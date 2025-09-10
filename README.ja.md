@@ -42,6 +42,11 @@ FQBN/Port はワークスペースごとに保存され、再起動後も保持�
 1) arduino-cli を用意
 - `PATH` に通すか、拡張設定 `arduino-cli-wrapper.path` にフルパスを設定。
 - 「Arduino CLI: Show Version」で認識確認（未設定ならガイドが表示されます）。
+ - Windows の場合: 次のいずれかでインストールしてください
+   - セットアップファイル: https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi
+   - コマンド: `winget install ArduinoSA.CLI`
+ - Linux / macOS の場合: 公式手順を参照してください
+   - https://arduino.github.io/arduino-cli/latest/installation/
 
 2) スケッチを開く
 - .ino を含むフォルダを開くと、ステータスバーに Build/Upload/Monitor と FQBN/Port/Baud が表示されます。
