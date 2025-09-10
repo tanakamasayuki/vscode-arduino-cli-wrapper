@@ -1308,10 +1308,18 @@ async function updateStatusBar() {
     return;
   }
   const sketchDir = await detectSketchDirForStatus();
-  let yamlInfo = null;
-  if (sketchDir) {
-    yamlInfo = await readSketchYamlInfo(sketchDir);
+  if (!sketchDir) {
+    statusList.hide();
+    statusListAll.hide();
+    statusBuild.hide();
+    statusUpload.hide();
+    statusMonitor.hide();
+    statusFqbn.hide();
+    statusPort.hide();
+    statusBaud.hide();
+    return;
   }
+  let yamlInfo = await readSketchYamlInfo(sketchDir);
   const fqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
   const port = extContext?.workspaceState.get(STATE_PORT, '') || '';
   const baud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';

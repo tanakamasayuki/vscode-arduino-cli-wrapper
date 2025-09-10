@@ -5,6 +5,10 @@
   "version": "1.0.0",
   "publisher": "tanakamasayuki",
   "license": "CC0-1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tanakamasayuki/vscode-arduino-cli-wrapper.git"
+  },
   "engines": {
     "vscode": "^1.84.0"
   },
