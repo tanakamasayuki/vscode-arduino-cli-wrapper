@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" version="1.1">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0BA360"/>
+      <stop offset="100%" stop-color="#3BB78F"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect x="8" y="8" width="240" height="240" rx="28" ry="28" fill="url(#bg)"/>
+
+  <!-- Chip body -->
+  <g filter="url(#shadow)">
+    <rect x="48" y="64" width="160" height="128" rx="16" ry="16" fill="#0D1B2A" opacity="0.15"/>
+    <rect x="52" y="68" width="152" height="120" rx="14" ry="14" fill="#FFFFFF" opacity="0.95"/>
+
+    <!-- Chip pins top -->
+    <g fill="#FFFFFF" opacity="0.95">
+      <rect x="64" y="52" width="8" height="12" rx="2"/>
+      <rect x="88" y="52" width="8" height="12" rx="2"/>
+      <rect x="112" y="52" width="8" height="12" rx="2"/>
+      <rect x="136" y="52" width="8" height="12" rx="2"/>
+      <rect x="160" y="52" width="8" height="12" rx="2"/>
+      <rect x="184" y="52" width="8" height="12" rx="2"/>
+    </g>
+    <!-- Chip pins bottom -->
+    <g fill="#FFFFFF" opacity="0.95">
+      <rect x="64" y="188" width="8" height="12" rx="2"/>
+      <rect x="88" y="188" width="8" height="12" rx="2"/>
+      <rect x="112" y="188" width="8" height="12" rx="2"/>
+      <rect x="136" y="188" width="8" height="12" rx="2"/>
+      <rect x="160" y="188" width="8" height="12" rx="2"/>
+      <rect x="184" y="188" width="8" height="12" rx="2"/>
+    </g>
+
+    <!-- Terminal prompt symbol -->
+    <g transform="translate(68,86)">
+      <!-- caret '>' -->
+      <path d="M0 24 L28 12 L28 36 Z" fill="#0E7C3A"/>
+      <!-- underscore '_' -->
+      <rect x="36" y="34" width="48" height="6" fill="#19C37D" rx="3"/>
+    </g>
+  </g>
+</svg>

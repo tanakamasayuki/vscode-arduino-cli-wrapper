@@ -7,4 +7,7 @@ node_modules
 **/*.log
 **/.DS_Store
 **/Thumbs.db
-
+images/*.svg
+*.txt
+*.bat
+.gitignore
