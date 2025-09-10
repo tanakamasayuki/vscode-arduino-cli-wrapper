@@ -1,0 +1,23 @@
+{
+  "ext.displayName": "Arduino CLI Wrapper",
+  "ext.description": "Run Arduino CLI commands from VS Code",
+  "cmd.runArbitrary": "Arduino CLI: Run Command",
+  "cmd.version": "Arduino CLI: Show Version",
+  "cmd.listBoards": "Arduino CLI: List Connected Boards",
+  "cmd.listAllBoards": "Arduino CLI: List All Boards (listall)",
+  "cmd.boardDetails": "Arduino CLI: Board Details",
+  "cmd.compile": "Arduino CLI: Compile Sketch",
+  "cmd.cleanCompile": "Arduino CLI: Clean Compile",
+  "cmd.upload": "Arduino CLI: Upload Sketch",
+  "cmd.monitor": "Arduino CLI: Monitor Serial",
+  "cmd.createSketchYaml": "Arduino CLI: Create sketch.yaml",
+  "cmd.configureIntelliSense": "Arduino CLI: Configure C/C++ IntelliSense",
+  "cmd.setProfile": "Arduino CLI: Set Profile (sketch.yaml)",
+  "cmd.setFqbn": "Arduino CLI: Set FQBN",
+  "cmd.setPort": "Arduino CLI: Set Serial Port",
+  "cmd.setBaud": "Arduino CLI: Set Baudrate",
+  "config.title": "Arduino CLI Wrapper",
+  "config.path.description": "Path to the arduino-cli executable (e.g. arduino-cli, arduino-cli.exe, or full path).",
+  "config.additionalArgs.description": "Additional arguments to append to every arduino-cli invocation.",
+  "config.verbose.description": "Add --verbose to compile/upload commands."
+}

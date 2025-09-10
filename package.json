@@ -1,0 +1,107 @@
+{
+  "name": "vscode-arduino-cli-wrapper",
+  "displayName": "%ext.displayName%",
+  "description": "%ext.description%",
+  "version": "1.0.0",
+  "publisher": "tanakamasayuki",
+  "license": "CC0-1.0",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:**/*.ino"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "arduino-cli.runArbitrary",
+        "title": "%cmd.runArbitrary%"
+      },
+      {
+        "command": "arduino-cli.version",
+        "title": "%cmd.version%"
+      },
+      {
+        "command": "arduino-cli.listBoards",
+        "title": "%cmd.listBoards%"
+      },
+      {
+        "command": "arduino-cli.listAllBoards",
+        "title": "%cmd.listAllBoards%"
+      },
+      {
+        "command": "arduino-cli.boardDetails",
+        "title": "%cmd.boardDetails%"
+      },
+      {
+        "command": "arduino-cli.compile",
+        "title": "%cmd.compile%"
+      },
+      {
+        "command": "arduino-cli.cleanCompile",
+        "title": "%cmd.cleanCompile%"
+      },
+      {
+        "command": "arduino-cli.upload",
+        "title": "%cmd.upload%"
+      },
+      {
+        "command": "arduino-cli.monitor",
+        "title": "%cmd.monitor%"
+      },
+      {
+        "command": "arduino-cli.createSketchYaml",
+        "title": "%cmd.createSketchYaml%"
+      },
+      {
+        "command": "arduino-cli.configureIntelliSense",
+        "title": "%cmd.configureIntelliSense%"
+      },
+      {
+        "command": "arduino-cli.setProfile",
+        "title": "%cmd.setProfile%"
+      },
+      {
+        "command": "arduino-cli.setFqbn",
+        "title": "%cmd.setFqbn%"
+      },
+      {
+        "command": "arduino-cli.setPort",
+        "title": "%cmd.setPort%"
+      },
+      {
+        "command": "arduino-cli.setBaud",
+        "title": "%cmd.setBaud%"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "%config.title%",
+      "properties": {
+        "arduino-cli-wrapper.path": {
+          "type": "string",
+          "default": "arduino-cli",
+          "description": "%config.path.description%"
+        },
+        "arduino-cli-wrapper.additionalArgs": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "%config.additionalArgs.description%"
+        },
+        "arduino-cli-wrapper.verbose": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.verbose.description%"
+        }
+      }
+    }
+  }
+}

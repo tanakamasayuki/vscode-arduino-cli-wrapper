@@ -1,0 +1,10 @@
+node_modules
+.vscode
+.git
+**/*.map
+**/*.ts
+**/*.tsbuildinfo
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+
