@@ -11,6 +11,7 @@
   "cmd.upload": "Arduino CLI: スケッチをアップロード",
   "cmd.monitor": "Arduino CLI: シリアルモニタ",
   "cmd.createSketchYaml": "Arduino CLI: sketch.yaml を作成",
+  "cmd.sketchYamlHelper": "Arduino CLI: sketch.yaml ヘルパー",
   "cmd.configureIntelliSense": "Arduino CLI: C/C++ IntelliSense を設定",
   "cmd.setProfile": "Arduino CLI: プロファイルを設定 (sketch.yaml)",
   "cmd.setFqbn": "Arduino CLI: FQBN を設定",

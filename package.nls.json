@@ -11,6 +11,7 @@
   "cmd.upload": "Arduino CLI: Upload Sketch",
   "cmd.monitor": "Arduino CLI: Monitor Serial",
   "cmd.createSketchYaml": "Arduino CLI: Create sketch.yaml",
+  "cmd.sketchYamlHelper": "Arduino CLI: sketch.yaml Helper",
   "cmd.configureIntelliSense": "Arduino CLI: Configure C/C++ IntelliSense",
   "cmd.setProfile": "Arduino CLI: Set Profile (sketch.yaml)",
   "cmd.setFqbn": "Arduino CLI: Set FQBN",

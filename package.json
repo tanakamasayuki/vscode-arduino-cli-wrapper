@@ -24,6 +24,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "arduino-cli.sketchYamlHelper",
+        "title": "%cmd.sketchYamlHelper%"
+      },
+      {
         "command": "arduino-cli.runArbitrary",
         "title": "%cmd.runArbitrary%"
       },

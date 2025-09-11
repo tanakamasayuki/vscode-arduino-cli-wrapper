@@ -78,6 +78,9 @@ const MSG = {
     cliCheckStart: '[cli] Checking arduino-cli…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] Failed to run arduino-cli. Please configure arduino-cli-wrapper.path or install arduino-cli.',
+    yamlApplied: 'Applied profile to sketch.yaml: {name}',
+    yamlApplyError: 'Failed to apply to sketch.yaml: {msg}',
+    yamlNoSketchDir: 'Could not determine a sketch folder in this workspace.',
   },
   ja: {
     missingCli: 'Arduino CLI が見つかりませんでした: {exe}',
@@ -131,6 +134,9 @@ const MSG = {
     cliCheckStart: '[cli] arduino-cli を確認中…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] arduino-cli の実行に失敗しました。arduino-cli のインストールまたは設定 (arduino-cli-wrapper.path) を行ってください。',
+    yamlApplied: 'sketch.yaml にプロファイルを反映しました: {name}',
+    yamlApplyError: 'sketch.yaml への反映に失敗しました: {msg}',
+    yamlNoSketchDir: 'ワークスペース内のスケッチフォルダを特定できませんでした。',
   }
 };
 
@@ -1090,6 +1096,7 @@ function activate(context) {
   extContext = context;
   // Commands
   context.subscriptions.push(
+    vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
     vscode.commands.registerCommand('arduino-cli.listBoards', commandListBoards),
     vscode.commands.registerCommand('arduino-cli.listAllBoards', commandListAllBoards),
@@ -1703,7 +1710,8 @@ function parsePlatformFromProfileYaml(profileYaml, preferProfileName) {
       currentKey = mKey[1].trim();
       continue;
     }
-    const mPlat = line.match(/^\s{6}platform\s*:\s*([A-Za-z0-9_:-]+)\s*\(([^)]+)\)\s*$/);
+    // Match either "      platform: ... (x.y.z)" or list item "      - platform: ... (x.y.z)"
+    const mPlat = line.match(/^\s{6}(?:-\s*)?platform\s*:\s*([A-Za-z0-9_:-]+)\s*\(([^)]+)\)\s*$/);
     if (mPlat && (!targetKey || targetKey === currentKey)) {
       return { vendorArch: mPlat[1], version: mPlat[2] };
     }
@@ -2072,4 +2080,200 @@ function replaceMonitorBaud(text, baud) {
     });
   }
   return text + `\nmonitor:\n  baudrate: ${encodeYamlString(baud)}`;
+}
+/**
+ * Open a webview for the sketch.yaml helper and wire apply action.
+ */
+async function commandOpenSketchYamlHelper() {
+  const panel = vscode.window.createWebviewPanel(
+    'sketchYamlHelper',
+    'sketch.yaml Helper',
+    vscode.ViewColumn.Active,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  try {
+    const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'sketch.yaml.html');
+    let html = await readTextFile(htmlUri);
+    // Inject VS Code API hook and override the dynamically created Download button
+    const inject = `\n<script>\n(function(){\n  'use strict';\n  const vscode = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : null;\n  const isJa = (navigator.language||'').toLowerCase().startsWith('ja');\n  function applyHook() {\n    const yamlBox = document.getElementById('yamlBox');\n    if (!yamlBox || !yamlBox.parentElement) return;\n    // The original page creates a button before the textarea within the same wrapper\n    let btn = yamlBox.previousElementSibling;\n    if (!(btn && btn.tagName === 'BUTTON')) {\n      btn = yamlBox.parentElement.querySelector('button');\n    }\n    if (!(btn && btn.tagName === 'BUTTON')) return;\n    // If already patched, skip
+    if (btn.dataset && btn.dataset.patched === '1') return;\n    // Replace with a clone to drop all previous listeners
+    const newBtn = btn.cloneNode(true);\n+    newBtn.textContent = isJa ? 'sketch.yaml に反映' : 'Apply to sketch.yaml';\n+    newBtn.dataset.patched = '1';\n+    newBtn.addEventListener('click', (ev) => {\n+      try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}\n+      const yaml = yamlBox ? (yamlBox.value||'') : '';\n+      if (vscode && yaml) vscode.postMessage({ type: 'applyYaml', yaml });\n+    }, { capture: true });\n+    btn.replaceWith(newBtn);\n+  }\n+  const mo = new MutationObserver(() => { try { applyHook(); } catch(_){} });\n+  if (document.readyState === 'loading') {\n+    document.addEventListener('DOMContentLoaded', () => { applyHook(); mo.observe(document.body, { childList: true, subtree: true }); });\n+  } else {\n+    applyHook(); mo.observe(document.body, { childList: true, subtree: true });\n+  }\n+})();\n</script>\n`;
+    // Append the injection just before </body>
+    html = html.replace(/<\/body>\s*<\/html>\s*$/i, inject + '</body></html>');
+    panel.webview.html = html;
+  } catch (e) {
+    showError(e);
+  }
+
+  // Try to initialize with currently selected profile's FQBN and libraries
+  (async () => {
+    try {
+      const ino = await pickInoFromWorkspace();
+      if (!ino) return;
+      const sketchDir = path.dirname(ino);
+      const yamlInfo = await readSketchYamlInfo(sketchDir);
+      if (!yamlInfo || !yamlInfo.profiles || yamlInfo.profiles.length === 0) return;
+      const prof = yamlInfo.defaultProfile || yamlInfo.profiles[0];
+      const extFqbn = await getFqbnFromSketchYaml(sketchDir, prof);
+      const libs = await getLibrariesFromSketchYaml(sketchDir, prof);
+      // Parse platform id/version from sketch.yaml text
+      let platformId = '';
+      let platformVersion = '';
+      try {
+        const text = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
+        const parsed = parsePlatformFromProfileYaml(text, prof);
+        if (parsed) { platformId = parsed.vendorArch || ''; platformVersion = parsed.version || ''; }
+      } catch { }
+      if (extFqbn) {
+        panel.webview.postMessage({ type: 'init', extFqbn, libraries: libs, platformId, platformVersion });
+      }
+    } catch (_) { /* ignore init errors */ }
+  })();
+
+  panel.webview.onDidReceiveMessage(async (msg) => {
+    if (!msg || msg.type !== 'applyYaml') return;
+    try {
+      let sketchDir = await detectSketchDirForStatus();
+      if (!sketchDir) {
+        // Try to pick a sketch by .ino
+        try {
+          const ino = await pickInoFromWorkspace();
+          if (ino) sketchDir = path.dirname(ino);
+        } catch(_) {}
+      }
+      if (!sketchDir) {
+        // As a last resort, let user choose a folder
+        const picked = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: _isJa ? 'スケッチフォルダを選択' : 'Select Sketch Folder' });
+        if (!picked || picked.length === 0) {
+          vscode.window.showWarningMessage(t('yamlNoSketchDir'));
+          return;
+        }
+        sketchDir = picked[0].fsPath;
+      }
+      const { profileName, blockText } = extractProfileFromTemplateYaml(String(msg.yaml||''));
+      if (!profileName || !blockText) throw new Error('invalid YAML payload');
+      const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+      let existing = '';
+      try { existing = await readTextFile(yamlUri); } catch { existing = ''; }
+      let merged = mergeProfileIntoSketchYaml(existing, profileName, blockText);
+      await writeTextFile(yamlUri, merged);
+      vscode.window.setStatusBarMessage(t('yamlApplied', { name: profileName }), 2000);
+      // Optionally reveal the file
+      try { await vscode.window.showTextDocument(yamlUri); } catch { }
+      updateStatusBar();
+    } catch (e) {
+      vscode.window.showErrorMessage(t('yamlApplyError', { msg: e.message }));
+    }
+  });
+}
+
+/**
+ * From a generated template YAML, extract the first profile name and its block text.
+ */
+function extractProfileFromTemplateYaml(text) {
+  const lines = String(text||'').split(/\r?\n/);
+  let inProfiles = false;
+  let start = -1;
+  let name = '';
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!inProfiles) {
+      if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true;
+      continue;
+    }
+    const m = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+    if (m) {
+      name = m[1].trim();
+      start = i;
+      break;
+    }
+  }
+  if (start < 0 || !name) return { profileName: '', blockText: '' };
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    const s = lines[i];
+    if (/^\s*default_profile\s*:\s*/.test(s)) { end = i; break; }
+    if (/^\S/.test(s)) { end = i; break; }
+  }
+  const block = lines.slice(start, end).join('\n');
+  return { profileName: name, blockText: block.replace(/\s+$/, '') + '\n' };
+}
+
+/**
+ * Merge a single profile block into existing sketch.yaml text.
+ * - Overwrite when the profile exists; otherwise append under profiles.
+ */
+function mergeProfileIntoSketchYaml(existingText, profileName, profileBlockText) {
+  const text = String(existingText||'');
+  const lines = text.split(/\r?\n/);
+  // Find profiles section
+  let profStart = -1; let profEnd = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*profiles\s*:\s*$/.test(lines[i])) { profStart = i; for (let j = i+1; j < lines.length; j++) { if (/^\S/.test(lines[j])) { profEnd = j; break; } } break; }
+  }
+  const ensureEol = (s) => s.endsWith('\n') ? s : (s + '\n');
+  if (profStart < 0) {
+    // No profiles section: append one at the end
+    const base = ensureEol(text.trimEnd());
+    return base + 'profiles:\n' + profileBlockText + '\n';
+  }
+  // Section exists: check if profile exists
+  let curStart = -1; let curEnd = profEnd;
+  for (let i = profStart + 1; i < profEnd; i++) {
+    const m = lines[i].match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+    if (m) {
+      if (curStart >= 0) { curEnd = i; break; }
+      if (m[1].trim() === profileName) { curStart = i; }
+    }
+  }
+  if (curStart >= 0) {
+    // Replace existing block
+    const before = lines.slice(0, curStart).join('\n');
+    const after = lines.slice(curEnd).join('\n');
+    return [before, profileBlockText.replace(/\s+$/, ''), after].join('\n').replace(/\n{3,}/g, '\n\n') + (text.endsWith('\n') ? '' : '\n');
+  }
+  // Append to end of profiles section
+  const before = lines.slice(0, profEnd).join('\n');
+  const after = lines.slice(profEnd).join('\n');
+  const glue = (before.endsWith('\n') ? '' : '\n');
+  return [before, glue + profileBlockText.replace(/\s+$/, ''), after].join('\n').replace(/\n{3,}/g, '\n\n') + (text.endsWith('\n') ? '' : '\n');
+}
+
+/**
+ * Parse libraries entries from sketch.yaml under a specific profile.
+ * Returns an array like [{ name, version }] (version may be '').
+ */
+async function getLibrariesFromSketchYaml(sketchDir, profileName) {
+  try {
+    const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+    const text = await readTextFile(yamlUri);
+    const lines = text.split(/\r?\n/);
+    let inProfiles = false;
+    let inTarget = false;
+    let inLibs = false;
+    const result = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!inProfiles) { if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true; continue; }
+      const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+      if (mKey) { inTarget = (mKey[1].trim() === profileName); inLibs = false; continue; }
+      if (!inTarget) { if (/^\S/.test(line)) break; else continue; }
+      const mLibs = line.match(/^\s{4}libraries\s*:\s*$/);
+      if (mLibs) { inLibs = true; continue; }
+      if (inLibs) {
+        const mItem = line.match(/^\s{6}-\s*(.+)\s*$/);
+        if (mItem) {
+          const raw = mItem[1].trim().replace(/^"|"$/g, '');
+          // Extract name and optional (version)
+          const mv = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+          if (mv) result.push({ name: mv[1].trim(), version: mv[2].trim() });
+          else if (raw) result.push({ name: raw, version: '' });
+          continue;
+        }
+        // End of list when indentation decreases or next top-level section starts
+        if (!/^\s{6}-/.test(line)) { inLibs = false; }
+      }
+    }
+    return result;
+  } catch { return []; }
 }
