@@ -214,7 +214,9 @@
           // Show base FQBN in both places even without options
           summaryTop.textContent = `${fqbn}`;
           summaryBottom.textContent = `${fqbn}`;
-          return;
+          // Note: do NOT return here so that mismatch panel
+          // and the update button are still active and can
+          // update the YAML template (e.g., platform version).
         }
 
         const groups = [];
@@ -387,18 +389,15 @@
 
         function ensureDefaultLibsForBoard() {
           if (!/m5stack/i.test(fqbn)) return;
-          // Prefer version if available
-          const findVersion = (target) => {
-            if (!Array.isArray(libsCache)) return '';
-            for (const row of libsCache) {
-              if (libName(row) === target) return libVersion(row) || '';
+          // Preselect libraries for M5 boards without forcing versions.
+          // Do not overwrite versions already coming from sketch.yaml/init.
+          const ensure = (name) => {
+            if (!selectedLibs.has(name)) {
+              selectedLibs.set(name, true); // unversioned default selection
             }
-            return '';
           };
-          const m5uVer = findVersion('M5Unified');
-          const m5gfxVer = findVersion('M5GFX');
-          selectedLibs.set('M5Unified', m5uVer || true);
-          selectedLibs.set('M5GFX', m5gfxVer || true);
+          ensure('M5Unified');
+          ensure('M5GFX');
         }
         function findLatestVersionByName(targetName) {
           if (!Array.isArray(libsCache)) return '';
@@ -526,15 +525,24 @@
           // Ask for platform update when mismatch exists
           const plat = collectPlatformMismatch();
           if (plat) {
-            const ok = window.confirm(ja ? `プラットフォーム ${plat.name} を最新に更新しますか？\n現在: ${plat.current}\n最新: ${plat.latest}` : `Update platform ${plat.name} to latest?\nCurrent: ${plat.current}\nLatest: ${plat.latest}`);
-            if (ok) {
-              selectedPlatformVersion = plat.latest;
-            } else {
-              selectedPlatformVersion = plat.current;
-            }
+            // Apply platform update without confirmation for consistency with library updates
+            selectedPlatformVersion = plat.latest;
+            try { (window.__INIT_STATE__ = window.__INIT_STATE__ || {}).platformVersion = plat.latest; } catch (_) {}
           }
           renderLibs();
           updateSummary();
+          // As a safeguard, force-update the platform version in the YAML box
+          try {
+            const parts = fqbn.split(':');
+            const platformId = parts.length >= 2 ? (parts[0] + ':' + parts[1]) : fqbn;
+            const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Match lines like: "- platform: <id>" optionally followed by "(x.y.z)" (multiline/global, CR/LF agnostic)
+            const re = new RegExp('^([\\t ]*-\\s*platform\\s*:\\s*' + esc(platformId) + ')(?:\\s*\\([^)]*\\))?\\s*$', 'gm');
+            const desired = selectedPlatformVersion ? ` (${selectedPlatformVersion})` : '';
+            const before = yamlBox.value || '';
+            const after = before.replace(re, `$1${desired}`);
+            if (after && after !== before) yamlBox.value = after;
+          } catch (_) {}
           updateMismatches();
         });
       }
