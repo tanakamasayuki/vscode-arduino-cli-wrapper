@@ -49,6 +49,8 @@
       let libsCache = null;
       /** @type {Map<string,string|true>} */
       const selectedLibs = new Map();
+      /** @type {Array<{key:string,val:string}>|null} */
+      window.__OPT_PAIRS = null; // pairs parsed from extFqbn (key=value)
 
       function setStatus(text, isError=false) {
         status.textContent = text;
@@ -339,6 +341,28 @@
             yamlBox.value = buildYaml(ext);
         }
 
+        // Apply extFqbn option pairs (if any) with retries to avoid timing issues
+        (function scheduleApplyOptionPairs(){
+          const delays = [0, 50, 150, 400];
+          const esc = (s) => { try { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'); } catch (_) { return s; } };
+          function applyOnce() {
+            try {
+              const pairs = Array.isArray(window.__OPT_PAIRS) ? window.__OPT_PAIRS : null;
+              if (!pairs || !pairs.length) return;
+              const rootEl = document.getElementById('config');
+              pairs.forEach(({key, val}) => {
+                const selector = `#config input[type="radio"][data-option="${esc(key)}"][data-val-text="${esc(val)}"]`;
+                const input = rootEl && rootEl.querySelector(selector);
+                if (input) {
+                  input.checked = true;
+                  input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              });
+            } catch (_) { /* ignore */ }
+          }
+          delays.forEach(d => setTimeout(applyOnce, d));
+        })();
+
         // Hook change events
         groups.forEach((fs) => {
             fs.addEventListener('change', updateSummary);
@@ -463,11 +487,26 @@
               ensureDefaultLibsForBoard();
               renderLibs();
               updateSummary();
+              // In case options UI got re-rendered after libs, apply pairs again
+              setTimeout(() => {
+                try {
+                  const pairs = Array.isArray(window.__OPT_PAIRS) ? window.__OPT_PAIRS : null;
+                  if (!pairs || !pairs.length) return;
+                  const rootEl = document.getElementById('config');
+                  const esc = (s) => { try { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'); } catch (_) { return s; } };
+                  pairs.forEach(({key, val}) => {
+                    const selector = `#config input[type=\"radio\"][data-option=\"${esc(key)}\"][data-val-text=\"${esc(val)}\"]`;
+                    const input = rootEl && rootEl.querySelector(selector);
+                    if (input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); }
+                  });
+                } catch (_) {}
+              }, 50);
             })
             .catch(() => { libsCache = []; renderLibs(); });
         } else {
           ensureDefaultLibsForBoard();
           renderLibs();
+          setTimeout(() => { try { const pairs = Array.isArray(window.__OPT_PAIRS) ? window.__OPT_PAIRS : null; if (!pairs || !pairs.length) return; const rootEl = document.getElementById('config'); const esc = (s) => { try { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'); } catch (_) { return s; } }; pairs.forEach(({key, val}) => { const selector = `#config input[type=\"radio\"][data-option=\"${esc(key)}\"][data-val-text=\"${esc(val)}\"]`; const input = rootEl && rootEl.querySelector(selector); if (input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); } }); } catch (_) {} }, 50);
         }
 
         // Initial render
@@ -583,24 +622,30 @@
           const pairsText = parts.slice(3).join(':');
           q.value = baseFqbn;
           applyFilter();
-          // Apply option selections
+          // Schedule additional retries after filter-triggered re-render
+          setTimeout(() => { try {
+            const pairs = Array.isArray(window.__OPT_PAIRS) ? window.__OPT_PAIRS : null;
+            if (!pairs || !pairs.length) return;
+            const rootEl = document.getElementById('config');
+            const esc = (s) => { try { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'); } catch (_) { return s; } };
+            pairs.forEach(({key, val}) => {
+              const selector = `#config input[type=\"radio\"][data-option=\"${esc(key)}\"][data-val-text=\"${esc(val)}\"]`;
+              const input = rootEl && rootEl.querySelector(selector);
+              if (input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); }
+            });
+          } catch (_) {} }, 100);
+          // Parse and store option selections for application after config renders
+          window.__OPT_PAIRS = null;
           if (pairsText) {
-            const pairs = pairsText.split(',').map(s => s.trim()).filter(Boolean);
-            const esc = (s) => {
-              try { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'); } catch (_) { return s; }
-            };
-            pairs.forEach(p => {
+            const pairs = [];
+            pairsText.split(',').map(s => s.trim()).filter(Boolean).forEach(p => {
               const kv = p.split('=');
               if (kv.length < 2) return;
               const key = kv[0];
               const val = kv.slice(1).join('=');
-              const selector = `#config input[type="radio"][data-option="${esc(key)}"][data-val-text="${esc(val)}"]`;
-              const input = document.querySelector(selector);
-              if (input) {
-                input.checked = true;
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-              }
+              pairs.push({ key, val });
             });
+            if (pairs.length) window.__OPT_PAIRS = pairs;
           }
           // Apply libraries selection
           if (Array.isArray(data.libraries)) {
