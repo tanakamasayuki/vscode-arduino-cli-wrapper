@@ -90,7 +90,17 @@
       function applyFilter() {
         const rawNeedle = q.value.trim();
         const needle = rawNeedle.toLowerCase();
-        const exact = rawNeedle && Object.prototype.hasOwnProperty.call(dataMap, rawNeedle) ? rawNeedle : null;
+        let exact = rawNeedle && Object.prototype.hasOwnProperty.call(dataMap, rawNeedle) ? rawNeedle : null;
+        // Fallback: if user pasted/extFQBN like vendor:arch:board:opt=val, use base vendor:arch:board
+        if (!exact && rawNeedle) {
+          const parts = rawNeedle.split(':');
+          if (parts.length >= 4) {
+            const base = parts.slice(0, 3).join(':');
+            if (Object.prototype.hasOwnProperty.call(dataMap, base)) {
+              exact = base;
+            }
+          }
+        }
         if (!needle) {
           items.forEach(it => { it.el.style.display = ''; });
           setStatus(`${items.length} items`);
@@ -116,6 +126,18 @@
           setStatus(`${visible} / ${items.length} items`);
           renderConfig(null, null);
         }
+      }
+
+      // VS Code API getter: acquire exactly once to avoid errors
+      function getVsCodeApi() {
+        try {
+          if (window.__VSCODE_API__) return window.__VSCODE_API__;
+          if (typeof acquireVsCodeApi === 'function') {
+            window.__VSCODE_API__ = acquireVsCodeApi();
+            return window.__VSCODE_API__;
+          }
+        } catch (_) { /* ignore */ }
+        return null;
       }
 
       function renderConfig(fqbn, detail) {
@@ -180,7 +202,7 @@
         const dlBtn = document.createElement('button');
         dlBtn.type = 'button';
         dlBtn.style.margin = '0 0 8px 0';
-        const vscode = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : null;
+        const vscode = getVsCodeApi();
         const isJa = (navigator.language || '').toLowerCase().startsWith('ja');
         if (vscode) {
           dlBtn.textContent = isJa ? 'sketch.yaml に反映' : 'Apply to sketch.yaml';
@@ -587,6 +609,8 @@
       }
 
       q.addEventListener('input', applyFilter);
+      q.addEventListener('change', applyFilter);
+      q.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') applyFilter(); });
 
       // Load data
       fetch(DATA_URL + '?v=' + Date.now(), { cache: 'no-store' })
