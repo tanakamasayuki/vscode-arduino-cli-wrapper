@@ -779,6 +779,242 @@ async function commandUpload() {
 }
 
 /**
+ * Build and upload the contents of `data/` as a filesystem image to ESP32.
+ * - Uses `arduino-cli compile --show-properties` to locate tool paths, build.path, upload.speed
+ * - Parses partitions.csv in build.path to get FS offset/size (spiffs line)
+ * - Detects FS type from the selected .ino (SPIFFS.h or LittleFS.h)
+ * - Runs mkspiffs/mklittlefs to build an image, then flashes via esptool.
+ */
+async function commandUploadData() {
+  if (!(await ensureCliReady())) return;
+  const ino = await pickInoFromWorkspace();
+  if (!ino) return;
+  const sketchDir = path.dirname(ino);
+  const channel = getOutput();
+
+  // Ensure data folder exists
+  const dataDirUri = vscode.Uri.file(path.join(sketchDir, 'data'));
+  const dataExists = await pathExists(dataDirUri);
+  if (!dataExists) {
+    vscode.window.showErrorMessage('data folder not found in sketch directory.');
+    return;
+  }
+
+  // Determine FS type from the main .ino
+  let fsType = '';
+  try {
+    const inoText = await readTextFile(vscode.Uri.file(ino));
+    if (/\bLittleFS\s*\.h\b|#include\s*[<\"]LittleFS\.h[>\"]/i.test(inoText)) fsType = 'LittleFS';
+    else if (/\bSPIFFS\s*\.h\b|#include\s*[<\"]SPIFFS\.h[>\"]/i.test(inoText)) fsType = 'SPIFFS';
+  } catch { }
+  if (!fsType) {
+    // Fallback: scan for any .ino under sketchDir
+    try {
+      const moreIno = await vscode.workspace.findFiles(new vscode.RelativePattern(sketchDir, '*.ino'), undefined, 10);
+      for (const u of moreIno) {
+        const txt = await readTextFile(u);
+        if (/\bLittleFS\s*\.h\b|#include\s*[<\"]LittleFS\.h[>\"]/i.test(txt)) { fsType = 'LittleFS'; break; }
+        if (/\bSPIFFS\s*\.h\b|#include\s*[<\"]SPIFFS\.h[>\"]/i.test(txt)) { fsType = 'SPIFFS'; break; }
+      }
+    } catch {}
+  }
+  if (!fsType) {
+    vscode.window.showErrorMessage('Could not detect filesystem: include SPIFFS.h or LittleFS.h in the sketch.');
+    return;
+  }
+
+  // Build arduino-cli compile --show-properties
+  const cfg = getConfig();
+  const exe = cfg.exe || 'arduino-cli';
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const propsArgs = [...baseArgs, 'compile'];
+  if (cfg.verbose) propsArgs.push('--verbose');
+
+  let usingProfile = false;
+  const yamlInfo = await readSketchYamlInfo(sketchDir);
+  if (yamlInfo && yamlInfo.profiles.length > 0) {
+    const profile = await resolveProfileName(yamlInfo);
+    if (!profile) return;
+    usingProfile = true;
+    propsArgs.push('--profile', profile);
+  } else {
+    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
+    if (!fqbn) {
+      const set = await commandSetFqbn(true);
+      if (!set) return;
+      fqbn = extContext.workspaceState.get(STATE_FQBN, '');
+    }
+    propsArgs.push('--fqbn', fqbn);
+  }
+  propsArgs.push('--show-properties');
+  propsArgs.push(sketchDir);
+
+  channel.show(true);
+  channel.appendLine(`${ANSI.cyan}[upload-data] Detecting tool paths via --show-properties${ANSI.reset}`);
+
+  // Run and capture stdout only
+  let propsText = '';
+  try {
+    await new Promise((resolve, reject) => {
+      const child = cp.spawn(exe, propsArgs, { shell: false, cwd: sketchDir });
+      child.stdout.on('data', d => { propsText += d.toString(); });
+      child.stderr.on('data', d => channel.append(d.toString()));
+      child.on('error', reject);
+      child.on('close', code => code === 0 ? resolve() : reject(new Error(`show-properties exit ${code}`)));
+    });
+  } catch (e) {
+    showError(e);
+    return;
+  }
+
+  // Parse key=value lines
+  const props = {};
+  for (const line of String(propsText).split(/\r?\n/)) {
+    const idx = line.indexOf('=');
+    if (idx > 0) {
+      const k = line.slice(0, idx).trim();
+      const v = line.slice(idx + 1).trim();
+      if (k) props[k] = v;
+    }
+  }
+
+  const buildPath = props['build.path'] || '';
+  if (!buildPath) {
+    vscode.window.showErrorMessage('build.path not found in show-properties output.');
+    return;
+  }
+  const partPath = path.join(buildPath, 'partitions.csv');
+  let offset = '';
+  let size = '';
+  try {
+    const csv = await readTextFile(vscode.Uri.file(partPath));
+    for (const raw of csv.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#')) continue;
+      // Expect a line like: spiffs,   data, spiffs,  0x310000,0xE0000,
+      const cols = line.split(',').map(s => s.trim());
+      if (cols.length >= 5 && /^spiffs$/i.test(cols[0])) {
+        // cols[3] offset, cols[4] size
+        offset = cols[3];
+        size = cols[4];
+        break;
+      }
+    }
+  } catch (e) {
+    showError(new Error(`Failed to read partitions.csv: ${e.message}`));
+    return;
+  }
+  if (!offset || !size) {
+    vscode.window.showErrorMessage('SPIFFS partition not found in partitions.csv');
+    return;
+  }
+
+  // Locate FS builder tool
+  let toolBase = '';
+  let toolName = '';
+  if (fsType === 'SPIFFS') {
+    toolBase = props['runtime.tools.mkspiffs.path'] || '';
+    toolName = 'mkspiffs';
+  } else {
+    toolBase = props['runtime.tools.mklittlefs.path'] || '';
+    toolName = 'mklittlefs';
+  }
+  if (!toolBase) {
+    vscode.window.showErrorMessage(`Tool path not found for ${fsType} (runtime.tools.*.path)`);
+    return;
+  }
+  const fsExe = await resolveExecutable(toolBase, toolName);
+  if (!fsExe) {
+    vscode.window.showErrorMessage(`Executable not found: ${toolName} under ${toolBase}`);
+    return;
+  }
+
+  // Build image
+  const outBin = path.join(buildPath, fsType.toLowerCase() + '.bin');
+  channel.appendLine(`${ANSI.cyan}[upload-data] Building ${fsType} image (${size}) -> ${outBin}${ANSI.reset}`);
+  try {
+    await runExternal(fsExe, ['-s', size, '-c', 'data', outBin], { cwd: sketchDir });
+  } catch (e) {
+    showError(new Error(`Failed to build ${fsType} image: ${e.message}`));
+    return;
+  }
+
+  // Locate esptool and port/speed
+  const esptoolBase = props['runtime.tools.esptool_py.path'] || '';
+  if (!esptoolBase) {
+    vscode.window.showErrorMessage('esptool path not found (runtime.tools.esptool_py.path)');
+    return;
+  }
+  const esptoolExe = await resolveExecutable(esptoolBase, 'esptool');
+  if (!esptoolExe) {
+    vscode.window.showErrorMessage(`Executable not found: esptool under ${esptoolBase}`);
+    return;
+  }
+  let port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  if (!port) {
+    const set = await commandSetPort(true);
+    if (!set) return;
+    port = extContext.workspaceState.get(STATE_PORT, '') || '';
+  }
+  const speed = props['upload.speed'] || '115200';
+
+  // If a serial monitor is open, close it before flashing to avoid port conflicts
+  let reopenMonitorAfter = false;
+  if (monitorTerminal) {
+    try { monitorTerminal.dispose(); } catch (_) { }
+    monitorTerminal = undefined;
+    reopenMonitorAfter = true;
+  }
+  // Wait a bit to ensure the serial port is fully released (Windows needs time)
+  await new Promise((res) => setTimeout(res, 1200));
+
+  channel.appendLine(`${ANSI.cyan}[upload-data] Flashing at ${offset} over ${port} (${speed} baud)${ANSI.reset}`);
+  try {
+    await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, outBin], { cwd: sketchDir });
+    vscode.window.showInformationMessage(`Uploaded ${fsType} image to ${port} at ${offset}`);
+    if (reopenMonitorAfter) {
+      await new Promise((res) => setTimeout(res, 1500));
+      await commandMonitor();
+    }
+  } catch (e) {
+    showError(new Error(`esptool failed: ${e.message}`));
+  }
+}
+
+/** Resolve an executable by trying plain name and platform-specific extensions under a base directory. */
+async function resolveExecutable(baseDir, name) {
+  const candidates = [];
+  const base = String(baseDir || '').replace(/[\\/]+$/,'');
+  const join = (n) => path.join(base, n);
+  if (process.platform === 'win32') {
+    candidates.push(join(name + '.exe'));
+  }
+  candidates.push(join(name));
+  // Also try in a bin/ subdir
+  if (process.platform === 'win32') candidates.push(join(path.join('bin', name + '.exe')));
+  candidates.push(join(path.join('bin', name)));
+  for (const p of candidates) {
+    try { if (await pathExists(vscode.Uri.file(p))) return p; } catch { }
+  }
+  return '';
+}
+
+/** Spawn an external tool, streaming output to the log terminal. */
+async function runExternal(exe, args, opts = {}) {
+  const channel = getOutput();
+  const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
+  channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${args.map(quoteArg).join(' ')}${ANSI.reset}`);
+  if (opts.cwd) channel.appendLine(`${ANSI.dim}(cwd: ${opts.cwd})${ANSI.reset}`);
+  await new Promise((resolve, reject) => {
+    const child = cp.spawn(exe, args, { shell: false, cwd: opts.cwd || undefined });
+    child.stdout.on('data', d => channel.append(d.toString()));
+    child.stderr.on('data', d => channel.append(d.toString()));
+    child.on('error', reject);
+    child.on('close', code => code === 0 ? resolve() : reject(new Error(`exit ${code}`)));
+  });
+}
+
+/**
  * Convenience wrapper: compute include paths and write c_cpp_properties.json
  * for a given sketch directory.
  */
@@ -1131,6 +1367,7 @@ function activate(context) {
         const { action, sketchDir, profile } = payload;
         if (action === 'compile') return runCompileFor(sketchDir, profile);
         if (action === 'upload') return runUploadFor(sketchDir, profile);
+        if (action === 'uploadData') return commandUploadDataFor(sketchDir, profile);
         if (action === 'monitor') return commandMonitor();
         if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
@@ -1154,6 +1391,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.setFqbn', () => commandSetFqbn(false)),
     vscode.commands.registerCommand('arduino-cli.setPort', () => commandSetPort(false)),
     vscode.commands.registerCommand('arduino-cli.setBaud', () => commandSetBaud(false)),
+    vscode.commands.registerCommand('arduino-cli.uploadData', commandUploadData),
   );
 
   // Status bar items
@@ -1269,6 +1507,7 @@ function defaultCommandItems(dir, profile) {
   return [
     new CommandItem('Compile', 'compile', dir, profile),
     new CommandItem('Upload', 'upload', dir, profile),
+    new CommandItem('Upload Data', 'uploadData', dir, profile),
     new CommandItem('Monitor', 'monitor', dir, profile),
     new CommandItem('Open Helper', 'helper', dir, profile),
   ];
@@ -1329,6 +1568,28 @@ async function runUploadFor(sketchDir, profile) {
   if (monitorTerminal) { try { monitorTerminal.dispose(); } catch(_){} monitorTerminal = undefined; reopenMonitorAfter = true; }
   await runCli(uArgs, { cwd: sketchDir, forceSpawn: true });
   if (reopenMonitorAfter) { await new Promise(r=>setTimeout(r,1500)); await commandMonitor(); }
+}
+
+// Tree helper: upload data for an explicit sketch/profile
+async function commandUploadDataFor(sketchDir, profile) {
+  // Temporarily set default profile resolution context by writing lastResolved
+  let info = await readSketchYamlInfo(sketchDir);
+  if (info && profile) info.lastResolved = profile;
+  // Reuse the main implementation which re-reads sketch.yaml
+  // and resolves profile/FQBN as needed from state.
+  // Make the picked .ino implicit by creating a fake payload; the command
+  // itself resolves the sketchDir by picking an .ino, so we instead run the
+  // core steps inline here when a sketchDir is given.
+  // For simplicity, change CWD and invoke commandUploadData logic with the
+  // first .ino under sketchDir when available.
+  try {
+    // Temporarily open any .ino in sketchDir to bias pickInoFromWorkspace
+    const inos = await vscode.workspace.findFiles(new vscode.RelativePattern(sketchDir, '*.ino'), undefined, 1);
+    if (inos && inos.length > 0) {
+      try { await vscode.window.showTextDocument(inos[0], { preview: true }); } catch { }
+    }
+  } catch { }
+  await commandUploadData();
 }
 
 // Register the tree view

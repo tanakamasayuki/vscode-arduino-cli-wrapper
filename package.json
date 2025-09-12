@@ -107,6 +107,10 @@
       {
         "command": "arduino-cli.setBaud",
         "title": "%cmd.setBaud%"
+      },
+      {
+        "command": "arduino-cli.uploadData",
+        "title": "%cmd.uploadData%"
       }
     ],
     "configuration": {

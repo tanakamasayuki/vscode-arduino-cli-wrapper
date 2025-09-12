@@ -1,16 +1,17 @@
 {
   "ext.displayName": "Arduino CLI ラッパー",
   "ext.description": "VS Code から Arduino CLI を実行",
-  "cmd.sketchNew": "Arduino CLI: 新しいスケッチを作成",
+
   "cmd.runArbitrary": "Arduino CLI: コマンドを実行",
   "cmd.version": "Arduino CLI: バージョンを表示",
+  "cmd.sketchNew": "Arduino CLI: 新しいスケッチを作成",
   "cmd.listBoards": "Arduino CLI: 接続中のボードを一覧",
   "cmd.listAllBoards": "Arduino CLI: 全ボードを一覧 (listall)",
   "cmd.boardDetails": "Arduino CLI: ボード詳細",
   "cmd.compile": "Arduino CLI: スケッチをビルド",
   "cmd.cleanCompile": "Arduino CLI: クリーンビルド",
   "cmd.upload": "Arduino CLI: スケッチをアップロード",
-  "cmd.monitor": "Arduino CLI: シリアルモニタ",
+  "cmd.monitor": "Arduino CLI: シリアルモニター",
   "cmd.createSketchYaml": "Arduino CLI: sketch.yaml を作成",
   "cmd.sketchYamlHelper": "Arduino CLI: sketch.yaml ヘルパー",
   "cmd.configureIntelliSense": "Arduino CLI: C/C++ IntelliSense を設定",
@@ -18,8 +19,10 @@
   "cmd.setFqbn": "Arduino CLI: FQBN を設定",
   "cmd.setPort": "Arduino CLI: シリアルポートを設定",
   "cmd.setBaud": "Arduino CLI: ボーレートを設定",
+  "cmd.uploadData": "Arduino CLI: data フォルダをアップロード",
+
   "config.title": "Arduino CLI ラッパー",
-  "config.path.description": "arduino-cli 実行ファイルのパス（例: arduino-cli, arduino-cli.exe, またはフルパス）",
-  "config.additionalArgs.description": "すべての arduino-cli 呼び出しに付与する追加引数",
+  "config.path.description": "arduino-cli 実行ファイルのパス (例: arduino-cli, arduino-cli.exe, フルパス)",
+  "config.additionalArgs.description": "すべての arduino-cli 実行に付与する追加引数",
   "config.verbose.description": "compile / upload コマンドに --verbose を付与"
 }
