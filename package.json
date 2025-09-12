@@ -37,6 +37,10 @@
         "title": "Arduino CLI: Refresh View"
       },
       {
+        "command": "arduino-cli.sketchNew",
+        "title": "%cmd.sketchNew%"
+      },
+      {
         "command": "arduino-cli.runTreeAction",
         "title": "Arduino CLI: Run Action"
       },

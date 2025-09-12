@@ -81,6 +81,9 @@ const MSG = {
     yamlApplied: 'Applied profile to sketch.yaml: {name}',
     yamlApplyError: 'Failed to apply to sketch.yaml: {msg}',
     yamlNoSketchDir: 'Could not determine a sketch folder in this workspace.',
+    enterSketchName: 'Enter new sketch name',
+    sketchCreateStart: '[sketch] Creating at: {path}',
+    sketchCreateDone: '[sketch] Created: {path}',
   },
   ja: {
     missingCli: 'Arduino CLI が見つかりませんでした: {exe}',
@@ -629,6 +632,27 @@ async function commandRunArbitrary() {
 }
 
 /**
+ * Create a new Arduino sketch in the workspace root.
+ * Prompts for sketch name and runs `arduino-cli sketch new <path>`.
+ */
+async function commandSketchNew() {
+  if (!(await ensureCliReady())) return;
+  const wf = await getRelevantWorkspaceFolder();
+  if (!wf) return;
+  const name = await vscode.window.showInputBox({ prompt: t('enterSketchName') });
+  if (!name) return;
+  const sketchPath = path.join(wf.uri.fsPath, name.trim());
+  const channel = getOutput();
+  channel.appendLine(t('sketchCreateStart', { path: sketchPath }));
+  try {
+    await runCli(['sketch', 'new', sketchPath], { cwd: wf.uri.fsPath, forceSpawn: true });
+    vscode.window.showInformationMessage(t('sketchCreateDone', { path: sketchPath }));
+  } catch (e) {
+    showError(e);
+  }
+}
+
+/**
  * Compile the current sketch directory.
  * Prefers sketch.yaml profiles when available; otherwise uses FQBN.
  * While compiling, parse include paths and update IntelliSense.
@@ -1113,6 +1137,7 @@ function activate(context) {
         if (action === 'setFqbn') return vscode.commands.executeCommand('arduino-cli.setFqbn');
       } catch (e) { showError(e); }
     }),
+    vscode.commands.registerCommand('arduino-cli.sketchNew', commandSketchNew),
     vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
     vscode.commands.registerCommand('arduino-cli.listBoards', commandListBoards),

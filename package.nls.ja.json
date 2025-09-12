@@ -1,6 +1,7 @@
 {
   "ext.displayName": "Arduino CLI ラッパー",
   "ext.description": "VS Code から Arduino CLI を実行",
+  "cmd.sketchNew": "Arduino CLI: 新しいスケッチを作成",
   "cmd.runArbitrary": "Arduino CLI: コマンドを実行",
   "cmd.version": "Arduino CLI: バージョンを表示",
   "cmd.listBoards": "Arduino CLI: 接続中のボードを一覧",
