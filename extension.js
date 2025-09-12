@@ -1098,6 +1098,21 @@ function activate(context) {
   extContext = context;
   // Commands
   context.subscriptions.push(
+    vscode.commands.registerCommand('arduino-cli.refreshView', () => {
+      try { if (arduinoTreeProvider) arduinoTreeProvider.refresh(); } catch (_) {}
+    }),
+    vscode.commands.registerCommand('arduino-cli.runTreeAction', async (payload) => {
+      try {
+        if (!payload || typeof payload !== 'object') return;
+        const { action, sketchDir, profile } = payload;
+        if (action === 'compile') return runCompileFor(sketchDir, profile);
+        if (action === 'upload') return runUploadFor(sketchDir, profile);
+        if (action === 'monitor') return commandMonitor();
+        if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
+        if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
+        if (action === 'setFqbn') return vscode.commands.executeCommand('arduino-cli.setFqbn');
+      } catch (e) { showError(e); }
+    }),
     vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
     vscode.commands.registerCommand('arduino-cli.listBoards', commandListBoards),
@@ -1162,6 +1177,138 @@ function activate(context) {
     }
   }, null, context.subscriptions);
 }
+
+// Tree View: Arduino CLI Commands per project/profile
+let arduinoTreeProvider;
+class ArduinoCliTreeProvider {
+  constructor() {
+    /** @type {vscode.EventEmitter<void>} */
+    this._em = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this._em.event;
+  }
+  refresh() { this._em.fire(); }
+  /** @param {any} element */
+  async getChildren(element) {
+    if (!element) {
+      // Root: list projects (sketch folders)
+      const sketches = await findSketches();
+      return sketches.map(s => new ProjectItem(s.dir, s.name));
+    }
+    if (element instanceof ProjectItem) {
+      const info = await readSketchYamlInfo(element.dir);
+      if (info && info.profiles && info.profiles.length) {
+        return info.profiles.map(p => new ProfileItem(element.dir, p));
+      }
+      // No profiles: return commands directly under project
+      return defaultCommandItems(element.dir, null);
+    }
+    if (element instanceof ProfileItem) {
+      return defaultCommandItems(element.dir, element.profile);
+    }
+    return [];
+  }
+  /** @param {any} element */
+  getTreeItem(element) { return element; }
+}
+
+class ProjectItem extends vscode.TreeItem {
+  constructor(dir, name) {
+    super(name || dir, vscode.TreeItemCollapsibleState.Collapsed);
+    this.contextValue = 'project';
+    this.tooltip = dir;
+    this.dir = dir;
+  }
+}
+class ProfileItem extends vscode.TreeItem {
+  constructor(dir, profile) {
+    super(`Profile: ${profile}`, vscode.TreeItemCollapsibleState.Collapsed);
+    this.contextValue = 'profile';
+    this.tooltip = `${dir} • ${profile}`;
+    this.dir = dir;
+    this.profile = profile;
+  }
+}
+class CommandItem extends vscode.TreeItem {
+  constructor(label, action, sketchDir, profile) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = 'command';
+    this.command = {
+      command: 'arduino-cli.runTreeAction',
+      title: label,
+      arguments: [{ action, sketchDir, profile }]
+    };
+  }
+}
+
+function defaultCommandItems(dir, profile) {
+  return [
+    new CommandItem('Compile', 'compile', dir, profile),
+    new CommandItem('Upload', 'upload', dir, profile),
+    new CommandItem('Monitor', 'monitor', dir, profile),
+    new CommandItem('Open Helper', 'helper', dir, profile),
+  ];
+}
+
+async function findSketches() {
+  /** @type {{dir:string,name:string}[]} */
+  const results = [];
+  try {
+    const uris = await vscode.workspace.findFiles('**/*.ino', '**/{node_modules,.git}/**', 50);
+    const seen = new Set();
+    for (const u of uris) {
+      const dir = path.dirname(u.fsPath);
+      if (seen.has(dir)) continue;
+      seen.add(dir);
+      results.push({ dir, name: path.basename(dir) });
+    }
+  } catch (_) {}
+  return results;
+}
+
+// Run helpers for explicit profile
+async function runCompileFor(sketchDir, profile) {
+  if (!(await ensureCliReady())) return;
+  const cfg = getConfig();
+  const args = ['compile'];
+  if (cfg.verbose) args.push('--verbose');
+  if (profile) args.push('--profile', profile); else {
+    // fallback to FQBN/state
+    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
+    if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
+    args.push('--fqbn', fqbn);
+  }
+  args.push(sketchDir);
+  await compileWithIntelliSense(sketchDir, args);
+}
+async function runUploadFor(sketchDir, profile) {
+  if (!(await ensureCliReady())) return;
+  const cfg = getConfig();
+  const channel = getOutput();
+  // Require port
+  const currentPort = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  if (!currentPort) { vscode.window.showErrorMessage(t('portUnsetWarn')); return; }
+  // Build args
+  const cArgs = ['compile']; if (cfg.verbose) cArgs.push('--verbose');
+  const uArgs = ['upload']; if (cfg.verbose) uArgs.push('--verbose');
+  if (profile) { cArgs.push('--profile', profile); uArgs.push('--profile', profile); }
+  else {
+    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
+    if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
+    cArgs.push('--fqbn', fqbn); uArgs.push('--fqbn', fqbn);
+  }
+  const port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  if (port) uArgs.push('-p', port);
+  cArgs.push(sketchDir); uArgs.push(sketchDir);
+  await compileWithIntelliSense(sketchDir, cArgs);
+  let reopenMonitorAfter = false;
+  if (monitorTerminal) { try { monitorTerminal.dispose(); } catch(_){} monitorTerminal = undefined; reopenMonitorAfter = true; }
+  await runCli(uArgs, { cwd: sketchDir, forceSpawn: true });
+  if (reopenMonitorAfter) { await new Promise(r=>setTimeout(r,1500)); await commandMonitor(); }
+}
+
+// Register the tree view
+arduinoTreeProvider = new ArduinoCliTreeProvider();
+vscode.window.createTreeView('arduinoCliView', { treeDataProvider: arduinoTreeProvider });
 
 /**
  * Perform a clean build by invoking `arduino-cli compile --clean`.
@@ -2086,7 +2233,7 @@ function replaceMonitorBaud(text, baud) {
 /**
  * Open a webview for the sketch.yaml helper and wire apply action.
  */
-async function commandOpenSketchYamlHelper() {
+async function commandOpenSketchYamlHelper(ctx) {
   const panel = vscode.window.createWebviewPanel(
     'sketchYamlHelper',
     'sketch.yaml Helper',
@@ -2101,15 +2248,19 @@ async function commandOpenSketchYamlHelper() {
     showError(e);
   }
 
-  // Try to initialize with currently selected profile's FQBN and libraries
+  // Try to initialize with selected profile's FQBN and libraries (if provided)
   (async () => {
     try {
-      const ino = await pickInoFromWorkspace();
-      if (!ino) return;
-      const sketchDir = path.dirname(ino);
+      let sketchDir = (ctx && ctx.sketchDir) ? String(ctx.sketchDir) : '';
+      if (!sketchDir) {
+        const ino = await pickInoFromWorkspace();
+        if (!ino) return;
+        sketchDir = path.dirname(ino);
+      }
       const yamlInfo = await readSketchYamlInfo(sketchDir);
       if (!yamlInfo || !yamlInfo.profiles || yamlInfo.profiles.length === 0) return;
-      const prof = yamlInfo.defaultProfile || yamlInfo.profiles[0];
+      let prof = (ctx && ctx.profile && yamlInfo.profiles.includes(ctx.profile)) ? ctx.profile : '';
+      if (!prof) prof = yamlInfo.defaultProfile || yamlInfo.profiles[0];
       const extFqbn = await getFqbnFromSketchYaml(sketchDir, prof);
       const libs = await getLibrariesFromSketchYaml(sketchDir, prof);
       // Parse platform id/version from sketch.yaml text
@@ -2120,9 +2271,7 @@ async function commandOpenSketchYamlHelper() {
         const parsed = parsePlatformFromProfileYaml(text, prof);
         if (parsed) { platformId = parsed.vendorArch || ''; platformVersion = parsed.version || ''; }
       } catch { }
-      if (extFqbn) {
-        panel.webview.postMessage({ type: 'init', extFqbn, libraries: libs, platformId, platformVersion });
-      }
+      if (extFqbn) panel.webview.postMessage({ type: 'init', extFqbn, libraries: libs, platformId, platformVersion });
     } catch (_) { /* ignore init errors */ }
   })();
 

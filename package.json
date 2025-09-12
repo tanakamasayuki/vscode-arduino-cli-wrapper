@@ -19,10 +19,27 @@
   "main": "./extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "workspaceContains:**/*.ino"
+    "workspaceContains:**/*.ino",
+    "onView:arduinoCliView"
   ],
   "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "arduinoCliView",
+          "name": "Arduino CLI"
+        }
+      ]
+    },
     "commands": [
+      {
+        "command": "arduino-cli.refreshView",
+        "title": "Arduino CLI: Refresh View"
+      },
+      {
+        "command": "arduino-cli.runTreeAction",
+        "title": "Arduino CLI: Run Action"
+      },
       {
         "command": "arduino-cli.sketchYamlHelper",
         "title": "%cmd.sketchYamlHelper%"
