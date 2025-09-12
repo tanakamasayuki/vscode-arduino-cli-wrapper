@@ -2096,12 +2096,6 @@ async function commandOpenSketchYamlHelper() {
   try {
     const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'sketch.yaml.html');
     let html = await readTextFile(htmlUri);
-    // Inject VS Code API hook and override the dynamically created Download button
-    const inject = `\n<script>\n(function(){\n  'use strict';\n  const vscode = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : null;\n  const isJa = (navigator.language||'').toLowerCase().startsWith('ja');\n  function applyHook() {\n    const yamlBox = document.getElementById('yamlBox');\n    if (!yamlBox || !yamlBox.parentElement) return;\n    // The original page creates a button before the textarea within the same wrapper\n    let btn = yamlBox.previousElementSibling;\n    if (!(btn && btn.tagName === 'BUTTON')) {\n      btn = yamlBox.parentElement.querySelector('button');\n    }\n    if (!(btn && btn.tagName === 'BUTTON')) return;\n    // If already patched, skip
-    if (btn.dataset && btn.dataset.patched === '1') return;\n    // Replace with a clone to drop all previous listeners
-    const newBtn = btn.cloneNode(true);\n+    newBtn.textContent = isJa ? 'sketch.yaml に反映' : 'Apply to sketch.yaml';\n+    newBtn.dataset.patched = '1';\n+    newBtn.addEventListener('click', (ev) => {\n+      try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch(_){}\n+      const yaml = yamlBox ? (yamlBox.value||'') : '';\n+      if (vscode && yaml) vscode.postMessage({ type: 'applyYaml', yaml });\n+    }, { capture: true });\n+    btn.replaceWith(newBtn);\n+  }\n+  const mo = new MutationObserver(() => { try { applyHook(); } catch(_){} });\n+  if (document.readyState === 'loading') {\n+    document.addEventListener('DOMContentLoaded', () => { applyHook(); mo.observe(document.body, { childList: true, subtree: true }); });\n+  } else {\n+    applyHook(); mo.observe(document.body, { childList: true, subtree: true });\n+  }\n+})();\n</script>\n`;
-    // Append the injection just before </body>
-    html = html.replace(/<\/body>\s*<\/html>\s*$/i, inject + '</body></html>');
     panel.webview.html = html;
   } catch (e) {
     showError(e);
