@@ -11,3 +11,4 @@ images/*.svg
 *.txt
 *.bat
 .gitignore
+temp

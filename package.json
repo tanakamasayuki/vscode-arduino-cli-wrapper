@@ -2,7 +2,7 @@
   "name": "vscode-arduino-cli-wrapper",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "tanakamasayuki",
   "icon": "images/icon.png",
   "license": "CC0-1.0",
@@ -19,15 +19,15 @@
   "main": "./extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "workspaceContains:**/*.ino",
-    "onView:arduinoCliView"
+    "workspaceContains:**/*.ino"
   ],
   "contributes": {
     "views": {
       "explorer": [
         {
           "id": "arduinoCliView",
-          "name": "Arduino CLI"
+          "name": "Arduino CLI",
+          "icon": "images/icon.png"
         }
       ]
     },
@@ -129,5 +129,8 @@
         }
       }
     }
+  },
+  "dependencies": {
+    "vsce": "^2.15.0"
   }
 }
