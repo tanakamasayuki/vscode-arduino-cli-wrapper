@@ -680,6 +680,13 @@ async function commandUpload() {
   const cfg = getConfig();
   const channel = getOutput();
 
+  // Require port selection before proceeding (fail fast)
+  const currentPort = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  if (!currentPort) {
+    vscode.window.showErrorMessage(t('portUnsetWarn'));
+    return;
+  }
+
   // Prefer sketch.yaml profile if present
   const yamlInfo = await readSketchYamlInfo(sketchDir);
   // Build first before upload
@@ -718,11 +725,6 @@ async function commandUpload() {
       const set = await commandSetFqbn(true);
       if (!set) return;
       fqbn = extContext.workspaceState.get(STATE_FQBN, '');
-    }
-    if (!port) {
-      const set = await commandSetPort(true);
-      if (!set) return;
-      port = extContext.workspaceState.get(STATE_PORT, '');
     }
     if (fqbn) uploadArgs.push('--fqbn', fqbn);
     if (port) uploadArgs.push('-p', port);
