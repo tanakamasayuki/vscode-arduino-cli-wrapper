@@ -435,11 +435,17 @@
 
         function ensureDefaultLibsForBoard() {
           if (!/m5stack/i.test(fqbn)) return;
-          // Preselect libraries for M5 boards without forcing versions.
-          // Do not overwrite versions already coming from sketch.yaml/init.
+          // Preselect libraries for M5 boards, upgrading to latest version
+          // once the libraries list is available. Do not overwrite versions
+          // already specified (e.g., coming from sketch.yaml/init).
           const ensure = (name) => {
-            if (!selectedLibs.has(name)) {
-              selectedLibs.set(name, true); // unversioned default selection
+            const has = selectedLibs.has(name);
+            const cur = has ? selectedLibs.get(name) : undefined;
+            const latest = (Array.isArray(libsCache) ? findLatestVersionByName(name) : '') || '';
+            if (!has) {
+              selectedLibs.set(name, latest || true);
+            } else if ((cur === true || cur === '' || cur == null) && latest) {
+              selectedLibs.set(name, latest);
             }
           };
           ensure('M5Unified');
