@@ -288,10 +288,15 @@ async function ensureCliReady() {
     // If executable not found, provide guided actions
     const msg = t('cliCheckFail');
     channel.appendLine(`[error] ${msg}`);
-    // Offer actions
-    const action = await vscode.window.showErrorMessage(msg, t('chooseExe'), t('openSettings'), t('installHelp'));
+    // Offer actions (include Windows MSI direct link)
+    const buttons = [t('chooseExe'), t('openSettings'), t('installHelp')];
+    const isWin = (process.platform === 'win32');
+    if (isWin) buttons.push('Download MSI');
+    const action = await vscode.window.showErrorMessage(msg, ...buttons);
     if (action === t('installHelp')) {
       vscode.env.openExternal(vscode.Uri.parse('https://arduino.github.io/arduino-cli/latest/installation/'));
+    } else if (action === 'Download MSI') {
+      vscode.env.openExternal(vscode.Uri.parse('https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi'));
     } else if (action === t('openSettings')) {
       vscode.commands.executeCommand('workbench.action.openSettings', 'arduino-cli-wrapper.path');
     } else if (action === t('chooseExe')) {
@@ -599,11 +604,46 @@ async function pickBoardOrFqbn(requirePort) {
 }
 
 async function commandVersion() {
-  if (!(await ensureCliReady())) return;
+  const channel = getOutput();
+  let current = '';
+  let ensured = false;
+  try { ensured = await ensureCliReady(); } catch { ensured = false; }
+  if (ensured) {
+    try { await runCli(['version']); } catch (_) { /* ignore */ }
+    try { current = await getArduinoCliVersionString(); } catch { current = ''; }
+  } else {
+    channel.appendLine('[info] arduino-cli not detected. Showing latest release info…');
+  }
   try {
-    await runCli(['version']);
+    const latest = await fetchLatestArduinoCliTag();
+    const latestNorm = normalizeVersion(latest);
+    const currentNorm = normalizeVersion(current);
+    const isWin = (process.platform === 'win32');
+    const msiUrl = 'https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi';
+    if (latest) channel.appendLine(`Latest release on GitHub: ${latest}`);
+    if (currentNorm && latestNorm) {
+      if (currentNorm === latestNorm) {
+        vscode.window.showInformationMessage(`arduino-cli is up to date (current: ${current})`);
+      } else {
+        const btns = isWin ? ['Open MSI', 'Open Release Page'] : ['Open Release Page'];
+        const sel = await vscode.window.showInformationMessage(`A newer arduino-cli is available: ${latest} (current: ${current})`, ...btns);
+        if (sel === 'Open MSI') vscode.env.openExternal(vscode.Uri.parse(msiUrl));
+        if (sel === 'Open Release Page') vscode.env.openExternal(vscode.Uri.parse('https://github.com/arduino/arduino-cli/releases/latest'));
+      }
+    } else {
+      const msg = `Latest arduino-cli: ${latest || '(unknown)'}`;
+      channel.appendLine(msg);
+      if (isWin) {
+        const sel = await vscode.window.showInformationMessage(`${msg}`, 'Open MSI', 'Open Release Page');
+        if (sel === 'Open MSI') vscode.env.openExternal(vscode.Uri.parse(msiUrl));
+        if (sel === 'Open Release Page') vscode.env.openExternal(vscode.Uri.parse('https://github.com/arduino/arduino-cli/releases/latest'));
+      } else {
+        const sel = await vscode.window.showInformationMessage(`${msg}`, 'Open Release Page');
+        if (sel === 'Open Release Page') vscode.env.openExternal(vscode.Uri.parse('https://github.com/arduino/arduino-cli/releases/latest'));
+      }
+    }
   } catch (e) {
-    showError(e);
+    channel.appendLine(`[warn] ${e.message || e}`);
   }
 }
 
@@ -614,6 +654,63 @@ async function commandListBoards() {
   } catch (e) {
     showError(e);
   }
+}
+
+// Return current arduino-cli version string via `version --format json` (e.g., "1.3.0")
+async function getArduinoCliVersionString() {
+  const cfg = getConfig();
+  const exe = cfg.exe || 'arduino-cli';
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const args = [...baseArgs, 'version', '--format', 'json'];
+  let stdout = '';
+  await new Promise((resolve, reject) => {
+    const child = cp.spawn(exe, args, { shell: false });
+    child.stdout.on('data', d => { stdout += d.toString(); });
+    child.stderr.on('data', () => {});
+    child.on('error', reject);
+    child.on('close', code => code === 0 ? resolve() : reject(new Error(`version exit ${code}`)));
+  });
+  try {
+    const json = JSON.parse(stdout || '{}');
+    const v = String(json.VersionString || json.version || json.Version || '').trim();
+    return v || '';
+  } catch { return (stdout || '').trim(); }
+}
+
+// Fetch latest tag name from GitHub Releases API for arduino/arduino-cli
+async function fetchLatestArduinoCliTag() {
+  const https = require('https');
+  const url = 'https://api.github.com/repos/arduino/arduino-cli/releases/latest';
+  const body = await new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'vscode-arduino-cli-wrapper' } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        // Handle simple redirect once
+        https.get(res.headers.location, { headers: { 'User-Agent': 'vscode-arduino-cli-wrapper' } }, (res2) => {
+          const chunks = [];
+          res2.on('data', c => chunks.push(Buffer.from(c)));
+          res2.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+          res2.on('error', reject);
+        }).on('error', reject);
+        return;
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(Buffer.from(c)));
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(8000, () => { try { req.destroy(new Error('timeout')); } catch(_){} });
+  });
+  try {
+    const json = JSON.parse(body || '{}');
+    const tag = String(json.tag_name || json.tag || '').trim();
+    return tag || '';
+  } catch { return ''; }
+}
+
+function normalizeVersion(v) {
+  if (!v) return '';
+  return String(v).trim().replace(/^v/i, '');
 }
 
 async function commandRunArbitrary() {
