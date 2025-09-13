@@ -816,7 +816,7 @@ async function commandUploadData() {
         if (/\bLittleFS\s*\.h\b|#include\s*[<\"]LittleFS\.h[>\"]/i.test(txt)) { fsType = 'LittleFS'; break; }
         if (/\bSPIFFS\s*\.h\b|#include\s*[<\"]SPIFFS\.h[>\"]/i.test(txt)) { fsType = 'SPIFFS'; break; }
       }
-    } catch {}
+    } catch { }
   }
   if (!fsType) {
     vscode.window.showErrorMessage('Could not detect filesystem: include SPIFFS.h or LittleFS.h in the sketch.');
@@ -984,7 +984,7 @@ async function commandUploadData() {
 /** Resolve an executable by trying plain name and platform-specific extensions under a base directory. */
 async function resolveExecutable(baseDir, name) {
   const candidates = [];
-  const base = String(baseDir || '').replace(/[\\/]+$/,'');
+  const base = String(baseDir || '').replace(/[\\/]+$/, '');
   const join = (n) => path.join(base, n);
   if (process.platform === 'win32') {
     candidates.push(join(name + '.exe'));
@@ -1210,7 +1210,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
           for (const p of [...staticIncludes, ...Array.from(dynamicSet).map(normalizeIncludePath)]) {
             if (p && !seen.has(p)) { seen.add(p); combined.push(p); }
           }
-        // ESP-IDF include globs removed per request
+          // ESP-IDF include globs removed per request
           // filter existing bases
           const checks = await Promise.all(combined.map(async (p) => {
             try {
@@ -1359,7 +1359,7 @@ function activate(context) {
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('arduino-cli.refreshView', () => {
-      try { if (arduinoTreeProvider) arduinoTreeProvider.refresh(); } catch (_) {}
+      try { if (arduinoTreeProvider) arduinoTreeProvider.refresh(); } catch (_) { }
     }),
     vscode.commands.registerCommand('arduino-cli.runTreeAction', async (payload) => {
       try {
@@ -1367,10 +1367,16 @@ function activate(context) {
         const { action, sketchDir, profile } = payload;
         if (action === 'compile') return runCompileFor(sketchDir, profile);
         if (action === 'upload') return runUploadFor(sketchDir, profile);
+        if (action === 'version') return vscode.commands.executeCommand('arduino-cli.version');
+        if (action === 'listBoards') return vscode.commands.executeCommand('arduino-cli.listBoards');
+        if (action === 'listAllBoards') return vscode.commands.executeCommand('arduino-cli.listAllBoards');
+        if (action === 'sketchNew') return vscode.commands.executeCommand('arduino-cli.sketchNew');
+        if (action === 'runArbitrary') return vscode.commands.executeCommand('arduino-cli.runArbitrary');
         if (action === 'uploadData') return commandUploadDataFor(sketchDir, profile);
         if (action === 'monitor') return commandMonitor();
         if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
+        if (action === 'setBaud') return vscode.commands.executeCommand('arduino-cli.setBaud');
         if (action === 'setFqbn') return vscode.commands.executeCommand('arduino-cli.setFqbn');
       } catch (e) { showError(e); }
     }),
@@ -1453,9 +1459,12 @@ class ArduinoCliTreeProvider {
   /** @param {any} element */
   async getChildren(element) {
     if (!element) {
-      // Root: list projects (sketch folders)
+      // Root: global commands + projects (sketch folders)
       const sketches = await findSketches();
-      return sketches.map(s => new ProjectItem(s.dir, s.name));
+      return [
+        ...globalCommandItems(),
+        ...sketches.map(s => new ProjectItem(s.dir, s.name))
+      ];
     }
     if (element instanceof ProjectItem) {
       const info = await readSketchYamlInfo(element.dir);
@@ -1513,6 +1522,18 @@ function defaultCommandItems(dir, profile) {
   ];
 }
 
+// Commands at the root level (not tied to a specific sketch/profile)
+function globalCommandItems() {
+  return [
+    new CommandItem('Version', 'version', '', ''),
+    new CommandItem('List Boards', 'listBoards', '', ''),
+    new CommandItem('List All Boards', 'listAllBoards', '', ''),
+    new CommandItem('Open Helper', 'helper', '', ''),
+    new CommandItem('New Sketch', 'sketchNew', '', ''),
+    new CommandItem('Run Command', 'runArbitrary', '', ''),
+  ];
+}
+
 async function findSketches() {
   /** @type {{dir:string,name:string}[]} */
   const results = [];
@@ -1525,7 +1546,7 @@ async function findSketches() {
       seen.add(dir);
       results.push({ dir, name: path.basename(dir) });
     }
-  } catch (_) {}
+  } catch (_) { }
   return results;
 }
 
@@ -1565,9 +1586,9 @@ async function runUploadFor(sketchDir, profile) {
   cArgs.push(sketchDir); uArgs.push(sketchDir);
   await compileWithIntelliSense(sketchDir, cArgs);
   let reopenMonitorAfter = false;
-  if (monitorTerminal) { try { monitorTerminal.dispose(); } catch(_){} monitorTerminal = undefined; reopenMonitorAfter = true; }
+  if (monitorTerminal) { try { monitorTerminal.dispose(); } catch (_) { } monitorTerminal = undefined; reopenMonitorAfter = true; }
   await runCli(uArgs, { cwd: sketchDir, forceSpawn: true });
-  if (reopenMonitorAfter) { await new Promise(r=>setTimeout(r,1500)); await commandMonitor(); }
+  if (reopenMonitorAfter) { await new Promise(r => setTimeout(r, 1500)); await commandMonitor(); }
 }
 
 // Tree helper: upload data for an explicit sketch/profile
@@ -2570,7 +2591,7 @@ async function commandOpenSketchYamlHelper(ctx) {
         try {
           const ino = await pickInoFromWorkspace();
           if (ino) sketchDir = path.dirname(ino);
-        } catch(_) {}
+        } catch (_) { }
       }
       if (!sketchDir) {
         // As a last resort, let user choose a folder
@@ -2581,7 +2602,7 @@ async function commandOpenSketchYamlHelper(ctx) {
         }
         sketchDir = picked[0].fsPath;
       }
-      const { profileName, blockText } = extractProfileFromTemplateYaml(String(msg.yaml||''));
+      const { profileName, blockText } = extractProfileFromTemplateYaml(String(msg.yaml || ''));
       if (!profileName || !blockText) throw new Error('invalid YAML payload');
       const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
       let existing = '';
@@ -2602,7 +2623,7 @@ async function commandOpenSketchYamlHelper(ctx) {
  * From a generated template YAML, extract the first profile name and its block text.
  */
 function extractProfileFromTemplateYaml(text) {
-  const lines = String(text||'').split(/\r?\n/);
+  const lines = String(text || '').split(/\r?\n/);
   let inProfiles = false;
   let start = -1;
   let name = '';
@@ -2635,12 +2656,12 @@ function extractProfileFromTemplateYaml(text) {
  * - Overwrite when the profile exists; otherwise append under profiles.
  */
 function mergeProfileIntoSketchYaml(existingText, profileName, profileBlockText) {
-  const text = String(existingText||'');
+  const text = String(existingText || '');
   const lines = text.split(/\r?\n/);
   // Find profiles section
   let profStart = -1; let profEnd = lines.length;
   for (let i = 0; i < lines.length; i++) {
-    if (/^\s*profiles\s*:\s*$/.test(lines[i])) { profStart = i; for (let j = i+1; j < lines.length; j++) { if (/^\S/.test(lines[j])) { profEnd = j; break; } } break; }
+    if (/^\s*profiles\s*:\s*$/.test(lines[i])) { profStart = i; for (let j = i + 1; j < lines.length; j++) { if (/^\S/.test(lines[j])) { profEnd = j; break; } } break; }
   }
   const ensureEol = (s) => s.endsWith('\n') ? s : (s + '\n');
   if (profStart < 0) {
