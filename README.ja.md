@@ -1,108 +1,95 @@
-# Arduino CLI Wrapper (VS Code Extension)
+# Arduino CLI Wrapper (VS Code 拡張機能)
 
-Arduino CLI のコマンドを VS Code から実行できる拡張機能です。コマンドパレットからビルド・アップロード・接続ボード一覧などを呼び出せます。
+Arduino CLI を VS Code から「コマンドパレット」「ステータスバー」「エクスプローラー」から操作できます。カラー付きの疑似ターミナルにログを集約し、sketch.yaml のプロファイルに対応、ビルド中に IntelliSense の includePath を自動更新します。
 
-## 主な機能
+[English README](README.md)
 
-- Arduino CLI: Show Version — `arduino-cli version` を実行
-- Arduino CLI: List Connected Boards — 接続ボード一覧表示
-- Arduino CLI: List All Boards (listall) — すべてのボード一覧。実行時にフィルター文字列を入力可能
-  - 入力したフィルターは `arduino-cli board listall <filter>` にそのまま渡します（例: `atom`）
-- Arduino CLI: Compile Sketch — スケッチを選択してコンパイル（FQBN指定可）
-- Arduino CLI: Clean Compile — クリーンビルド（`--clean` を付けてコンパイル）。開始時に includePath を空にリセットし、その後ビルドから検出したパスのみを追記
-- Arduino CLI: Upload Sketch — スケッチを選択し、ポートと FQBN を指定して書き込み
-- Arduino CLI: Monitor Serial — シリアルモニタを起動（ポートとボーレートを指定）
-- Arduino CLI: Create sketch.yaml — スケッチフォルダに `sketch.yaml` を作成（dump-profile の profiles を含め、default_profile を現在の FQBN に対応するプロファイル名へ設定）
-  - 仕様は Arduino CLI のドキュメント「Sketch Project File」を参照: https://arduino.github.io/arduino-cli/latest/sketch-project-file/
-  - 作成時、FQBN が設定されていれば `arduino-cli compile --dump-profile` の結果（profiles セクション）も追記します。
-- Arduino CLI: Board Details — プロファイル使用時は選択中プロファイルの FQBN を `-b` で渡して詳細表示
-- Arduino CLI: Run Command — 任意の引数で Arduino CLI を実行
+## 機能
 
-実行ログは疑似ターミナルにカラー表示（ANSI）で統一しています。
+- Show Version: `arduino-cli version` を実行
+- List Connected Boards: 接続中のボード一覧を表示
+- List All Boards (listall): すべてのボード一覧。実行時にフィルター入力可（`arduino-cli board listall <filter>` に渡します）
+- Compile Sketch: スケッチをコンパイル（プロファイルまたは FQBN を使用）
+- Clean Compile: `--clean` でクリーンビルド。最初に includePath を空にし、ビルドで検出したパスのみを追加
+- Upload Sketch: ビルドしてから書き込み。選択したポートとプロファイル/FQBNを使用。必要に応じてモニタを一時停止・再開
+- Monitor Serial: シリアルモニタを起動（ポートとボーレートを選択）
+- Create sketch.yaml: スケッチフォルダーに `sketch.yaml` を作成。`--dump-profile` の結果を profiles に追記し、`default_profile` を設定
+- Board Details: プロファイル使用時は `-b` でその FQBN を渡して詳細表示
+- Run Command: 任意の Arduino CLI 引数を実行
+- Configure IntelliSense: ビルドせずに includePath を計算して `.vscode/c_cpp_properties.json` を作成
+- Upload Data (ESP32): `data/` から LittleFS/SPIFFS イメージを作成し、esptool で書き込み
+- New Sketch: 新しいスケッチフォルダーを作成
+- Open Helper: sketch.yaml ヘルパーの Web ビューを開き、プロファイル/ライブラリを確認・反映
+
+すべてのコマンドのログは疑似ターミナルに ANSI カラーで表示されます。
+
+## エクスプローラー ビュー
+
+- エクスプローラーに「Arduino CLI」ビューを追加。
+- スケッチフォルダーを一覧表示し、`sketch.yaml` があればプロファイルも表示。
+- プロジェクト/プロファイルごとのアクション: Compile / Upload / Upload Data / Monitor / Open Helper。
+- 先頭にグローバルアクション: Version / List Boards / List All Boards / Open Helper / New Sketch / Run Command。
 
 ## ステータスバー
 
-- `$(tools) Build`: 現在開いているフォルダ内の .ino を対象にコンパイル
-- `$(cloud-upload) Upload`: 現在開いているフォルダ内の .ino を対象に書き込み
+- `$(tools) Build`: 現在のフォルダー内の `.ino` をコンパイル
+- `$(cloud-upload) Upload`: 現在のフォルダー内の `.ino` を書き込み
 - `$(pulse) Monitor`: シリアルモニタを開く
 - `$(list-unordered) Boards`: 接続中のボード一覧（`arduino-cli board list`）
-- `$(search) ListAll`: すべてのボード一覧（`arduino-cli board listall`、実行時にフィルター入力可）
+- `$(search) ListAll`: すべてのボード一覧（`arduino-cli board listall`、実行時にフィルター入力）
 - `$(circuit-board) <FQBN/Profile>`:
-  - スケッチフォルダに `sketch.yaml` がある場合は default_profile（または最初のプロファイル名）を表示し、クリックで選択（`Arduino CLI: Set Profile`）
-  - 無い場合は FQBN を表示し、クリックで変更（`Arduino CLI: Set FQBN`）
-- `$(plug) <Port>`: 現在選択されているシリアルポートを表示（クリックで変更）
-- `$(watch) <Baud>`: 現在選択されているボーレートを表示（クリックで変更）
+  - `sketch.yaml` がある場合は既定または先頭のプロファイル名を表示し、「Arduino CLI: Set Profile」で切替可能。
+  - ない場合は FQBN を表示し、「Arduino CLI: Set FQBN」で変更可能。
+- `$(plug) <Port>`: 現在のシリアルポート（クリックで変更）
+- `$(watch) <Baud>`: 現在のボーレート（クリックで変更）
 
-注: ワークスペース内に .ino が存在しない場合はステータスバー項目は非表示です。
+`.ino` がないワークスペースではステータスバー項目は非表示です。FQBN/Port/Baud はワークスペースごとに保存され、再起動後も保持されます。
 
-FQBN/Port はワークスペースごとに保存され、再起動後も保持されます。
+## クイックスタート
 
-## クイックスタート / 使い方
+1) Arduino CLI の準備
+- `PATH` に通すか、設定 `arduino-cli-wrapper.path` に実行ファイルのフルパスを指定。
+- 「Arduino CLI: Show Version」で認識確認（未設定ならガイドを表示）。
+  - Windows: インストーラー https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi または `winget install ArduinoSA.CLI`
+  - Linux / macOS: https://arduino.github.io/arduino-cli/latest/installation/
 
-1) arduino-cli を用意
-- `PATH` に通すか、拡張設定 `arduino-cli-wrapper.path` にフルパスを設定。
-- 「Arduino CLI: Show Version」で認識確認（未設定ならガイドが表示されます）。
- - Windows の場合: 次のいずれかでインストールしてください
-   - セットアップファイル: https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi
-   - コマンド: `winget install ArduinoSA.CLI`
- - Linux / macOS の場合: 公式手順を参照してください
-   - https://arduino.github.io/arduino-cli/latest/installation/
+2) スケッチフォルダーを開く
+- `.ino` を含むフォルダーを開くと、Build/Upload/Monitor と FQBN/Port/Baud がステータスバーに表示されます。
 
-2) スケッチを開く
-- .ino を含むフォルダを開くと、ステータスバーに Build/Upload/Monitor と FQBN/Port/Baud が表示されます。
+3) ビルド / 書き込み / モニタ
+- ビルド: 「Arduino CLI: Compile Sketch」または Build をクリック。
+- 書き込み: 「Arduino CLI: Upload Sketch」または Upload をクリック。先にポートを選択してください（プロファイル使用時でも `-p` で明示指定）。
+- モニタ: 「Arduino CLI: Monitor Serial」または Monitor をクリック。ボーレートは既定 115200、ステータスバーから変更できます。
 
-3) ビルド
-- 「Arduino CLI: Compile Sketch」またはステータスバーの Build。
-- 必要に応じて FQBN を設定。ビルド中に IntelliSense 設定が自動更新されます。
+ヒント:
+- `.ino` が複数あるときは選択ダイアログが出ます。アクティブな `.ino` エディターがあれば優先されます。
+- FQBN を自動取得できない場合は手入力できます。
 
-4) アップロード
-- 「Arduino CLI: Upload Sketch」またはステータスバーの Upload。
-- 事前にポートを選択（プロファイル使用時でも選択済みポートを `-p` で明示指定します）。
+## Upload Data (ESP32)
 
-5) モニタ
-- 「Arduino CLI: Monitor Serial」またはステータスバーの Monitor。
-- ボーレートはステータスバーから変更（既定 115200）。
-
-### 速度設定（ボーレート）
-
-- コマンド: Arduino CLI: Set Baudrate
-- ステータスバーの `$(watch) <Baud>` をクリックでも変更可能
-- ポート選択は `arduino-cli board list` の結果から選択できます（選択した行に FQBN があれば同時に設定します）
-
-または、ステータスバーの Build/Upload ボタンを利用してください。
-
-補足:
-- コンパイル/書き込みの対象は「現在開いているワークスペースフォルダ内の .ino」です。アクティブな .ino があればそれを優先します。
-- 複数の .ino がある場合は Quick Pick で選択します。
-- FQBN は接続ボードから自動取得できない場合、手入力が可能です。
-
-## コマンドまとめ
-
-- Show Version / List Connected Boards / List All Boards (listall)
-- Compile Sketch / Clean Compile（`--clean` でクリーンビルド）
-- Upload Sketch（プロファイル使用時も選択済みポートを `-p` で明示）
-- Monitor Serial（`--config baudrate=<baud>`）
-- Create sketch.yaml（dump-profile を追記し `default_profile` を設定）
-- Board Details（プロファイルの FQBN を `-b` で渡す）
-- Run Command（任意の引数で CLI 実行）
+- スケッチ直下に `data/` フォルダーが必要です。スケッチに `#include <LittleFS.h>` または `#include <SPIFFS.h>` を含めてください。
+- `mklittlefs` または `mkspiffs` でイメージを生成し、`esptool` で SPIFFS パーティションに書き込みます。
+- `arduino-cli compile --show-properties` の結果からツールや速度を取得し、ビルド出力中の `partitions.csv` を解析してオフセット/サイズを特定します。
+- フラッシュ前にシリアルモニタを閉じ、完了後に自動で再オープンします。
 
 ## sketch.yaml とプロファイル
 
-- `sketch.yaml` がある場合、コンパイル/アップロードはプロファイルを優先します。
-- `default_profile` が未設定なら最初のプロファイル名を候補に表示。
-- 「Create sketch.yaml」で `arduino-cli compile --dump-profile` の結果（profiles）を追記し、`default_profile` を自動設定します。
-- ステータスバーの FQBN 表示は、`sketch.yaml` があるとプロファイル名表示に切り替わります（クリックで Set Profile）。
+- `sketch.yaml` があるときはプロファイルを優先。ない場合は FQBN を使用します。
+- 「Create sketch.yaml」で `--dump-profile` の結果を `profiles:` に追記し、`default_profile` を自動設定します。
+- ステータスバーの FQBN 表示は、プロファイルがあればプロファイル名に切り替わります。「Arduino CLI: Set Profile」で変更できます。
+- 「Open Helper」では、選択したプロファイルの FQBN やライブラリ、プラットフォーム情報の確認と反映ができます。
 
-## IntelliSense の更新仕様
+## IntelliSense
 
-- ビルド出力から `-I` / `-isystem` / `-iprefix` を解析し、`.vscode/c_cpp_properties.json` の `Arduino` 構成に重複なく `includePath` を追加します。
-- クリーンビルドでは最初に includePath を空にし、その後検出分のみ追加します。
-- C/C++ 標準（ESP32 系は `c17` / `c++23` を優先）
+- ビルド中にコンパイラ出力（`-I` / `-isystem` / `-iprefix`）を解析し、`.vscode/c_cpp_properties.json`（`Arduino` 構成）を重複なく更新します。
+- クリーンビルドでは先に includePath を空にし、その後に検出パスのみを追加します。
+- ESP32 系（esp32/xtensa-esp32/riscv32-esp-elf）では `c17` / `c++23` を優先します。
+- 「Configure IntelliSense」でビルドせずに includePath を計算し、`c_cpp_properties.json` を作成できます。
 
 ## 設定
 
-- `arduino-cli-wrapper.path`: arduino-cli の実行ファイルパス
-- `arduino-cli-wrapper.additionalArgs`: すべての呼び出しに追加する引数（配列）
+- `arduino-cli-wrapper.path`: `arduino-cli` 実行ファイルのパス
+- `arduino-cli-wrapper.additionalArgs`: すべての呼び出しに付与する追加引数（配列）
 - `arduino-cli-wrapper.verbose`: コンパイル/書き込み時に `--verbose` を付与
 
 ## 要件
@@ -110,11 +97,13 @@ FQBN/Port はワークスペースごとに保存され、再起動後も保持�
 - VS Code 1.84.0 以降
 - Arduino CLI がローカルにインストール済み
 
-## トラブルシュート
+## トラブルシューティング
 
 - 実行ファイルが見つからない: `arduino-cli-wrapper.path` にフルパスを設定してください。
-- ボードが検出されない: ケーブル/ドライバ/ポートを確認し、`Arduino CLI: List Connected Boards` を実行して状況を確認してください。
+- ボードが検出されない: ケーブル/ドライバー/ポートを確認し、「Arduino CLI: List Connected Boards」で確認してください。
+- Upload Data: `data/` が存在するか、スケッチに `SPIFFS.h` または `LittleFS.h` を含めているか確認してください。
 
 ## ライセンス
 
-このプロジェクトは CC0 1.0 Universal（Public Domain Dedication）で提供します。詳細は `LICENSE` を参照してください。
+CC0 1.0 Universal (Public Domain Dedication)。詳細は `LICENSE` を参照してください。
+
