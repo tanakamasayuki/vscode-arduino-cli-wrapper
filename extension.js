@@ -2667,6 +2667,8 @@ async function commandOpenSketchYamlHelper(ctx) {
       if (!prof) prof = yamlInfo.defaultProfile || yamlInfo.profiles[0];
       const extFqbn = await getFqbnFromSketchYaml(sketchDir, prof);
       const libs = await getLibrariesFromSketchYaml(sketchDir, prof);
+      // Extract raw profile block text to preserve user-defined parameters
+      const profileBlock = await getProfileBlockFromSketchYaml(sketchDir, prof);
       // Parse platform id/version from sketch.yaml text
       let platformId = '';
       let platformVersion = '';
@@ -2675,7 +2677,7 @@ async function commandOpenSketchYamlHelper(ctx) {
         const parsed = parsePlatformFromProfileYaml(text, prof);
         if (parsed) { platformId = parsed.vendorArch || ''; platformVersion = parsed.version || ''; }
       } catch { }
-      if (extFqbn) panel.webview.postMessage({ type: 'init', extFqbn, libraries: libs, platformId, platformVersion });
+      if (extFqbn) panel.webview.postMessage({ type: 'init', extFqbn, libraries: libs, platformId, platformVersion, profileBlock, profileName: prof });
     } catch (_) { /* ignore init errors */ }
   })();
 
@@ -2724,25 +2726,34 @@ function extractProfileFromTemplateYaml(text) {
   let inProfiles = false;
   let start = -1;
   let name = '';
+  // First, try to find under an explicit `profiles:` section
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (!inProfiles) {
-      if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true;
-      continue;
-    }
-    const m = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
-    if (m) {
-      name = m[1].trim();
-      start = i;
-      break;
+    if (!inProfiles) { if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true; continue; }
+    const m = line.match(/^\s{2,}([^\s:#][^:]*)\s*:\s*$/);
+    if (m) { name = m[1].trim(); start = i; break; }
+  }
+  // Fallback: accept a raw profile block starting at an indented key
+  if (start < 0) {
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^\s{2,}([^\s:#][^:]*)\s*:\s*$/);
+      if (m) { name = m[1].trim(); start = i; break; }
     }
   }
   if (start < 0 || !name) return { profileName: '', blockText: '' };
+  // Determine the indentation of the profile key to detect the end reliably
+  const indentMatch = lines[start].match(/^(\s+)/);
+  const baseIndent = indentMatch ? indentMatch[1] : '  ';
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
     const s = lines[i];
     if (/^\s*default_profile\s*:\s*/.test(s)) { end = i; break; }
     if (/^\S/.test(s)) { end = i; break; }
+    const m = s.match(/^\s{2,}([^\s:#][^:]*)\s*:\s*$/);
+    if (m) {
+      const ind = (s.match(/^(\s+)/) || [,''])[1];
+      if (ind && ind.length === baseIndent.length) { end = i; break; }
+    }
   }
   const block = lines.slice(start, end).join('\n');
   return { profileName: name, blockText: block.replace(/\s+$/, '') + '\n' };
@@ -2825,4 +2836,42 @@ async function getLibrariesFromSketchYaml(sketchDir, profileName) {
     }
     return result;
   } catch { return []; }
+}
+
+/**
+ * Extract the raw YAML block for the given profile from sketch.yaml.
+ * Returns an empty string when not found.
+ */
+async function getProfileBlockFromSketchYaml(sketchDir, profileName) {
+  try {
+    const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+    const text = await readTextFile(yamlUri);
+    const lines = text.split(/\r?\n/);
+    let inProfiles = false;
+    let start = -1;
+    let end = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!inProfiles) {
+        if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true;
+        continue;
+      }
+      const m = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+      if (m) {
+        const name = m[1].trim();
+        if (start >= 0) { end = i; break; }
+        if (!profileName || name === profileName) { start = i; }
+        continue;
+      }
+      // Stop at top-level or default_profile
+      if (start >= 0 && (/^\s*default_profile\s*:\s*/.test(line) || /^\S/.test(line))) {
+        end = i; break;
+      }
+    }
+    if (start >= 0 && end < 0) end = lines.length;
+    if (start >= 0 && end > start) {
+      return lines.slice(start, end).join('\n') + (text.endsWith('\n') ? '' : '\n');
+    }
+  } catch { }
+  return '';
 }

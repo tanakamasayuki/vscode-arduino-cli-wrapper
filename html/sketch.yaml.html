@@ -335,6 +335,162 @@
             lines.push('default_profile: ' + profile);
             return lines.join('\n');
         }
+        // Patch helpers for keep mode
+        function patchFqbnInYaml(yamlText, profileName, extFqbn) {
+          try {
+            const lines = String(yamlText || '').split(/\r?\n/);
+            // Find profiles section bounds
+            let pStart = -1; let pEnd = lines.length;
+            for (let i = 0; i < lines.length; i++) {
+              if (/^\s*profiles\s*:\s*$/.test(lines[i])) { pStart = i; for (let j = i + 1; j < lines.length; j++) { if (/^\S/.test(lines[j])) { pEnd = j; break; } } break; }
+            }
+            if (pStart < 0) return yamlText;
+            // Find profile block
+            let profStart = -1; let profEnd = pEnd;
+            const wanted = String(profileName || '').trim();
+            for (let i = pStart + 1; i < pEnd; i++) {
+              const m = lines[i].match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+              if (m) {
+                if (!wanted || m[1].trim() === wanted) {
+                  if (profStart < 0) { profStart = i; continue; }
+                }
+                if (profStart >= 0) { profEnd = i; break; }
+              }
+            }
+            if (profStart < 0) return yamlText;
+            if (profEnd <= profStart) profEnd = pEnd;
+            // Look for fqbn line, else insert right after profile key
+            let fqbnLine = -1;
+            for (let i = profStart + 1; i < profEnd; i++) {
+              if (/^\s{4}fqbn\s*:\s*.+$/.test(lines[i])) { fqbnLine = i; break; }
+              // stop if next sibling key at same indent appears
+              if (/^\s{2}[^\s:#][^:]*\s*:\s*$/.test(lines[i])) break;
+            }
+            if (fqbnLine >= 0) {
+              lines[fqbnLine] = `    fqbn: ${extFqbn}`;
+              return lines.join('\n');
+            }
+            // Insert after the profile key line
+            const before = lines.slice(0, profStart + 1).join('\n');
+            const after = lines.slice(profStart + 1).join('\n');
+            const mid = `\n    fqbn: ${extFqbn}`;
+            return before + mid + (after.startsWith('\n') ? '' : '\n') + after;
+          } catch (_) { return yamlText; }
+        }
+        function libsArrayFromSelected() {
+          const arr = [];
+          for (const [name, ver] of selectedLibs.entries()) {
+            arr.push({ name, version: (typeof ver === 'string' && ver) ? ver : '' });
+          }
+          return arr;
+        }
+        // Helpers to patch only the libraries: section inside the current YAML when preserving existing YAML
+        function patchLibrariesInYaml(yamlText, profileName, libs) {
+          try {
+            const lines = String(yamlText || '').split(/\r?\n/);
+            // Find profiles section
+            let pStart = -1; let pEnd = lines.length;
+            for (let i = 0; i < lines.length; i++) {
+              if (/^\s*profiles\s*:\s*$/.test(lines[i])) { pStart = i; for (let j = i + 1; j < lines.length; j++) { if (/^\S/.test(lines[j])) { pEnd = j; break; } } break; }
+            }
+            if (pStart < 0) return yamlText; // not a wrapped YAML
+            // Find target profile start
+            let profStart = -1; let profEnd = pEnd;
+            let profName = String(profileName || '').trim();
+            for (let i = pStart + 1; i < pEnd; i++) {
+              const m = lines[i].match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+              if (m) {
+                if (!profName) { profName = m[1].trim(); profStart = i; continue; }
+                if (m[1].trim() === profName) { profStart = i; continue; }
+                if (profStart >= 0) { profEnd = i; break; }
+              }
+            }
+            if (profStart < 0) return yamlText;
+            if (profEnd <= profStart) profEnd = pEnd;
+            // Find libraries block inside profile
+            let libHeader = -1; let libEnd = -1;
+            for (let i = profStart + 1; i < profEnd; i++) {
+              if (/^\s{4}libraries\s*:\s*$/.test(lines[i])) { libHeader = i; libEnd = i + 1; for (let j = i + 1; j < profEnd; j++) { if (/^\s{6}-\s*/.test(lines[j])) { libEnd = j + 1; continue; } if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\S/.test(lines[j]) || /^\s*default_profile\s*:\s*/.test(lines[j])) { break; } }
+                break; }
+            }
+            const header = '    libraries:';
+            const items = (Array.isArray(libs) && libs.length > 0) ? libs.map(x => '      - ' + (x.version ? `${x.name} (${x.version})` : x.name)) : ['      - '];
+            if (libHeader >= 0) {
+              // Replace existing block
+              const before = lines.slice(0, libHeader).join('\n');
+              const after = lines.slice(libEnd >= 0 ? libEnd : libHeader + 1).join('\n');
+              return [before, header, ...items, after].join('\n');
+            }
+            // Insert before profile end
+            const before = lines.slice(0, profEnd).join('\n');
+            const after = lines.slice(profEnd).join('\n');
+            const glue = before.endsWith('\n') ? '' : '\n';
+            return [before, glue + header, ...items, after].join('\n');
+          } catch (_) { return yamlText; }
+        }
+
+        // Patch only the platform version in the current profile's platforms list
+        function patchPlatformVersionInYaml(yamlText, profileName, platformId, newVersion) {
+          try {
+            const id = String(platformId || '').trim();
+            const ver = String(newVersion || '').trim();
+            if (!id) return yamlText;
+            const lines = String(yamlText || '').split(/\r?\n/);
+            // Find profiles bounds
+            let pStart = -1; let pEnd = lines.length;
+            for (let i = 0; i < lines.length; i++) {
+              if (/^\s*profiles\s*:\s*$/.test(lines[i])) { pStart = i; for (let j = i + 1; j < lines.length; j++) { if (/^\S/.test(lines[j])) { pEnd = j; break; } } break; }
+            }
+            if (pStart < 0) return yamlText;
+            // Find profile block
+            let profStart = -1; let profEnd = pEnd;
+            const wanted = String(profileName || '').trim();
+            for (let i = pStart + 1; i < pEnd; i++) {
+              const m = lines[i].match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+              if (m) {
+                if (!wanted || m[1].trim() === wanted) {
+                  if (profStart < 0) { profStart = i; continue; }
+                }
+                if (profStart >= 0) { profEnd = i; break; }
+              }
+            }
+            if (profStart < 0) return yamlText;
+            if (profEnd <= profStart) profEnd = pEnd;
+            const desired = `      - platform: ${id}${ver ? ` (${ver})` : ''}`;
+            // Look for platforms header
+            let platsHeader = -1;
+            for (let i = profStart + 1; i < profEnd; i++) {
+              if (/^\s{4}platforms\s*:\s*$/.test(lines[i])) { platsHeader = i; break; }
+            }
+            if (platsHeader >= 0) {
+              // Search for matching platform entry to replace; else insert after header
+              for (let i = platsHeader + 1; i < profEnd; i++) {
+                const line = lines[i];
+                if (/^\s{6}-\s*platform\s*:\s*/.test(line)) {
+                  const m = line.match(/^\s{6}-\s*platform\s*:\s*([^\s]+)\s*(?:\([^)]*\))?\s*$/);
+                  if (m && m[1] === id) {
+                    lines[i] = desired;
+                    return lines.join('\n');
+                  }
+                  continue;
+                }
+                // stop when another key at same indent or profile ends
+                if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) {
+                  break;
+                }
+              }
+              // Not found: insert after header
+              const before = lines.slice(0, platsHeader + 1).join('\n');
+              const after = lines.slice(platsHeader + 1).join('\n');
+              return before + '\n' + desired + (after.startsWith('\n') ? '' : '\n') + after;
+            }
+            // No platforms header: insert a minimal block after profile key
+            const before = lines.slice(0, profStart + 1).join('\n');
+            const after = lines.slice(profStart + 1).join('\n');
+            const block = ['    platforms:', desired].join('\n');
+            return [before, block, after].join('\n');
+          } catch (_) { return yamlText; }
+        }
         function updateSummary() {
             // Gather selected values across groups
             const pairs = [];
@@ -360,7 +516,22 @@
                 summaryTop.textContent = `${fqbn}`;
                 summaryBottom.textContent = `${fqbn}`;
             }
-            yamlBox.value = buildYaml(ext);
+            // Respect preserve flag: don't overwrite textarea when using existing profile block
+            try {
+              const keep = !!window.__KEEP_EXISTING_YAML__;
+              if (!keep) {
+                yamlBox.value = buildYaml(ext);
+              } else {
+                // Patch FQBN and libraries section under the current profile
+                const libsArr = libsArrayFromSelected();
+                const prof = (window.__PROFILE_NAME__ || '');
+                let txt = patchFqbnInYaml(yamlBox.value, prof, ext);
+                txt = patchLibrariesInYaml(txt, prof, libsArr);
+                yamlBox.value = txt;
+              }
+            } catch (_) {
+              yamlBox.value = buildYaml(ext);
+            }
         }
 
         // Apply extFqbn option pairs (if any) with retries to avoid timing issues
@@ -433,24 +604,6 @@
         function libName(row) { return (row.name || row.Title || row.title || row.Library || '').toString(); }
         function libVersion(row) { return (row.version || row.Version || row.library_version || '').toString(); }
 
-        function ensureDefaultLibsForBoard() {
-          if (!/m5stack/i.test(fqbn)) return;
-          // Preselect libraries for M5 boards, upgrading to latest version
-          // once the libraries list is available. Do not overwrite versions
-          // already specified (e.g., coming from sketch.yaml/init).
-          const ensure = (name) => {
-            const has = selectedLibs.has(name);
-            const cur = has ? selectedLibs.get(name) : undefined;
-            const latest = (Array.isArray(libsCache) ? findLatestVersionByName(name) : '') || '';
-            if (!has) {
-              selectedLibs.set(name, latest || true);
-            } else if ((cur === true || cur === '' || cur == null) && latest) {
-              selectedLibs.set(name, latest);
-            }
-          };
-          ensure('M5Unified');
-          ensure('M5GFX');
-        }
         function findLatestVersionByName(targetName) {
           if (!Array.isArray(libsCache)) return '';
           for (const row of libsCache) {
@@ -472,8 +625,7 @@
         function renderLibs() {
           libsList.innerHTML = '';
           if (!Array.isArray(libsCache)) { libsStatus.textContent = 'Load error'; return; }
-          // Ensure defaults (e.g., M5 libs) are selected for this board
-          ensureDefaultLibsForBoard();
+          // No implicit default library selection; respect only provided/selected libraries
           const term = libsQ.value.trim().toLowerCase();
           let visible = 0;
           libsCache.forEach((row, idx) => {
@@ -598,17 +750,12 @@
           }
           renderLibs();
           updateSummary();
-          // As a safeguard, force-update the platform version in the YAML box
+          // Update platform version in YAML textarea (even in keep mode), but scoped to the current profile only
           try {
             const parts = fqbn.split(':');
             const platformId = parts.length >= 2 ? (parts[0] + ':' + parts[1]) : fqbn;
-            const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            // Match lines like: "- platform: <id>" optionally followed by "(x.y.z)" (multiline/global, CR/LF agnostic)
-            const re = new RegExp('^([\\t ]*-\\s*platform\\s*:\\s*' + esc(platformId) + ')(?:\\s*\\([^)]*\\))?\\s*$', 'gm');
-            const desired = selectedPlatformVersion ? ` (${selectedPlatformVersion})` : '';
-            const before = yamlBox.value || '';
-            const after = before.replace(re, `$1${desired}`);
-            if (after && after !== before) yamlBox.value = after;
+            const prof = (window.__PROFILE_NAME__ || '');
+            yamlBox.value = patchPlatformVersionInYaml(yamlBox.value, prof, platformId, selectedPlatformVersion);
           } catch (_) {}
           updateMismatches();
         });
@@ -644,6 +791,9 @@
         try {
           // Store initial platform info
           window.__INIT_STATE__ = { platformId: String(data.platformId||''), platformVersion: String(data.platformVersion||'') };
+          // If a raw profile block is provided, remember it and try to inject into textarea later
+          try { window.__INITIAL_PROFILE_BLOCK__ = (typeof data.profileBlock === 'string') ? data.profileBlock : ''; } catch (_) {}
+          try { window.__PROFILE_NAME__ = String(data.profileName || ''); } catch (_) {}
           const extFqbn = String(data.extFqbn || '');
           if (!extFqbn) return;
           // Base FQBN is vendor:arch:board (first 3 segments)
@@ -664,6 +814,29 @@
               if (input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); }
             });
           } catch (_) {} }, 100);
+
+          // If initial profile YAML was provided, inject it into the textarea after UI renders
+          const tryInjectYaml = () => {
+            try {
+              const box = document.getElementById('yamlBox');
+              // Do not trim leading spaces to preserve YAML indentation
+              const raw = String(window.__INITIAL_PROFILE_BLOCK__ || '').replace(/\s+$/,'');
+              const profName = String(data.profileName || '').trim();
+              if (box && raw) {
+                const wrapped = 'profiles:\n' + raw.replace(/\s+$/, '') + '\n\n' + (profName ? ('default_profile: ' + profName + '\n') : '');
+                box.value = wrapped;
+                // Lock auto-template updates to preserve the injected YAML block
+                try { window.__KEEP_EXISTING_YAML__ = true; } catch (_) {}
+                // Update summary display to reflect extFqbn but avoid overwriting YAML
+                const top = document.querySelector('#config .fqbn');
+                const bottom = document.getElementById('summaryBottom');
+                if (top) top.textContent = extFqbn;
+                if (bottom) bottom.textContent = extFqbn;
+              }
+            } catch (_) { /* ignore */ }
+          };
+          // Attempt a few times to ensure elements exist
+          [50, 150, 350].forEach(d => setTimeout(tryInjectYaml, d));
           // Parse and store option selections for application after config renders
           window.__OPT_PAIRS = null;
           if (pairsText) {
@@ -687,7 +860,11 @@
             });
             // If library list already loaded, re-render and update summary
             try { if (libsCache !== null) { renderLibs(); } } catch (_) {}
-            try { updateSummary(); } catch (_) {}
+            // Avoid overwriting provided YAML block; only refresh mismatches/summary text
+            try {
+              const hadInitial = !!(window.__INITIAL_PROFILE_BLOCK__);
+              if (!hadInitial) updateSummary();
+            } catch (_) {}
             try { if (typeof updateMismatches === 'function') updateMismatches(); } catch (_) {}
           }
         } catch (_) { /* ignore */ }
