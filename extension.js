@@ -10,6 +10,7 @@ const OUTPUT_NAME = 'Arduino CLI';
 const STATE_FQBN = 'arduino-cli.selectedFqbn';
 const STATE_PORT = 'arduino-cli.selectedPort';
 const STATE_BAUD = 'arduino-cli.selectedBaud';
+const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
 let output;
 let extContext;
 let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusList, statusListAll;
@@ -1889,6 +1890,18 @@ async function updateStatusBar() {
     statusFqbn.text = `$(circuit-board) ${label}`;
     statusFqbn.tooltip = _isJa ? '現在のプロファイル（クリックで変更）' : 'Current profile (click to change)';
     statusFqbn.command = 'arduino-cli.setProfile';
+    // Apply port/baud from current profile when values differ (robust against FS timing)
+    try {
+      if (label) {
+        await extContext.workspaceState.update(STATE_LAST_PROFILE, label);
+        const curPort = extContext?.workspaceState.get(STATE_PORT, '') || '';
+        const curBaud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
+        const p = await getPortFromSketchYaml(sketchDir, label);
+        if (p && p !== curPort) await extContext.workspaceState.update(STATE_PORT, p);
+        const b = await getPortConfigBaudFromSketchYaml(sketchDir, label);
+        if (b && String(b) !== String(curBaud)) await extContext.workspaceState.update(STATE_BAUD, String(b));
+      }
+    } catch (_) { }
   } else {
     statusFqbn.text = fqbn ? `$(circuit-board) ${fqbn}` : (_isJa ? '$(circuit-board) FQBN: 未選択' : '$(circuit-board) FQBN: Not set');
     statusFqbn.tooltip = _isJa ? '現在の FQBN（クリックで変更）' : 'Current FQBN (click to change)';
@@ -1930,6 +1943,15 @@ async function commandSetProfile(required) {
   const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
   let text = await readTextFile(yamlUri);
   text = replaceYamlKey(text, 'default_profile', pick.value);
+  // Immediately reflect port/baud from the selected profile in memory to avoid stale reads
+  try {
+    const profName = pick.value;
+    const portFromText = getPortFromSketchYamlText(text, profName);
+    if (portFromText) await extContext.workspaceState.update(STATE_PORT, portFromText);
+    const baudFromText = getPortConfigBaudFromSketchYamlText(text, profName);
+    if (baudFromText) await extContext.workspaceState.update(STATE_BAUD, String(baudFromText));
+    await extContext.workspaceState.update(STATE_LAST_PROFILE, profName);
+  } catch (_) { }
   await writeTextFile(yamlUri, text);
   vscode.window.setStatusBarMessage(_isJa ? `Profile を設定: ${pick.value}` : `Set profile: ${pick.value}`, 2000);
   updateStatusBar();
@@ -2838,6 +2860,56 @@ async function getLibrariesFromSketchYaml(sketchDir, profileName) {
   } catch { return []; }
 }
 
+/** Get `port` value from sketch.yaml under a specific profile (string or empty). */
+async function getPortFromSketchYaml(sketchDir, profileName) {
+  try {
+    const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+    const text = await readTextFile(yamlUri);
+    const lines = text.split(/\r?\n/);
+    let inProfiles = false;
+    let inTarget = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!inProfiles) { if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true; continue; }
+      const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+      if (mKey) { inTarget = (mKey[1].trim() === profileName); continue; }
+      if (!inTarget) { if (/^\S/.test(line)) break; else continue; }
+      const mPort = line.match(/^\s{4}port\s*:\s*(.+)\s*$/);
+      if (mPort) return mPort[1].trim().replace(/^"|"$/g, '');
+    }
+  } catch { }
+  return '';
+}
+
+/** Get `port_config.baudrate` from sketch.yaml under a specific profile (string or empty). */
+async function getPortConfigBaudFromSketchYaml(sketchDir, profileName) {
+  try {
+    const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+    const text = await readTextFile(yamlUri);
+    const lines = text.split(/\r?\n/);
+    let inProfiles = false;
+    let inTarget = false;
+    let inPortCfg = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!inProfiles) { if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true; continue; }
+      const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+      if (mKey) { inTarget = (mKey[1].trim() === profileName); inPortCfg = false; continue; }
+      if (!inTarget) { if (/^\S/.test(line)) break; else continue; }
+      if (/^\s{4}port_config\s*:\s*$/.test(line)) { inPortCfg = true; continue; }
+      if (inPortCfg) {
+        const mBaud = line.match(/^\s{6}baudrate\s*:\s*(.+)\s*$/);
+        if (mBaud) return mBaud[1].trim().replace(/^"|"$/g, '');
+        // leave when next sibling key or out of profile
+        if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line)) {
+          inPortCfg = false; continue;
+        }
+      }
+    }
+  } catch { }
+  return '';
+}
+
 /**
  * Extract the raw YAML block for the given profile from sketch.yaml.
  * Returns an empty string when not found.
@@ -2873,5 +2945,50 @@ async function getProfileBlockFromSketchYaml(sketchDir, profileName) {
       return lines.slice(start, end).join('\n') + (text.endsWith('\n') ? '' : '\n');
     }
   } catch { }
+  return '';
+}
+
+/** Parse `port` from provided sketch.yaml text under a specific profile. */
+function getPortFromSketchYamlText(text, profileName) {
+  try {
+    const lines = String(text || '').split(/\r?\n/);
+    let inProfiles = false;
+    let inTarget = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!inProfiles) { if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true; continue; }
+      const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+      if (mKey) { inTarget = (mKey[1].trim() === profileName); continue; }
+      if (!inTarget) { if (/^\S/.test(line)) break; else continue; }
+      const mPort = line.match(/^\s{4}port\s*:\s*(.+)\s*$/);
+      if (mPort) return mPort[1].trim().replace(/^"|"$/g, '');
+    }
+  } catch {}
+  return '';
+}
+
+/** Parse `port_config.baudrate` from provided sketch.yaml text under a specific profile. */
+function getPortConfigBaudFromSketchYamlText(text, profileName) {
+  try {
+    const lines = String(text || '').split(/\r?\n/);
+    let inProfiles = false;
+    let inTarget = false;
+    let inPortCfg = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!inProfiles) { if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true; continue; }
+      const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+      if (mKey) { inTarget = (mKey[1].trim() === profileName); inPortCfg = false; continue; }
+      if (!inTarget) { if (/^\S/.test(line)) break; else continue; }
+      if (/^\s{4}port_config\s*:\s*$/.test(line)) { inPortCfg = true; continue; }
+      if (inPortCfg) {
+        const mBaud = line.match(/^\s{6}baudrate\s*:\s*(.+)\s*$/);
+        if (mBaud) return mBaud[1].trim().replace(/^"|"$/g, '');
+        if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line)) {
+          inPortCfg = false; continue;
+        }
+      }
+    }
+  } catch {}
   return '';
 }
