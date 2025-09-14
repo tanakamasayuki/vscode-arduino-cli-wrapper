@@ -51,6 +51,8 @@
       const selectedLibs = new Map();
       /** @type {Array<{key:string,val:string}>|null} */
       window.__OPT_PAIRS = null; // pairs parsed from extFqbn (key=value)
+      // Defer any YAML templating until init message arrives with profile block
+      try { window.__INIT_PENDING__ = true; window.__USER_CHANGED_OPTIONS__ = false; } catch (_) {}
 
       function setStatus(text, isError=false) {
         status.textContent = text;
@@ -229,6 +231,22 @@
         yamlWrap.appendChild(yamlBox);
         root.appendChild(yamlWrap);
 
+        // If there is an initial profile block (from existing sketch.yaml), inject it immediately
+        // to avoid showing a temporary template and to preserve unknown keys like `note`.
+        try {
+          const initialBlock = String(window.__INITIAL_PROFILE_BLOCK__ || '');
+          const profNameHint = String(window.__PROFILE_NAME__ || '');
+          if (initialBlock.trim()) {
+            const wrapped = 'profiles:\n' + initialBlock.replace(/\s+$/, '') + '\n\n' + (profNameHint ? ('default_profile: ' + profNameHint + '\n') : '');
+            yamlBox.value = wrapped;
+            window.__KEEP_EXISTING_YAML__ = true;
+            // Avoid patching libraries until the user explicitly changes selection
+            window.__ALLOW_LIB_PATCH__ = false;
+            // Update FQBN summaries to ext, but do not rebuild YAML
+            try { summaryTop.textContent = extFqbn || fqbn; summaryBottom.textContent = extFqbn || fqbn; } catch (_) {}
+          }
+        } catch (_) { }
+
         const opts = Array.isArray(detail.config_options) ? detail.config_options : [];
         if (!opts.length) {
           const p = document.createElement('p');
@@ -312,7 +330,9 @@
             const parts = fqbn.split(':');
             const platformId = parts.length >= 2 ? (parts[0] + ':' + parts[1]) : fqbn;
             const platformVer = selectedPlatformVersion || '';
-            const profile = toSlug(parts[2] || detail.name || parts[parts.length - 1] || 'profile');
+            // Prefer provided profile name (from sketch.yaml) when available to avoid switching to FQBN-derived name
+            const profileHint = (typeof window !== 'undefined' && window.__PROFILE_NAME__) ? String(window.__PROFILE_NAME__) : '';
+            const profile = (profileHint && profileHint.trim()) ? profileHint.trim() : toSlug(parts[2] || detail.name || parts[parts.length - 1] || 'profile');
             const lines = [];
             lines.push('profiles:');
             lines.push('  ' + profile + ':');
@@ -491,7 +511,25 @@
             return [before, block, after].join('\n');
           } catch (_) { return yamlText; }
         }
-        function updateSummary() {
+function updateSummary() {
+            // Skip templating before init finishes to avoid wiping existing YAML
+            try { if (window.__INIT_PENDING__) { return; } } catch (_) {}
+            // Inject existing profile YAML on first pass to preserve unknown keys
+            try {
+              const hasInitial = !!(String(window.__INITIAL_PROFILE_BLOCK__ || '').trim());
+              if (hasInitial && !window.__KEEP_EXISTING_YAML__) {
+                const box = document.getElementById('yamlBox');
+                if (box) {
+                  const profNameHint = String(window.__PROFILE_NAME__ || '').trim();
+                  const wrapped = 'profiles:\n' + String(window.__INITIAL_PROFILE_BLOCK__).replace(/\s+$/,'') + '\n\n' + (profNameHint ? ('default_profile: ' + profNameHint + '\n') : '');
+                  box.value = wrapped;
+                  window.__KEEP_EXISTING_YAML__ = true;
+                  if (!window.__CURRENT_EXTFQBN__) window.__CURRENT_EXTFQBN__ = fqbn;
+                  try { summaryTop.textContent = fqbn; summaryBottom.textContent = fqbn; } catch (_) {}
+                  return;
+                }
+              }
+            } catch (_) {}
             // Gather selected values across groups
             const pairs = [];
             let anyChanged = false;
@@ -516,17 +554,49 @@
                 summaryTop.textContent = `${fqbn}`;
                 summaryBottom.textContent = `${fqbn}`;
             }
+            // If base FQBN (vendor:arch:board) changed by user, unlock keep-mode and reset everything to template
+            try {
+              const prev = String(window.__CURRENT_EXTFQBN__ || '');
+              const userChanged = !!window.__USER_CHANGED_OPTIONS__;
+              if (ext !== prev) {
+                window.__CURRENT_EXTFQBN__ = ext;
+                // Compare base FQBNs: only reset when base board changed, not when only options changed
+                const baseNow = String(fqbn || '');
+                const basePrev = String(window.__CURRENT_BASEFQBN__ || '');
+                const baseChanged = baseNow !== basePrev;
+                if (baseChanged) { try { window.__CURRENT_BASEFQBN__ = baseNow; } catch (_) {}
+                }
+                if (userChanged && baseChanged) {
+                  // Unlock and clear initial preserved state
+                  window.__KEEP_EXISTING_YAML__ = false;
+                  window.__INITIAL_PROFILE_BLOCK__ = '';
+                  window.__PROFILE_NAME__ = '';
+                  // Reset libraries selection
+                  try { selectedLibs.clear(); } catch (_) {}
+                  // Reset library UI filters so items appear
+                  try { if (typeof onlySel !== 'undefined' && onlySel) onlySel.checked = false; } catch (_) {}
+                  try { if (typeof libsQ !== 'undefined' && libsQ) libsQ.value = ''; } catch (_) {}
+                  // Rebuild YAML from template for the new FQBN
+                  yamlBox.value = buildYaml(ext);
+                  try { renderLibs(); } catch (_) {}
+                  try { updateMismatches(); } catch (_) {}
+                  return;
+                }
+              }
+            } catch (_) {}
             // Respect preserve flag: don't overwrite textarea when using existing profile block
             try {
               const keep = !!window.__KEEP_EXISTING_YAML__;
               if (!keep) {
                 yamlBox.value = buildYaml(ext);
               } else {
-                // Patch FQBN and libraries section under the current profile
+                // Patch FQBN always; patch libraries only after user interaction to avoid wiping existing entries
                 const libsArr = libsArrayFromSelected();
                 const prof = (window.__PROFILE_NAME__ || '');
                 let txt = patchFqbnInYaml(yamlBox.value, prof, ext);
-                txt = patchLibrariesInYaml(txt, prof, libsArr);
+                if (window.__ALLOW_LIB_PATCH__) {
+                  txt = patchLibrariesInYaml(txt, prof, libsArr);
+                }
                 yamlBox.value = txt;
               }
             } catch (_) {
@@ -558,7 +628,14 @@
 
         // Hook change events
         groups.forEach((fs) => {
-            fs.addEventListener('change', updateSummary);
+            fs.addEventListener('change', () => {
+              try {
+                // Ignore synthetic changes during init
+                if (window.__INIT_PENDING__) { updateSummary(); return; }
+                window.__USER_CHANGED_OPTIONS__ = true;
+              } catch (_) {}
+              updateSummary();
+            });
         });
 
         // Libraries UI (under options)
@@ -642,6 +719,8 @@
             cb.checked = selectedLibs.has(name);
             cb.addEventListener('change', () => {
               if (cb.checked) { selectedLibs.set(name, ver || true); } else { selectedLibs.delete(name); }
+              // User interacted with libraries; allow YAML libraries patching from now on
+              try { window.__ALLOW_LIB_PATCH__ = true; } catch (_) {}
               updateSummary();
               try { updateMismatches(); } catch (_) {}
             });
@@ -663,8 +742,7 @@
             .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
             .then(json => {
               libsCache = Array.isArray(json) ? json : [];
-              // Re-apply defaults now that versions are known
-              ensureDefaultLibsForBoard();
+              // No implicit default library selection
               renderLibs();
               updateSummary();
               // In case options UI got re-rendered after libs, apply pairs again
@@ -684,7 +762,7 @@
             })
             .catch(() => { libsCache = []; renderLibs(); });
         } else {
-          ensureDefaultLibsForBoard();
+          // No implicit default library selection
           renderLibs();
           setTimeout(() => { try { const pairs = Array.isArray(window.__OPT_PAIRS) ? window.__OPT_PAIRS : null; if (!pairs || !pairs.length) return; const rootEl = document.getElementById('config'); const esc = (s) => { try { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'); } catch (_) { return s; } }; pairs.forEach(({key, val}) => { const selector = `#config input[type=\"radio\"][data-option=\"${esc(key)}\"][data-val-text=\"${esc(val)}\"]`; const input = rootEl && rootEl.querySelector(selector); if (input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); } }); } catch (_) {} }, 50);
         }
@@ -727,11 +805,11 @@
           const platformMM = collectPlatformMismatch();
           const libMM = collectLibVersionMismatches();
           const lines = [];
-          if (platformMM) lines.push((ja ? 'プラットフォーム' : 'Platform') + ` ${platformMM.name}: ${platformMM.current} -> ${platformMM.latest}`);
+          if (platformMM) lines.push((ja ? '\u30d7\u30e9\u30c3\u30c8\u30d5\u30a9\u30fc\u30e0' : 'Platform') + ` ${platformMM.name}: ${platformMM.current} -> ${platformMM.latest}`);
           libMM.forEach(m => lines.push(`${m.name}: ${m.current} -> ${m.latest}`));
           mmList.textContent = lines.join('\n');
           const count = lines.length;
-          mmHeader.textContent = ja ? '更新可能な項目' : 'Updates available';
+          mmHeader.textContent = ja ? '\u66f4\u65b0\u53ef\u80fd\u306a\u9805\u76ee' : 'Updates available';
           mmBtn.textContent = (ja ? '最新に更新' : 'Update to latest') + (count ? ` (${count})` : '');
           mmBtn.disabled = count === 0;
           mismatchPanel.style.display = count ? '' : 'none';
@@ -749,6 +827,8 @@
             try { (window.__INIT_STATE__ = window.__INIT_STATE__ || {}).platformVersion = plat.latest; } catch (_) {}
           }
           renderLibs();
+          // User explicitly requested updates: allow libraries patching into YAML
+          try { window.__ALLOW_LIB_PATCH__ = true; } catch (_) {}
           updateSummary();
           // Update platform version in YAML textarea (even in keep mode), but scoped to the current profile only
           try {
@@ -794,6 +874,7 @@
           // If a raw profile block is provided, remember it and try to inject into textarea later
           try { window.__INITIAL_PROFILE_BLOCK__ = (typeof data.profileBlock === 'string') ? data.profileBlock : ''; } catch (_) {}
           try { window.__PROFILE_NAME__ = String(data.profileName || ''); } catch (_) {}
+          try { window.__INIT_EXTFQBN__ = String(data.extFqbn || ''); window.__CURRENT_EXTFQBN__ = window.__INIT_EXTFQBN__; } catch (_) {}
           const extFqbn = String(data.extFqbn || '');
           if (!extFqbn) return;
           // Base FQBN is vendor:arch:board (first 3 segments)
@@ -801,6 +882,7 @@
           const baseFqbn = parts.slice(0, 3).join(':');
           const pairsText = parts.slice(3).join(':');
           q.value = baseFqbn;
+          try { window.__CURRENT_BASEFQBN__ = baseFqbn; } catch (_) {}
           applyFilter();
           // Schedule additional retries after filter-triggered re-render
           setTimeout(() => { try {
@@ -814,6 +896,8 @@
               if (input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); }
             });
           } catch (_) {} }, 100);
+          // After giving the UI time to render and initial YAML to inject, lift the init guard
+          setTimeout(() => { try { window.__INIT_PENDING__ = false; updateSummary(); } catch (_) {} }, 220);
 
           // If initial profile YAML was provided, inject it into the textarea after UI renders
           const tryInjectYaml = () => {
@@ -873,3 +957,5 @@
   </script>
 </body>
 </html>
+
+
