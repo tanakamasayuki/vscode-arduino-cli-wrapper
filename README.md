@@ -13,7 +13,7 @@ VS Code extension to run Arduino CLI from the command palette, status bar, and a
 - Clean Compile: compiles with `--clean`; resets includePath first, then adds only paths discovered during the build
 - Upload Sketch: builds then uploads with selected port and profile/FQBN; closes and reopens monitor if needed
 - Monitor Serial: open a serial monitor (select port and baudrate)
- - Open Helper: open a sketch.yaml helper webview to inspect/apply profiles/libraries
+- Open Helper: open a sketch.yaml helper webview to inspect/apply profiles/libraries
 - Board Details: when using profiles, passes the profile's FQBN with `-b`
 - Run Command: run arbitrary Arduino CLI arguments
 - Configure IntelliSense: compute include paths and write `.vscode/c_cpp_properties.json` without building
@@ -27,8 +27,9 @@ All command logs are unified in a dedicated pseudo terminal with ANSI colors.
 
 - Adds an "Arduino CLI" view under Explorer.
 - Lists detected sketch folders; shows profiles from `sketch.yaml` when available.
-- Per project/profile actions: Compile, Upload, Upload Data, Monitor, Open Helper.
-- Global actions at the top: Version, List Boards, List All Boards, Open Helper, New Sketch, Run Command.
+- Per project/profile actions: Compile, Upload, Upload Data, Monitor, Open Helper, Open Examples.
+- Global actions at the top: Version, List Boards, List All Boards, Open Helper, Refresh View, New Sketch, Run Command.
+- Sketch items display workspace-relative paths, and nodes are expanded by default.
 
 ## Status Bar
 

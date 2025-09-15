@@ -13,7 +13,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - Clean Compile: `--clean` でクリーンビルド。最初に includePath を空にし、ビルドで検出したパスのみを追加
 - Upload Sketch: ビルドしてから書き込み。選択したポートとプロファイル/FQBNを使用。必要に応じてモニタを一時停止・再開
 - Monitor Serial: シリアルモニタを起動（ポートとボーレートを選択）
- - Open Helper: sketch.yaml ヘルパーの Web ビューを開き、プロファイル/ライブラリを確認・反映
+- Open Helper: sketch.yaml ヘルパーの Web ビューを開き、プロファイル/ライブラリを確認・反映
 - Board Details: プロファイル使用時は `-b` でその FQBN を渡して詳細表示
 - Run Command: 任意の Arduino CLI 引数を実行
 - Configure IntelliSense: ビルドせずに includePath を計算して `.vscode/c_cpp_properties.json` を作成
@@ -27,8 +27,9 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 
 - エクスプローラーに「Arduino CLI」ビューを追加。
 - スケッチフォルダーを一覧表示し、`sketch.yaml` があればプロファイルも表示。
-- プロジェクト/プロファイルごとのアクション: Compile / Upload / Upload Data / Monitor / Open Helper。
-- 先頭にグローバルアクション: Version / List Boards / List All Boards / Open Helper / New Sketch / Run Command。
+- プロジェクト/プロファイルごとのアクション: Compile / Upload / Upload Data / Monitor / Open Helper / Open Examples。
+- 先頭にグローバルアクション: Version / List Boards / List All Boards / Open Helper / Refresh View / New Sketch / Run Command。
+- スケッチ項目はワークスペースからの相対パスで表示され、ノードは既定で展開状態です。
 
 ## ステータスバー
 
