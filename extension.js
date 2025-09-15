@@ -1646,7 +1646,19 @@ async function findSketches() {
       const dir = path.dirname(u.fsPath);
       if (seen.has(dir)) continue;
       seen.add(dir);
-      results.push({ dir, name: path.basename(dir) });
+      const base = path.basename(dir);
+      let rel = '';
+      try {
+        const wf = vscode.workspace.getWorkspaceFolder(u);
+        if (wf && wf.uri && wf.uri.fsPath) {
+          rel = path.relative(wf.uri.fsPath, dir);
+        }
+      } catch (_) { }
+      let display = base;
+      if (rel && rel !== '.') {
+        display = rel;
+      }
+      results.push({ dir, name: display });
     }
   } catch (_) { }
   return results;
