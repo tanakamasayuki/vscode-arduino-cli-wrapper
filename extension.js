@@ -1693,8 +1693,15 @@ async function findSketches() {
       if (rel && rel !== '.') {
         display = rel;
       }
-      results.push({ dir, name: display });
+      const depth = (rel && rel !== '.') ? rel.split(/[\\\/]+/).length : 0;
+      results.push({ dir, name: display, depth });
     }
+    // Sort: shallower hierarchy first, then by name (case-insensitive)
+    results.sort((a, b) => {
+      const d = (a.depth || 0) - (b.depth || 0);
+      if (d !== 0) return d;
+      return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+    });
   } catch (_) { }
   return results;
 }
