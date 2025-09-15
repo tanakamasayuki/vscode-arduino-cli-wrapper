@@ -1584,7 +1584,7 @@ class ArduinoCliTreeProvider {
 
 class ProjectItem extends vscode.TreeItem {
   constructor(dir, name) {
-    super(name || dir, vscode.TreeItemCollapsibleState.Collapsed);
+    super(name || dir, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'project';
     this.tooltip = dir;
     this.dir = dir;
@@ -1592,7 +1592,7 @@ class ProjectItem extends vscode.TreeItem {
 }
 class ProfileItem extends vscode.TreeItem {
   constructor(dir, profile) {
-    super(`Profile: ${profile}`, vscode.TreeItemCollapsibleState.Collapsed);
+    super(`Profile: ${profile}`, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'profile';
     this.tooltip = `${dir} • ${profile}`;
     this.dir = dir;
