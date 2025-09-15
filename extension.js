@@ -1474,6 +1474,7 @@ function activate(context) {
         if (action === 'monitor') return commandMonitor();
         if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
         if (action === 'examples') return commandOpenExamplesBrowser({ sketchDir, profile });
+        if (action === 'refreshView') return vscode.commands.executeCommand('arduino-cli.refreshView');
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
         if (action === 'setBaud') return vscode.commands.executeCommand('arduino-cli.setBaud');
         if (action === 'setFqbn') return vscode.commands.executeCommand('arduino-cli.setFqbn');
@@ -1629,7 +1630,7 @@ function globalCommandItems() {
     new CommandItem('List Boards', 'listBoards', '', ''),
     new CommandItem('List All Boards', 'listAllBoards', '', ''),
     new CommandItem('Open Helper', 'helper', '', ''),
-    new CommandItem('Open Examples', 'examples', '', ''),
+    new CommandItem('Refresh View', 'refreshView', '', ''),
     new CommandItem('New Sketch', 'sketchNew', '', ''),
     new CommandItem('Run Command', 'runArbitrary', '', ''),
   ];
