@@ -13,6 +13,7 @@
   "cmd.monitor": "Arduino CLI: Monitor Serial",
   "cmd.refreshView": "Arduino CLI: Refresh View",
   "cmd.examples": "Arduino CLI: Examples Browser",
+  "cmd.expandAll": "Arduino CLI: Expand All",
   "cmd.runTreeAction": "Arduino CLI: Run Action",
   "cmd.sketchYamlHelper": "Arduino CLI: sketch.yaml Helper",
   "cmd.configureIntelliSense": "Arduino CLI: Configure C/C++ IntelliSense",

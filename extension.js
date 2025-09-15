@@ -1516,6 +1516,7 @@ function activate(context) {
       } catch (e) { showError(e); }
     }),
     vscode.commands.registerCommand('arduino-cli.sketchNew', commandSketchNew),
+    vscode.commands.registerCommand('arduino-cli.expandAll', commandExpandAllTree),
     vscode.commands.registerCommand('arduino-cli.examples', () => commandOpenExamplesBrowser({})),
     vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
@@ -1584,38 +1585,47 @@ function activate(context) {
 
 // Tree View: Arduino CLI Commands per project/profile
 let arduinoTreeProvider;
+let arduinoTreeView;
 class ArduinoCliTreeProvider {
   constructor() {
     /** @type {vscode.EventEmitter<void>} */
     this._em = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._em.event;
+    this._stale = true;
+    this._roots = [];
   }
-  refresh() { this._em.fire(); }
+  refresh() { this._stale = true; this._em.fire(); }
   /** @param {any} element */
   async getChildren(element) {
     if (!element) {
       // Root: global commands + projects (sketch folders)
-      const sketches = await findSketches();
-      return [
-        ...globalCommandItems(),
-        ...sketches.map(s => new ProjectItem(s.dir, s.name))
-      ];
+      if (this._stale) {
+        const sketches = await findSketches();
+        this._roots = [
+          ...globalCommandItems(),
+          ...sketches.map(s => new ProjectItem(s.dir, s.name))
+        ];
+        this._stale = false;
+      }
+      return this._roots;
     }
     if (element instanceof ProjectItem) {
       const info = await readSketchYamlInfo(element.dir);
       if (info && info.profiles && info.profiles.length) {
-        return info.profiles.map(p => new ProfileItem(element.dir, p));
+        return info.profiles.map(p => new ProfileItem(element.dir, p, element));
       }
       // No profiles: return commands directly under project
-      return defaultCommandItems(element.dir, null);
+      return defaultCommandItems(element.dir, null, element);
     }
     if (element instanceof ProfileItem) {
-      return defaultCommandItems(element.dir, element.profile);
+      return defaultCommandItems(element.dir, element.profile, element);
     }
     return [];
   }
   /** @param {any} element */
   getTreeItem(element) { return element; }
+  /** @param {any} element */
+  getParent(element) { return element && element.parent ? element.parent : undefined; }
 }
 
 class ProjectItem extends vscode.TreeItem {
@@ -1624,19 +1634,23 @@ class ProjectItem extends vscode.TreeItem {
     this.contextValue = 'project';
     this.tooltip = dir;
     this.dir = dir;
+    this.id = `project:${dir}`;
+    this.parent = undefined;
   }
 }
 class ProfileItem extends vscode.TreeItem {
-  constructor(dir, profile) {
+  constructor(dir, profile, parent) {
     super(`Profile: ${profile}`, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'profile';
     this.tooltip = `${dir} • ${profile}`;
     this.dir = dir;
     this.profile = profile;
+    this.id = `profile:${dir}|${profile}`;
+    this.parent = parent;
   }
 }
 class CommandItem extends vscode.TreeItem {
-  constructor(label, action, sketchDir, profile) {
+  constructor(label, action, sketchDir, profile, parent) {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'command';
     this.command = {
@@ -1644,17 +1658,19 @@ class CommandItem extends vscode.TreeItem {
       title: label,
       arguments: [{ action, sketchDir, profile }]
     };
+    this.id = `cmd:${action}|${sketchDir}|${profile||''}|${label}`;
+    this.parent = parent;
   }
 }
 
-function defaultCommandItems(dir, profile) {
+function defaultCommandItems(dir, profile, parent) {
   return [
-    new CommandItem('Compile', 'compile', dir, profile),
-    new CommandItem('Upload', 'upload', dir, profile),
-    new CommandItem('Upload Data', 'uploadData', dir, profile),
-    new CommandItem('Monitor', 'monitor', dir, profile),
-    new CommandItem('Open Helper', 'helper', dir, profile),
-    new CommandItem('Open Examples', 'examples', dir, profile),
+    new CommandItem('Compile', 'compile', dir, profile, parent),
+    new CommandItem('Upload', 'upload', dir, profile, parent),
+    new CommandItem('Upload Data', 'uploadData', dir, profile, parent),
+    new CommandItem('Monitor', 'monitor', dir, profile, parent),
+    new CommandItem('Open Helper', 'helper', dir, profile, parent),
+    new CommandItem('Open Examples', 'examples', dir, profile, parent),
   ];
 }
 
@@ -1771,7 +1787,24 @@ async function commandUploadDataFor(sketchDir, profile) {
 
 // Register the tree view
 arduinoTreeProvider = new ArduinoCliTreeProvider();
-vscode.window.createTreeView('arduinoCliView', { treeDataProvider: arduinoTreeProvider });
+arduinoTreeView = vscode.window.createTreeView('arduinoCliView', { treeDataProvider: arduinoTreeProvider, showCollapseAll: true });
+
+// Expand all nodes in the Arduino CLI tree view
+async function commandExpandAllTree() {
+  try {
+    const view = arduinoTreeView;
+    if (!view) return;
+    const roots = await arduinoTreeProvider.getChildren();
+    const expandNode = async (node) => {
+      try { await view.reveal(node, { expand: true }); } catch { /* ignore */ }
+      const children = await arduinoTreeProvider.getChildren(node);
+      if (children && children.length) {
+        for (const c of children) await expandNode(c);
+      }
+    };
+    for (const r of roots) await expandNode(r);
+  } catch (e) { showError(e); }
+}
 
 /**
  * Perform a clean build by invoking `arduino-cli compile --clean`.

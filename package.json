@@ -41,6 +41,10 @@
         "title": "%cmd.examples%"
       },
       {
+        "command": "arduino-cli.expandAll",
+        "title": "%cmd.expandAll%"
+      },
+      {
         "command": "arduino-cli.sketchNew",
         "title": "%cmd.sketchNew%"
       },
@@ -113,6 +117,15 @@
         "title": "%cmd.uploadData%"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "arduino-cli.expandAll",
+          "when": "view == arduinoCliView",
+          "group": "navigation@2"
+        }
+      ]
+    },
     "configuration": {
       "type": "object",
       "title": "%config.title%",

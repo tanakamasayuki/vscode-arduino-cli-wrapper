@@ -13,6 +13,7 @@
   "cmd.monitor": "Arduino CLI: シリアルモニター",
   "cmd.refreshView": "Arduino CLI: ビューを更新",
   "cmd.examples": "Arduino CLI: サンプル ブラウザー",
+  "cmd.expandAll": "Arduino CLI: すべて展開",
   "cmd.runTreeAction": "Arduino CLI: アクションを実行",
   "cmd.sketchYamlHelper": "Arduino CLI: sketch.yaml ヘルパー",
   "cmd.configureIntelliSense": "Arduino CLI: C/C++ IntelliSense を設定",
