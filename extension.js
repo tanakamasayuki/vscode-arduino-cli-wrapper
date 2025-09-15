@@ -1224,14 +1224,45 @@ async function writeCppProps(sketchDir, include, reason) {
     }
     const target = cfgObj.configurations[idx] || {};
 
-    // Merge includePath normally; in clean mode, force empty
+    // Strategy flags
     const forceEmptyInclude = typeof reason === 'string' && /clean/i.test(reason);
+    const isStreaming = typeof reason === 'string' && /streaming/i.test(reason);
+    const isFinalize = typeof reason === 'string' && /(finalize|prune)/i.test(reason);
+
+    // Start from current includePath
     let existingIncludes = Array.isArray(target.includePath) ? target.includePath.slice() : [];
     if (forceEmptyInclude) existingIncludes = [];
-    const seen = new Set(existingIncludes);
-    for (const p of include || []) {
-      const s = String(p || '');
-      if (!seen.has(s)) { existingIncludes.push(s); seen.add(s); }
+
+    // Optionally prune non-existent paths when not streaming (to minimize churn during build)
+    if (!isStreaming && existingIncludes.length) {
+      try {
+        const checks = await Promise.all(existingIncludes.map(async (p) => {
+          try {
+            const base = getGlobBase(String(p));
+            if (!base) return false;
+            return await pathExists(vscode.Uri.file(base));
+          } catch { return false; }
+        }));
+        existingIncludes = existingIncludes.filter((_, i) => checks[i]);
+      } catch { /* ignore */ }
+    }
+    let finalIncludes;
+    if (isFinalize) {
+      // After build completes: replace with the final filtered set (prune unused)
+      const seen = new Set();
+      finalIncludes = [];
+      for (const p of include || []) {
+        const s = String(p || '');
+        if (!seen.has(s)) { finalIncludes.push(s); seen.add(s); }
+      }
+    } else {
+      // During streaming or manual updates: only add new entries, keep existing
+      finalIncludes = existingIncludes.slice();
+      const seen = new Set(finalIncludes);
+      for (const p of include || []) {
+        const s = String(p || '');
+        if (!seen.has(s)) { finalIncludes.push(s); seen.add(s); }
+      }
     }
     // Update compilerPath if we discovered one; otherwise keep existing
     if (lastCompilerPath) {
@@ -1254,7 +1285,7 @@ async function writeCppProps(sketchDir, include, reason) {
       if (!('cppStandard' in target)) target.cppStandard = 'c++17';
     }
     if (!('intelliSenseMode' in target)) target.intelliSenseMode = 'gcc-x64';
-    target.includePath = existingIncludes;
+    target.includePath = finalIncludes;
     cfgObj.configurations[idx] = target;
 
     // If nothing changed, skip write. Compare against the original JSON text
@@ -1292,6 +1323,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   let wroteInitial = false;
   let pendingWrite = null;
   let lastFilteredCount = 0;
+  let lastFinalFiltered = [];
   if (cleanReset) {
     try { await writeCppProps(sketchDir, [], 'compile: clean reset includePath'); } catch { }
   }
@@ -1319,6 +1351,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
           }));
           const filtered = combined.filter((_, i) => checks[i]);
           lastFilteredCount = filtered.length;
+          lastFinalFiltered = filtered.slice();
           await writeCppProps(sketchDir, filtered, 'compile: streaming');
         } while (writeRequested);
       } finally {
@@ -1435,6 +1468,8 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
       if (buffer) processLine(buffer);
       // Final write after process ends
       await scheduleWrite();
+      // Prune unused and non-existent paths to minimize includePath size
+      try { await writeCppProps(sketchDir, lastFinalFiltered, 'compile: finalize prune'); } catch { }
       if (cfg.verbose) {
         channel.appendLine(`[include-stream] final includePath count=${lastFilteredCount}`);
       }

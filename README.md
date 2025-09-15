@@ -82,7 +82,7 @@ Tips:
 
 ## IntelliSense
 
-- During builds, the extension parses compiler lines (`-I`, `-isystem`, `-iprefix`) and updates `.vscode/c_cpp_properties.json` (configuration `Arduino`) without duplicates.
+- During builds, the extension parses compiler lines (`-I`, `-isystem`, `-iprefix`) and updates `.vscode/c_cpp_properties.json` (configuration `Arduino`). While the build runs, it only appends newly discovered paths to minimize churn; when the build finishes, it prunes unused and non-existent entries.
 - Clean builds reset `includePath` first, then add only discovered paths.
 - For ESP32 family (esp32/xtensa-esp32/riscv32-esp-elf), it prefers `c17` / `c++23`.
 - "Configure IntelliSense" computes include paths and writes `c_cpp_properties.json` without triggering a build.

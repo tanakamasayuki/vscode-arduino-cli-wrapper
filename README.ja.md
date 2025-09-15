@@ -82,7 +82,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 
 ## IntelliSense
 
-- ビルド中にコンパイラ出力（`-I` / `-isystem` / `-iprefix`）を解析し、`.vscode/c_cpp_properties.json`（`Arduino` 構成）を重複なく更新します。
+- ビルド中にコンパイラ出力（`-I` / `-isystem` / `-iprefix`）を解析し、`.vscode/c_cpp_properties.json`（`Arduino` 構成）を更新します。ビルドの最中は新規パスの追加のみ行い、ビルド完了時に未使用および存在しないパスを削除して最終的に整理します。
 - クリーンビルドでは先に includePath を空にし、その後に検出パスのみを追加します。
 - ESP32 系（esp32/xtensa-esp32/riscv32-esp-elf）では `c17` / `c++23` を優先します。
 - 「Configure IntelliSense」でビルドせずに includePath を計算し、`c_cpp_properties.json` を作成できます。
