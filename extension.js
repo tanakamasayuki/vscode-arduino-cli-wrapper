@@ -1473,13 +1473,14 @@ function activate(context) {
         if (action === 'uploadData') return commandUploadDataFor(sketchDir, profile);
         if (action === 'monitor') return commandMonitor();
         if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
+        if (action === 'examples') return commandOpenExamplesBrowser({ sketchDir, profile });
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
         if (action === 'setBaud') return vscode.commands.executeCommand('arduino-cli.setBaud');
         if (action === 'setFqbn') return vscode.commands.executeCommand('arduino-cli.setFqbn');
       } catch (e) { showError(e); }
     }),
     vscode.commands.registerCommand('arduino-cli.sketchNew', commandSketchNew),
-    vscode.commands.registerCommand('arduino-cli.examples', commandOpenExamplesBrowser),
+    vscode.commands.registerCommand('arduino-cli.examples', () => commandOpenExamplesBrowser({})),
     vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
     vscode.commands.registerCommand('arduino-cli.listBoards', commandListBoards),
@@ -1618,6 +1619,7 @@ function defaultCommandItems(dir, profile) {
     new CommandItem('Upload Data', 'uploadData', dir, profile),
     new CommandItem('Monitor', 'monitor', dir, profile),
     new CommandItem('Open Helper', 'helper', dir, profile),
+    new CommandItem('Open Examples', 'examples', dir, profile),
   ];
 }
 
@@ -1628,6 +1630,7 @@ function globalCommandItems() {
     new CommandItem('List Boards', 'listBoards', '', ''),
     new CommandItem('List All Boards', 'listAllBoards', '', ''),
     new CommandItem('Open Helper', 'helper', '', ''),
+    new CommandItem('Open Examples', 'examples', '', ''),
     new CommandItem('New Sketch', 'sketchNew', '', ''),
     new CommandItem('Run Command', 'runArbitrary', '', ''),
   ];
@@ -2867,7 +2870,7 @@ async function getLibrariesFromSketchYaml(sketchDir, profileName) {
  * - Libraries listed in sketch.yaml, mapped to includePath entries in c_cpp_properties.json
  * Provides filtering, grep, preview, and copy-to-project features.
  */
-async function commandOpenExamplesBrowser() {
+async function commandOpenExamplesBrowser(ctx) {
   const panel = vscode.window.createWebviewPanel(
     'arduinoExamplesBrowser',
     'Arduino Examples',
@@ -2887,7 +2890,7 @@ async function commandOpenExamplesBrowser() {
       if (!msg || !msg.type) return;
       switch (msg.type) {
         case 'requestExamples': {
-          const examples = await collectExamplesForCurrentSketch();
+          const examples = await collectExamplesForCurrentSketch(ctx && ctx.sketchDir ? String(ctx.sketchDir) : '');
           panel.webview.postMessage({ type: 'examples', items: examples });
           break;
         }
@@ -2938,10 +2941,15 @@ function makeGrepRegex(pattern) {
   return new RegExp(esc, 'i');
 }
 
-async function collectExamplesForCurrentSketch() {
-  const ino = await pickInoFromWorkspace();
-  if (!ino) return [];
-  const sketchDir = path.dirname(ino);
+async function collectExamplesForCurrentSketch(preferSketchDir = '') {
+  let sketchDir = '';
+  if (preferSketchDir) {
+    sketchDir = preferSketchDir;
+  } else {
+    const picked = await pickInoFromWorkspace();
+    if (!picked) return [];
+    sketchDir = path.dirname(picked);
+  }
   const list = [];
   // Platform examples via show-properties
   try {
@@ -3130,6 +3138,28 @@ async function copyExampleToProject(inoPath) {
       const oldPath = vscode.Uri.file(path.join(destDir, ino[0]));
       const newPath = vscode.Uri.file(path.join(destDir, path.basename(destDir) + '.ino'));
       try { await vscode.workspace.fs.rename(oldPath, newPath, { overwrite: false }); } catch { }
+    }
+  } catch { }
+  // Also copy the sketch.yaml used by the current project into the copied example
+  try {
+    let sketchDir = await detectSketchDirForStatus();
+    if (!sketchDir) {
+      const inoPick = await pickInoFromWorkspace();
+      if (inoPick) sketchDir = path.dirname(inoPick);
+    }
+    if (sketchDir) {
+      const yamlSrc = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+      if (await pathExists(yamlSrc)) {
+        const yamlDstDefault = vscode.Uri.file(path.join(destDir, 'sketch.yaml'));
+        if (!(await pathExists(yamlDstDefault))) {
+          const data = await vscode.workspace.fs.readFile(yamlSrc);
+          await vscode.workspace.fs.writeFile(yamlDstDefault, data);
+        } else {
+          const yamlDstAlt = vscode.Uri.file(path.join(destDir, 'sketch.project.yaml'));
+          const data = await vscode.workspace.fs.readFile(yamlSrc);
+          await vscode.workspace.fs.writeFile(yamlDstAlt, data);
+        }
+      }
     }
   } catch { }
   return destDir;
