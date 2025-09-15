@@ -89,10 +89,6 @@
         "title": "%cmd.monitor%"
       },
       {
-        "command": "arduino-cli.createSketchYaml",
-        "title": "%cmd.createSketchYaml%"
-      },
-      {
         "command": "arduino-cli.configureIntelliSense",
         "title": "%cmd.configureIntelliSense%"
       },

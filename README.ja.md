@@ -13,13 +13,13 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - Clean Compile: `--clean` でクリーンビルド。最初に includePath を空にし、ビルドで検出したパスのみを追加
 - Upload Sketch: ビルドしてから書き込み。選択したポートとプロファイル/FQBNを使用。必要に応じてモニタを一時停止・再開
 - Monitor Serial: シリアルモニタを起動（ポートとボーレートを選択）
-- Create sketch.yaml: スケッチフォルダーに `sketch.yaml` を作成。`--dump-profile` の結果を profiles に追記し、`default_profile` を設定
+ - Open Helper: sketch.yaml ヘルパーの Web ビューを開き、プロファイル/ライブラリを確認・反映
 - Board Details: プロファイル使用時は `-b` でその FQBN を渡して詳細表示
 - Run Command: 任意の Arduino CLI 引数を実行
 - Configure IntelliSense: ビルドせずに includePath を計算して `.vscode/c_cpp_properties.json` を作成
 - Upload Data (ESP32): `data/` から LittleFS/SPIFFS イメージを作成し、esptool で書き込み
 - New Sketch: 新しいスケッチフォルダーを作成
-- Open Helper: sketch.yaml ヘルパーの Web ビューを開き、プロファイル/ライブラリを確認・反映
+
 
 すべてのコマンドのログは疑似ターミナルに ANSI カラーで表示されます。
 
@@ -75,7 +75,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 ## sketch.yaml とプロファイル
 
 - `sketch.yaml` があるときはプロファイルを優先。ない場合は FQBN を使用します。
-- 「Create sketch.yaml」で `--dump-profile` の結果を `profiles:` に追記し、`default_profile` を自動設定します。
+ - ひな形を作るには「Open Helper」を使ってボードやライブラリを選択し、生成されたテンプレートを `sketch.yaml` として保存してください。
 - ステータスバーの FQBN 表示は、プロファイルがあればプロファイル名に切り替わります。「Arduino CLI: Set Profile」で変更できます。
 - 「Open Helper」では、選択したプロファイルの FQBN やライブラリ、プラットフォーム情報の確認と反映ができます。
 
@@ -106,4 +106,3 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 ## ライセンス
 
 CC0 1.0 Universal (Public Domain Dedication)。詳細は `LICENSE` を参照してください。
-

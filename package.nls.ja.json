@@ -1,7 +1,6 @@
 {
   "ext.displayName": "Arduino CLI ラッパー",
   "ext.description": "VS Code から Arduino CLI を実行",
-
   "cmd.runArbitrary": "Arduino CLI: コマンドを実行",
   "cmd.version": "Arduino CLI: バージョンを表示",
   "cmd.sketchNew": "Arduino CLI: 新しいスケッチを作成",
@@ -12,7 +11,6 @@
   "cmd.cleanCompile": "Arduino CLI: クリーンビルド",
   "cmd.upload": "Arduino CLI: スケッチをアップロード",
   "cmd.monitor": "Arduino CLI: シリアルモニター",
-  "cmd.createSketchYaml": "Arduino CLI: sketch.yaml を作成",
   "cmd.sketchYamlHelper": "Arduino CLI: sketch.yaml ヘルパー",
   "cmd.configureIntelliSense": "Arduino CLI: C/C++ IntelliSense を設定",
   "cmd.setProfile": "Arduino CLI: プロファイルを設定 (sketch.yaml)",
@@ -20,7 +18,6 @@
   "cmd.setPort": "Arduino CLI: シリアルポートを設定",
   "cmd.setBaud": "Arduino CLI: ボーレートを設定",
   "cmd.uploadData": "Arduino CLI: data フォルダをアップロード",
-
   "config.title": "Arduino CLI ラッパー",
   "config.path.description": "arduino-cli 実行ファイルのパス (例: arduino-cli, arduino-cli.exe, フルパス)",
   "config.additionalArgs.description": "すべての arduino-cli 実行に付与する追加引数",

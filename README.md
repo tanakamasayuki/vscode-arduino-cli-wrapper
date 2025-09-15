@@ -13,13 +13,13 @@ VS Code extension to run Arduino CLI from the command palette, status bar, and a
 - Clean Compile: compiles with `--clean`; resets includePath first, then adds only paths discovered during the build
 - Upload Sketch: builds then uploads with selected port and profile/FQBN; closes and reopens monitor if needed
 - Monitor Serial: open a serial monitor (select port and baudrate)
-- Create sketch.yaml: creates `sketch.yaml` in the sketch folder; appends `--dump-profile` output and sets `default_profile`
+ - Open Helper: open a sketch.yaml helper webview to inspect/apply profiles/libraries
 - Board Details: when using profiles, passes the profile's FQBN with `-b`
 - Run Command: run arbitrary Arduino CLI arguments
 - Configure IntelliSense: compute include paths and write `.vscode/c_cpp_properties.json` without building
 - Upload Data (ESP32): build LittleFS/SPIFFS image from `data/` and flash via esptool
 - New Sketch: create a new Arduino sketch folder
-- Open Helper: open a sketch.yaml helper webview to inspect/apply profiles/libraries
+
 
 All command logs are unified in a dedicated pseudo terminal with ANSI colors.
 
@@ -75,7 +75,7 @@ Tips:
 ## sketch.yaml and Profiles
 
 - When `sketch.yaml` exists, compile/upload use profiles; otherwise FQBN is used.
-- "Create sketch.yaml" appends `--dump-profile` output as `profiles:` and auto-sets `default_profile`.
+ - To bootstrap a `sketch.yaml`, use the Helper view to generate a template for your board and libraries, then copy it into a new `sketch.yaml` in your sketch folder.
 - The status bar FQBN indicator switches to a profile name if profiles exist. Use "Arduino CLI: Set Profile" to change it.
 - "Open Helper" shows a helper UI to inspect/apply FQBN, libraries, and platform info for a selected profile.
 
@@ -106,4 +106,3 @@ Tips:
 ## License
 
 CC0 1.0 Universal (Public Domain Dedication). See `LICENSE`.
-
