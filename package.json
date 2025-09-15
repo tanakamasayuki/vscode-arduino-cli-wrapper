@@ -37,6 +37,10 @@
         "title": "Arduino CLI: Refresh View"
       },
       {
+        "command": "arduino-cli.examples",
+        "title": "Arduino CLI: Examples Browser"
+      },
+      {
         "command": "arduino-cli.sketchNew",
         "title": "%cmd.sketchNew%"
       },

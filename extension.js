@@ -1479,6 +1479,7 @@ function activate(context) {
       } catch (e) { showError(e); }
     }),
     vscode.commands.registerCommand('arduino-cli.sketchNew', commandSketchNew),
+    vscode.commands.registerCommand('arduino-cli.examples', commandOpenExamplesBrowser),
     vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
     vscode.commands.registerCommand('arduino-cli.listBoards', commandListBoards),
@@ -2858,6 +2859,299 @@ async function getLibrariesFromSketchYaml(sketchDir, profileName) {
     }
     return result;
   } catch { return []; }
+}
+
+/**
+ * Open a webview that lists Arduino examples from:
+ * - Platform path detected via `compile --show-properties` (runtime.platform.path/build.board.platform.path)
+ * - Libraries listed in sketch.yaml, mapped to includePath entries in c_cpp_properties.json
+ * Provides filtering, grep, preview, and copy-to-project features.
+ */
+async function commandOpenExamplesBrowser() {
+  const panel = vscode.window.createWebviewPanel(
+    'arduinoExamplesBrowser',
+    'Arduino Examples',
+    vscode.ViewColumn.Active,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  try {
+    const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'examples.html');
+    let html = await readTextFile(htmlUri);
+    panel.webview.html = html;
+  } catch (e) {
+    showError(e);
+  }
+
+  panel.webview.onDidReceiveMessage(async (msg) => {
+    try {
+      if (!msg || !msg.type) return;
+      switch (msg.type) {
+        case 'requestExamples': {
+          const examples = await collectExamplesForCurrentSketch();
+          panel.webview.postMessage({ type: 'examples', items: examples });
+          break;
+        }
+        case 'readFile': {
+          const p = String(msg.path || '');
+          if (!p) return;
+          const text = await readTextFile(vscode.Uri.file(p));
+          panel.webview.postMessage({ type: 'fileContent', path: p, content: text });
+          break;
+        }
+        case 'grep': {
+          const pattern = String(msg.pattern || '').trim();
+          const files = Array.isArray(msg.files) ? msg.files.map(String) : [];
+          if (!pattern || files.length === 0) { panel.webview.postMessage({ type: 'grepResult', matches: [] }); return; }
+          const re = makeGrepRegex(pattern);
+          const matches = [];
+          for (const f of files) {
+            try {
+              const text = await readTextFile(vscode.Uri.file(f));
+              if (re.test(text)) matches.push(f);
+            } catch { }
+          }
+          panel.webview.postMessage({ type: 'grepResult', matches });
+          break;
+        }
+        case 'copyToProject': {
+          const inoPath = String(msg.path || '');
+          if (!inoPath) return;
+          const dest = await copyExampleToProject(inoPath);
+          if (dest) {
+            vscode.window.setStatusBarMessage(`Copied to: ${dest}`, 2000);
+            panel.webview.postMessage({ type: 'copied', dest });
+          }
+          break;
+        }
+      }
+    } catch (e) { showError(e); }
+  });
+}
+
+function makeGrepRegex(pattern) {
+  // Simple: if pattern looks like /foo/i use as regex; else escape
+  try {
+    const m = String(pattern).match(/^\s*\/(.*)\/([a-z]*)\s*$/i);
+    if (m) return new RegExp(m[1], m[2]);
+  } catch { }
+  const esc = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(esc, 'i');
+}
+
+async function collectExamplesForCurrentSketch() {
+  const ino = await pickInoFromWorkspace();
+  if (!ino) return [];
+  const sketchDir = path.dirname(ino);
+  const list = [];
+  // Platform examples via show-properties
+  try {
+    const props = await getShowProperties(sketchDir);
+    const platformRoots = [];
+    if (props['runtime.platform.path']) platformRoots.push(props['runtime.platform.path']);
+    if (props['build.board.platform.path'] && props['build.board.platform.path'] !== props['runtime.platform.path']) {
+      platformRoots.push(props['build.board.platform.path']);
+    }
+    for (const root of platformRoots) {
+      const items = await scanExamplesUnderRoot(root, 'platform');
+      for (const it of items) list.push(it);
+    }
+  } catch { }
+  // Library examples via sketch.yaml libraries + c_cpp_properties.json includePath
+  try {
+    const libRoots = await detectLibraryRootsFromCppProps(sketchDir);
+    for (const r of libRoots) {
+      const items = await scanExamplesUnderRoot(r, 'library');
+      for (const it of items) list.push(it);
+    }
+  } catch { }
+  // Dedup by absolute path
+  const seen = new Set();
+  return list.filter(it => { const k = it.path; if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+async function getShowProperties(sketchDir) {
+  if (!(await ensureCliReady())) return {};
+  const cfg = getConfig();
+  const exe = cfg.exe || 'arduino-cli';
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const args = [...baseArgs, 'compile'];
+  const yamlInfo = await readSketchYamlInfo(sketchDir);
+  if (yamlInfo && yamlInfo.profiles.length > 0) {
+    const profile = yamlInfo.defaultProfile || yamlInfo.profiles[0];
+    args.push('--profile', profile);
+  } else {
+    const fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
+    if (fqbn) args.push('--fqbn', fqbn);
+  }
+  args.push('--show-properties');
+  args.push(sketchDir);
+  let out = '';
+  await new Promise((resolve, reject) => {
+    const child = cp.spawn(exe, args, { shell: false, cwd: sketchDir });
+    child.stdout.on('data', d => { out += d.toString(); });
+    child.stderr.on('data', () => { /* ignore */ });
+    child.on('error', reject);
+    child.on('close', code => code === 0 ? resolve() : resolve()); // tolerate non-zero
+  });
+  const props = {};
+  for (const line of String(out).split(/\r?\n/)) {
+    const i = line.indexOf('=');
+    if (i > 0) props[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return props;
+}
+
+async function scanExamplesUnderRoot(rootPath, kind) {
+  const results = [];
+  const root = String(rootPath || '').trim();
+  if (!root) return results;
+  const rootUri = vscode.Uri.file(root);
+  const exists = await pathExists(rootUri);
+  if (!exists) return results;
+  // Find directories named 'examples'
+  const exampleDirs = await findDirectoriesNamed(rootUri, 'examples', 4); // limit depth a bit
+  for (const exUri of exampleDirs) {
+    const parent = path.basename(path.dirname(exUri.fsPath));
+    const inoFiles = await findFilesWithExtension(exUri, '.ino', 4);
+    for (const f of inoFiles) {
+      const rel = path.relative(exUri.fsPath, f.fsPath).replace(/\\/g, '/');
+      results.push({
+        kind,
+        parent,
+        relUnderExamples: rel,
+        label: `${parent} : ${rel}`,
+        path: f.fsPath
+      });
+    }
+  }
+  return results;
+}
+
+async function findDirectoriesNamed(baseUri, name, maxDepth = 5, depth = 0) {
+  const out = [];
+  try {
+    if (depth > maxDepth) return out;
+    const entries = await vscode.workspace.fs.readDirectory(baseUri);
+    for (const [fname, ftype] of entries) {
+      if (ftype === vscode.FileType.Directory) {
+        const child = vscode.Uri.joinPath(baseUri, fname);
+        if (fname.toLowerCase() === name.toLowerCase()) out.push(child);
+        else {
+          // Skip heavy dirs
+          if (/^(tools|docs|test|tests|examples|build|out|dist|\.git)$/i.test(fname)) continue;
+          const nested = await findDirectoriesNamed(child, name, maxDepth, depth + 1);
+          for (const u of nested) out.push(u);
+        }
+      }
+    }
+  } catch { }
+  return out;
+}
+
+async function findFilesWithExtension(baseUri, ext, maxDepth = 5, depth = 0) {
+  const out = [];
+  try {
+    if (depth > maxDepth) return out;
+    const entries = await vscode.workspace.fs.readDirectory(baseUri);
+    for (const [fname, ftype] of entries) {
+      const child = vscode.Uri.joinPath(baseUri, fname);
+      if (ftype === vscode.FileType.File) {
+        if (fname.toLowerCase().endsWith(ext.toLowerCase())) out.push(child);
+      } else if (ftype === vscode.FileType.Directory) {
+        const nested = await findFilesWithExtension(child, ext, maxDepth, depth + 1);
+        for (const u of nested) out.push(u);
+      }
+    }
+  } catch { }
+  return out;
+}
+
+async function detectLibraryRootsFromCppProps(sketchDir) {
+  const roots = new Set();
+  // Read libraries from sketch.yaml
+  let libs = [];
+  try {
+    const info = await readSketchYamlInfo(sketchDir);
+    const profile = info?.defaultProfile || (info?.profiles && info.profiles[0]) || '';
+    if (profile) libs = await getLibrariesFromSketchYaml(sketchDir, profile);
+  } catch { }
+  const libNames = libs.map(x => String(x.name || '').trim()).filter(Boolean);
+  if (libNames.length === 0) return Array.from(roots);
+  // Read c_cpp_properties.json
+  try {
+    const cppUri = vscode.Uri.file(path.join(sketchDir, '.vscode', 'c_cpp_properties.json'));
+    const txt = await readTextFile(cppUri);
+    const json = JSON.parse(txt);
+    const conf = Array.isArray(json.configurations) && json.configurations.length > 0 ? json.configurations[0] : json;
+    const include = Array.isArray(conf.includePath) ? conf.includePath : [];
+    for (let p of include) {
+      if (!p) continue;
+      p = String(p);
+      // Normalize glob tail and trailing separator
+      p = p.replace(/[\\/]+\*\*.*$/, '');
+      p = p.replace(/[\\/]+$/, '');
+      // If path points into a library's src, search from the parent of src
+      // Handle cases like: .../libraries/<lib>/src or deeper under src
+      const parts = p.split(/[\\/]+/);
+      const idxSrc = parts.map(s => s.toLowerCase()).lastIndexOf('src');
+      if (idxSrc >= 0) {
+        p = parts.slice(0, idxSrc).join(path.sep);
+      }
+      for (const name of libNames) {
+        const segMatch = p.split(/[\\/]+/).some(seg => seg.toLowerCase() === name.toLowerCase());
+        if (segMatch) roots.add(p);
+      }
+    }
+  } catch { }
+  return Array.from(roots);
+}
+
+async function copyExampleToProject(inoPath) {
+  const folders = vscode.workspace.workspaceFolders || [];
+  if (folders.length === 0) { vscode.window.showWarningMessage('No workspace folder open.'); return ''; }
+  const projectRoot = folders[0].uri.fsPath;
+  const examplesDest = path.join(projectRoot, 'examples');
+  const srcDir = path.dirname(inoPath);
+  const baseName = path.basename(srcDir);
+  await ensureDir(vscode.Uri.file(examplesDest));
+  // Resolve unique folder name
+  let destDir = path.join(examplesDest, baseName);
+  let suffix = 1;
+  while (await pathExists(vscode.Uri.file(destDir))) {
+    suffix++;
+    destDir = path.join(examplesDest, `${baseName}_${suffix}`);
+  }
+  await copyDirectoryRecursive(vscode.Uri.file(srcDir), vscode.Uri.file(destDir));
+  // Rename primary .ino to match dest folder
+  try {
+    const files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(destDir));
+    const ino = files.find(([n,t]) => t === vscode.FileType.File && /\.ino$/i.test(n));
+    if (ino) {
+      const oldPath = vscode.Uri.file(path.join(destDir, ino[0]));
+      const newPath = vscode.Uri.file(path.join(destDir, path.basename(destDir) + '.ino'));
+      try { await vscode.workspace.fs.rename(oldPath, newPath, { overwrite: false }); } catch { }
+    }
+  } catch { }
+  return destDir;
+}
+
+async function ensureDir(uri) {
+  try { await vscode.workspace.fs.createDirectory(uri); } catch { }
+}
+
+async function copyDirectoryRecursive(src, dst) {
+  await ensureDir(dst);
+  const entries = await vscode.workspace.fs.readDirectory(src);
+  for (const [name, type] of entries) {
+    const s = vscode.Uri.joinPath(src, name);
+    const d = vscode.Uri.joinPath(dst, name);
+    if (type === vscode.FileType.Directory) {
+      await copyDirectoryRecursive(s, d);
+    } else if (type === vscode.FileType.File) {
+      const data = await vscode.workspace.fs.readFile(s);
+      await vscode.workspace.fs.writeFile(d, data);
+    }
+  }
 }
 
 /** Get `port` value from sketch.yaml under a specific profile (string or empty). */

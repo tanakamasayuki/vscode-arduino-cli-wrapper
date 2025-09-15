@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arduino Examples</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; margin: 0; padding: 0; }
+    header { padding: 8px 12px; background: #1e1e1e; color: #ddd; display:flex; gap:8px; align-items:center; }
+    input[type="text"] { flex: 1; padding: 6px 8px; background:#2b2b2b; border:1px solid #3d3d3d; color:#ddd; border-radius:4px; }
+    main { display:flex; height: calc(100vh - 48px); }
+    .list { width: 48%; border-right: 1px solid #2d2d2d; overflow:auto; }
+    .viewer { flex: 1; display:flex; flex-direction:column; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { padding: 6px 10px; border-bottom: 1px solid #2d2d2d; cursor: pointer; color:#ddd; }
+    li:hover { background:#2a2a2a; }
+    .meta { color:#888; font-size: 12px; }
+    textarea { flex: 1; width: 100%; box-sizing: border-box; padding: 8px; background:#1b1b1b; color:#ddd; border:0; resize:none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .toolbar { padding: 8px; border-bottom: 1px solid #2d2d2d; display:flex; gap:8px; align-items:center; }
+    button { background:#0e639c; color:#fff; border:0; padding:6px 10px; border-radius:4px; cursor:pointer; }
+    button:disabled { background:#4a4a4a; cursor:default; }
+    .count { color:#aaa; font-size:12px; margin-left:auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <input id="filter" type="text" placeholder="フィルタ (親フォルダ名/パス/ファイル名)" />
+    <input id="grep" type="text" placeholder="grep (例: /WiFi/i または 文字列)" />
+  </header>
+  <main>
+    <div class="list">
+      <ul id="items"></ul>
+    </div>
+    <div class="viewer">
+      <div class="toolbar">
+        <span id="sel"></span>
+        <span class="count" id="count"></span>
+      </div>
+      <textarea id="content" placeholder="スケッチを選択してください" readonly></textarea>
+      <div class="toolbar">
+        <button id="copy" disabled>プロジェクトの /examples にコピー</button>
+      </div>
+    </div>
+  </main>
+  <script>
+    const vscode = acquireVsCodeApi();
+    let allItems = []; // {label,parent,relUnderExamples,path}
+    let filtered = [];
+    let selectedPath = '';
+
+    function requestExamples() { vscode.postMessage({ type: 'requestExamples' }); }
+    function readFile(path) { vscode.postMessage({ type: 'readFile', path }); }
+    function grep(files, pattern) { vscode.postMessage({ type: 'grep', files, pattern }); }
+    function copyToProject(path) { vscode.postMessage({ type: 'copyToProject', path }); }
+
+    function renderList() {
+      const ul = document.getElementById('items');
+      ul.innerHTML = '';
+      filtered.forEach(it => {
+        const li = document.createElement('li');
+        li.dataset.path = it.path;
+        li.innerHTML = `<div>${escapeHtml(it.label)}</div><div class="meta">${escapeHtml(it.path)}</div>`;
+        li.onclick = () => selectItem(it);
+        ul.appendChild(li);
+      });
+      document.getElementById('count').textContent = `${filtered.length} 件`;
+    }
+
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+    function selectItem(it) {
+      selectedPath = it.path;
+      document.getElementById('sel').textContent = it.label;
+      document.getElementById('copy').disabled = false;
+      readFile(it.path);
+    }
+
+    function applyFilter() {
+      const q = document.getElementById('filter').value.trim().toLowerCase();
+      if (!q) { filtered = allItems.slice(); renderList(); return; }
+      filtered = allItems.filter(it =>
+        it.label.toLowerCase().includes(q) ||
+        it.path.toLowerCase().includes(q)
+      );
+      renderList();
+    }
+
+    function applyGrep() {
+      const pattern = document.getElementById('grep').value.trim();
+      if (!pattern) { filtered = allItems.slice(); renderList(); return; }
+      const files = filtered.map(it => it.path);
+      grep(files, pattern);
+    }
+
+    document.getElementById('filter').addEventListener('input', applyFilter);
+    document.getElementById('grep').addEventListener('change', applyGrep);
+    document.getElementById('copy').addEventListener('click', () => { if (selectedPath) copyToProject(selectedPath); });
+
+    window.addEventListener('message', event => {
+      const msg = event.data || {};
+      if (msg.type === 'examples') {
+        allItems = Array.isArray(msg.items) ? msg.items : [];
+        filtered = allItems.slice();
+        renderList();
+      } else if (msg.type === 'fileContent') {
+        if (msg.path === selectedPath) {
+          document.getElementById('content').value = String(msg.content || '');
+        }
+      } else if (msg.type === 'grepResult') {
+        const matched = new Set(msg.matches || []);
+        filtered = allItems.filter(it => matched.has(it.path));
+        renderList();
+      } else if (msg.type === 'copied') {
+        // Optionally notify user in the UI
+      }
+    });
+
+    requestExamples();
+  </script>
+</body>
+</html>
+
