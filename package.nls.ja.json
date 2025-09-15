@@ -11,6 +11,9 @@
   "cmd.cleanCompile": "Arduino CLI: クリーンビルド",
   "cmd.upload": "Arduino CLI: スケッチをアップロード",
   "cmd.monitor": "Arduino CLI: シリアルモニター",
+  "cmd.refreshView": "Arduino CLI: ビューを更新",
+  "cmd.examples": "Arduino CLI: サンプル ブラウザー",
+  "cmd.runTreeAction": "Arduino CLI: アクションを実行",
   "cmd.sketchYamlHelper": "Arduino CLI: sketch.yaml ヘルパー",
   "cmd.configureIntelliSense": "Arduino CLI: C/C++ IntelliSense を設定",
   "cmd.setProfile": "Arduino CLI: プロファイルを設定 (sketch.yaml)",
@@ -21,5 +24,6 @@
   "config.title": "Arduino CLI ラッパー",
   "config.path.description": "arduino-cli 実行ファイルのパス (例: arduino-cli, arduino-cli.exe, フルパス)",
   "config.additionalArgs.description": "すべての arduino-cli 実行に付与する追加引数",
-  "config.verbose.description": "compile / upload コマンドに --verbose を付与"
+  "config.verbose.description": "compile / upload コマンドに --verbose を付与",
+  "view.arduinoCli": "Arduino CLI"
 }

@@ -11,6 +11,9 @@
   "cmd.cleanCompile": "Arduino CLI: Clean Compile",
   "cmd.upload": "Arduino CLI: Upload Sketch",
   "cmd.monitor": "Arduino CLI: Monitor Serial",
+  "cmd.refreshView": "Arduino CLI: Refresh View",
+  "cmd.examples": "Arduino CLI: Examples Browser",
+  "cmd.runTreeAction": "Arduino CLI: Run Action",
   "cmd.sketchYamlHelper": "Arduino CLI: sketch.yaml Helper",
   "cmd.configureIntelliSense": "Arduino CLI: Configure C/C++ IntelliSense",
   "cmd.setProfile": "Arduino CLI: Set Profile (sketch.yaml)",
@@ -21,5 +24,6 @@
   "config.title": "Arduino CLI Wrapper",
   "config.path.description": "Path to the arduino-cli executable (e.g. arduino-cli, arduino-cli.exe, or full path).",
   "config.additionalArgs.description": "Additional arguments to append to every arduino-cli invocation.",
-  "config.verbose.description": "Add --verbose to compile/upload commands."
+  "config.verbose.description": "Add --verbose to compile/upload commands.",
+  "view.arduinoCli": "Arduino CLI"
 }

@@ -26,7 +26,7 @@
       "explorer": [
         {
           "id": "arduinoCliView",
-          "name": "Arduino CLI",
+          "name": "%view.arduinoCli%",
           "icon": "images/icon.png"
         }
       ]
@@ -34,11 +34,11 @@
     "commands": [
       {
         "command": "arduino-cli.refreshView",
-        "title": "Arduino CLI: Refresh View"
+        "title": "%cmd.refreshView%"
       },
       {
         "command": "arduino-cli.examples",
-        "title": "Arduino CLI: Examples Browser"
+        "title": "%cmd.examples%"
       },
       {
         "command": "arduino-cli.sketchNew",
@@ -46,7 +46,7 @@
       },
       {
         "command": "arduino-cli.runTreeAction",
-        "title": "Arduino CLI: Run Action"
+        "title": "%cmd.runTreeAction%"
       },
       {
         "command": "arduino-cli.sketchYamlHelper",
