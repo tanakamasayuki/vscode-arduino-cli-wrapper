@@ -16,11 +16,16 @@
     input[type="text"] { flex: 1; padding: 6px 8px; background:#2b2b2b; border:1px solid #3d3d3d; color:#ddd; border-radius:4px; }
     input[type="text"]::placeholder { color:#767676; }
     main { display:flex; height: calc(100vh - 48px); }
-    .list { flex: 0 0 360px; width: 360px; min-width: 220px; max-width: calc(100% - 300px); overflow:auto; }
+    .list { flex: 0 0 360px; width: 360px; min-width: 220px; max-width: calc(100% - 300px); display:flex; flex-direction:column; position:relative; border-right: 1px solid #2d2d2d; overflow:hidden; }
     .divider { flex: 0 0 6px; cursor: col-resize; background:#1f1f1f; border-left:1px solid #2d2d2d; border-right:1px solid #161616; }
     .divider:hover, body.resizing .divider { background:#2d2d2d; }
     .viewer { flex: 1; display:flex; flex-direction:column; min-width: 300px; }
     ul { list-style: none; margin: 0; padding: 0; }
+    #items { flex: 1; overflow:auto; }
+    .loading-banner { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(18,18,18,0.9); color:#bbb; font-size:13px; text-align:center; z-index:5; pointer-events:auto; }
+    .hidden { display:none !important; }
+    .status { margin-left:auto; color:#aaa; font-size:12px; }
+    .loading-active #items { filter: blur(1px); }
     li { padding: 6px 10px; border-bottom: 1px solid #2d2d2d; cursor: pointer; color:#ddd; }
     li:hover { background:#2a2a2a; }
     li.selected { background:#094771; }
@@ -49,6 +54,7 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
   </header>
   <main>
     <div class="list">
+      <div id="loading" class="loading-banner hidden">スケッチ例を検索中...</div>
       <ul id="items"></ul>
     </div>
     <div id="divider" class="divider" role="separator" aria-orientation="vertical"></div>
@@ -57,9 +63,10 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
         <span id="sel"></span>
         <span class="count" id="count"></span>
       </div>
-      <pre id="codeView" class="code-view"><code id="content" class="hljs language-cpp empty" data-placeholder="スケッチを選択してください"></code></pre>
-      <div class="toolbar">
+      <pre id="codeView" class="code-view"><code id="content" class="hljs language-cpp empty" data-placeholder="スケッチを選択してください"></code></pre>      <div class="toolbar">
+        <button id="copyClipboard" disabled>クリップボードにコピー</button>
         <button id="copy" disabled>プロジェクトの /examples にコピー</button>
+        <span id="status" class="status"></span>
       </div>
     </div>
   </main>
@@ -1334,17 +1341,62 @@ let filtered = [];
 let selectedPath = '';
 const codeEl = document.getElementById('content');
 const copyBtn = document.getElementById('copy');
+const copyClipboardBtn = document.getElementById('copyClipboard');
 const selectionLabel = document.getElementById('sel');
 const countLabel = document.getElementById('count');
+const filterInput = document.getElementById('filter');
+const grepInput = document.getElementById('grep');
+const loadingEl = document.getElementById('loading');
+const statusLabel = document.getElementById('status');
 const mainEl = document.querySelector('main');
 const listEl = document.querySelector('.list');
 const divider = document.getElementById('divider');
+const itemsList = document.getElementById('items');
 const layoutState = vscode.getState ? (vscode.getState() || {}) : {};
 const MIN_LIST_WIDTH = 220;
 const MIN_VIEWER_WIDTH = 300;
 const DEFAULT_LIST_WIDTH = 360;
 let listWidthPx = typeof layoutState.listWidth === 'number' ? layoutState.listWidth : DEFAULT_LIST_WIDTH;
 const placeholderMessage = 'スケッチを選択してください';
+let statusTimer = 0;
+let isLoading = false;
+let hasContent = false;
+let currentContent = '';
+
+function setStatus(text) {
+  if (!statusLabel) return;
+  if (statusTimer) {
+    clearTimeout(statusTimer);
+    statusTimer = 0;
+  }
+  statusLabel.textContent = text;
+  if (text) {
+    statusTimer = window.setTimeout(() => {
+      statusLabel.textContent = '';
+      statusTimer = 0;
+    }, 3000);
+  }
+}
+
+function refreshControls() {
+  if (typeof copyBtn !== 'undefined' && copyBtn) copyBtn.disabled = !selectedPath || isLoading;
+  if (typeof copyClipboardBtn !== 'undefined' && copyClipboardBtn) copyClipboardBtn.disabled = !selectedPath || !hasContent || isLoading;
+}
+
+function updateCount() {
+  countLabel.textContent = isLoading ? '検索中...' : filtered.length + ' 件';
+}
+
+function setLoading(active) {
+  if (active) setStatus('');
+  isLoading = !!active;
+  if (loadingEl) loadingEl.classList.toggle('hidden', !active);
+  if (listEl) listEl.classList.toggle('loading-active', !!active);
+  if (filterInput) filterInput.disabled = !!active;
+  if (grepInput) grepInput.disabled = !!active;
+  refreshControls();
+  updateCount();
+}
 
 function applyListWidth(width, persist = true) {
   if (!mainEl || !listEl) return;
@@ -1394,24 +1446,25 @@ if (mainEl && listEl && divider) {
 }
 
 
-function requestExamples() { vscode.postMessage({ type: 'requestExamples' }); }
+function requestExamples() { setLoading(true); vscode.postMessage({ type: 'requestExamples' }); }
 function readFile(path) { vscode.postMessage({ type: 'readFile', path }); }
 function grep(files, pattern) { vscode.postMessage({ type: 'grep', files, pattern }); }
 function copyToProject(path) { vscode.postMessage({ type: 'copyToProject', path }); }
 
 function renderList() {
-  const ul = document.getElementById('items');
-  ul.innerHTML = '';
+  if (!itemsList) return;
+  itemsList.innerHTML = '';
   filtered.forEach(it => {
     const li = document.createElement('li');
     li.dataset.path = it.path;
-    li.innerHTML = '<div>' + escapeHtml(it.label) + '</div><div class="meta">' + escapeHtml(it.path) + '</div>';
+    li.innerHTML = '<div>' + escapeHtml(it.label) + '</div><div class=\"meta\">' + escapeHtml(it.path) + '</div>';
     if (it.path === selectedPath) li.classList.add('selected');
     li.onclick = () => selectItem(it);
-    ul.appendChild(li);
+    itemsList.appendChild(li);
   });
-  countLabel.textContent = filtered.length + ' 件';
+  updateCount();
 }
+
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1426,13 +1479,16 @@ function updateSelectionStyles() {
 function selectItem(it) {
   selectedPath = it.path;
   selectionLabel.textContent = it.label;
-  copyBtn.disabled = false;
+  hasContent = false;
+  currentContent = '';
+  setStatus('');
+  refreshControls();
   updateSelectionStyles();
   readFile(it.path);
 }
 
 function applyFilter() {
-  const q = document.getElementById('filter').value.trim().toLowerCase();
+  const q = filterInput.value.trim().toLowerCase();
   if (!q) {
     filtered = allItems.slice();
   } else {
@@ -1445,7 +1501,7 @@ function applyFilter() {
 }
 
 function applyGrep() {
-  const pattern = document.getElementById('grep').value.trim();
+  const pattern = grepInput.value.trim();
   if (!pattern) {
     filtered = allItems.slice();
     renderList();
@@ -1457,8 +1513,10 @@ function applyGrep() {
 
 function showContent(text) {
   const value = String(text || '');
+  currentContent = value;
   codeEl.textContent = value;
   delete codeEl.dataset.highlighted;
+  hasContent = Boolean(selectedPath);
   if (!value) {
     codeEl.dataset.placeholder = placeholderMessage;
     codeEl.classList.add('empty');
@@ -1469,23 +1527,29 @@ function showContent(text) {
       window.hljs.highlightElement(codeEl);
     }
   }
+  refreshControls();
 }
 
 function clearSelection() {
   selectedPath = '';
   selectionLabel.textContent = '';
-  copyBtn.disabled = true;
+  hasContent = false;
+  currentContent = '';
   updateSelectionStyles();
+  setStatus('');
   showContent('');
+  refreshControls();
 }
 
-document.getElementById('filter').addEventListener('input', applyFilter);
-document.getElementById('grep').addEventListener('change', applyGrep);
-copyBtn.addEventListener('click', () => { if (selectedPath) copyToProject(selectedPath); });
+if (filterInput) filterInput.addEventListener('input', applyFilter);
+if (grepInput) grepInput.addEventListener('change', applyGrep);
+if (copyBtn) copyBtn.addEventListener('click', () => { if (selectedPath) { setStatus(''); copyToProject(selectedPath); }});
+if (copyClipboardBtn) copyClipboardBtn.addEventListener('click', () => { if (selectedPath) { setStatus(''); vscode.postMessage({ type: 'copyToClipboard', path: selectedPath, content: currentContent }); }});
 
 window.addEventListener('message', event => {
   const msg = event.data || {};
   if (msg.type === 'examples') {
+    setLoading(false);
     allItems = Array.isArray(msg.items) ? msg.items : [];
     filtered = allItems.slice();
     renderList();
@@ -1494,6 +1558,7 @@ window.addEventListener('message', event => {
     } else {
       updateSelectionStyles();
     }
+    refreshControls();
   } else if (msg.type === 'fileContent') {
     if (msg.path === selectedPath) {
       showContent(msg.content || '');
@@ -1506,7 +1571,13 @@ window.addEventListener('message', event => {
       clearSelection();
     }
   } else if (msg.type === 'copied') {
-    // Optionally notify user in the UI
+    const dest = typeof msg.dest === 'string' ? msg.dest : '';
+    const label = dest ? dest.split(/[\\\/]/).pop() || '' : '';
+    setStatus(label ? 'プロジェクトにコピーしました: ' + label : 'プロジェクトにコピーしました');
+  } else if (msg.type === 'clipboardCopied') {
+    const p = typeof msg.path === 'string' ? msg.path : '';
+    const label = p ? p.split(/[\\\/]/).pop() || '' : '';
+    setStatus(label ? 'クリップボードにコピーしました: ' + label : 'クリップボードにコピーしました');
   }
 });
 
@@ -1515,13 +1586,6 @@ requestExamples();
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
 
 
 

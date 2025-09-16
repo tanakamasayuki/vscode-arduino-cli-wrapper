@@ -2964,6 +2964,20 @@ async function commandOpenExamplesBrowser(ctx) {
           panel.webview.postMessage({ type: 'grepResult', matches });
           break;
         }
+        case 'copyToClipboard': {
+          const text = typeof msg.content === 'string' ? msg.content : '';
+          const clipPath = String(msg.path || '');
+          try {
+            await vscode.env.clipboard.writeText(text);
+            panel.webview.postMessage({ type: 'clipboardCopied', path: clipPath });
+            const baseLabel = clipPath ? clipPath.split(/[\\/]/).pop() || '' : '';
+            const statusMsg = baseLabel ? 'Copied to clipboard: ' + baseLabel : 'Copied sketch to clipboard';
+            vscode.window.setStatusBarMessage(statusMsg, 2000);
+          } catch (err) {
+            showError(err);
+          }
+          break;
+        }
         case 'copyToProject': {
           const inoPath = String(msg.path || '');
           if (!inoPath) return;
@@ -3364,3 +3378,4 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
   } catch {}
   return '';
 }
+
