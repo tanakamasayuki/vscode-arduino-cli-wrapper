@@ -104,6 +104,10 @@ Tips:
 - Board not detected: check cable/driver/port, and run "Arduino CLI: List Connected Boards".
 - Upload Data: ensure `data/` exists and the sketch includes `SPIFFS.h` or `LittleFS.h`.
 
+## Third-Party Notices
+
+- Highlight.js (core, cpp grammar, VS2015 theme) (c) 2006-2023 the highlight.js authors, BSD-3-Clause. [License](https://github.com/highlightjs/highlight.js/blob/main/LICENSE)
+
 ## License
 
 CC0 1.0 Universal (Public Domain Dedication). See `LICENSE`.

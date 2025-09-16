@@ -98,6 +98,10 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - VS Code 1.84.0 以降
 - Arduino CLI がローカルにインストール済み
 
+## Third-Party Notices
+
+- Highlight.js (core, cpp grammar, VS2015 theme) (c) 2006-2023 highlight.js authors, BSD-3-Clause. License: https://github.com/highlightjs/highlight.js/blob/main/LICENSE
+
 ## トラブルシューティング
 
 - 実行ファイルが見つからない: `arduino-cli-wrapper.path` にフルパスを設定してください。
