@@ -54,7 +54,7 @@ pre code.hljs{display:block;overflow-x:auto;padding:1em}code.hljs{padding:3px 5p
   </header>
   <main>
     <div class="list">
-      <div id="loading" class="loading-banner hidden">スケッチ例を検索中...</div>
+      <div id="loading" class="loading-banner hidden"></div>
       <ul id="items"></ul>
     </div>
     <div id="divider" class="divider" role="separator" aria-orientation="vertical"></div>
@@ -1357,46 +1357,41 @@ const MIN_LIST_WIDTH = 220;
 const MIN_VIEWER_WIDTH = 300;
 const DEFAULT_LIST_WIDTH = 360;
 let listWidthPx = typeof layoutState.listWidth === 'number' ? layoutState.listWidth : DEFAULT_LIST_WIDTH;
-const placeholderMessage = 'スケッチを選択してください';
-let statusTimer = 0;
-let isLoading = false;
-let hasContent = false;
-let currentContent = '';
-
-function setStatus(text) {
-  if (!statusLabel) return;
-  if (statusTimer) {
-    clearTimeout(statusTimer);
-    statusTimer = 0;
+const LANG = ((navigator.language || navigator.userLanguage || 'en') + '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
+document.documentElement.lang = LANG;
+const STR = {
+  ja: {
+    filterPlaceholder: 'フィルター (フォルダー名/パス/ファイル名)',
+    grepPlaceholder: 'grep (例: /WiFi/i や 文字列)',
+    loading: 'スケッチ例を検索中...',
+    copyClipboard: 'クリップボードにコピー',
+    copyProject: 'プロジェクトの /examples にコピー',
+    statusCopiedProject: (label) => label ? `プロジェクトにコピーしました: ${label}` : 'プロジェクトにコピーしました',
+    statusCopiedClipboard: (label) => label ? `クリップボードにコピーしました: ${label}` : 'クリップボードにコピーしました',
+    selectPlaceholder: 'スケッチを選択してください',
+    countItems: (n) => `${n} 件`,
+    counting: '検索中...'
+  },
+  en: {
+    filterPlaceholder: 'Filter (folder/path/filename)',
+    grepPlaceholder: 'grep (e.g. /WiFi/i or text)',
+    loading: 'Searching example sketches...',
+    copyClipboard: 'Copy to Clipboard',
+    copyProject: 'Copy to project /examples',
+    statusCopiedProject: (label) => label ? `Copied to project: ${label}` : 'Copied to project',
+    statusCopiedClipboard: (label) => label ? `Copied to clipboard: ${label}` : 'Copied to clipboard',
+    selectPlaceholder: 'Select a sketch',
+    countItems: (n) => `${n} items`,
+    counting: 'Searching...'
   }
-  statusLabel.textContent = text;
-  if (text) {
-    statusTimer = window.setTimeout(() => {
-      statusLabel.textContent = '';
-      statusTimer = 0;
-    }, 3000);
-  }
-}
-
-function refreshControls() {
-  if (typeof copyBtn !== 'undefined' && copyBtn) copyBtn.disabled = !selectedPath || isLoading;
-  if (typeof copyClipboardBtn !== 'undefined' && copyClipboardBtn) copyClipboardBtn.disabled = !selectedPath || !hasContent || isLoading;
-}
-
-function updateCount() {
-  countLabel.textContent = isLoading ? '検索中...' : filtered.length + ' 件';
-}
-
-function setLoading(active) {
-  if (active) setStatus('');
-  isLoading = !!active;
-  if (loadingEl) loadingEl.classList.toggle('hidden', !active);
-  if (listEl) listEl.classList.toggle('loading-active', !!active);
-  if (filterInput) filterInput.disabled = !!active;
-  if (grepInput) grepInput.disabled = !!active;
-  refreshControls();
-  updateCount();
-}
+};
+const placeholderMessage = STR[LANG].selectPlaceholder;
+// Apply localized static texts
+if (typeof filterInput !== 'undefined' && filterInput) filterInput.placeholder = STR[LANG].filterPlaceholder;
+if (typeof grepInput !== 'undefined' && grepInput) grepInput.placeholder = STR[LANG].grepPlaceholder;
+if (typeof copyBtn !== 'undefined' && copyBtn) copyBtn.textContent = STR[LANG].copyProject;
+if (typeof copyClipboardBtn !== 'undefined' && copyClipboardBtn) copyClipboardBtn.textContent = STR[LANG].copyClipboard;
+if (typeof loadingEl !== 'undefined' && loadingEl) loadingEl.textContent = STR[LANG].loading;
 
 function applyListWidth(width, persist = true) {
   if (!mainEl || !listEl) return;
@@ -1446,6 +1441,29 @@ if (mainEl && listEl && divider) {
 }
 
 
+
+
+function updateCount() {
+  countLabel.textContent = isLoading ? STR[LANG].counting : STR[LANG].countItems(filtered.length);
+}
+let __statusTimer = 0;
+function setStatus(text) {
+  if (!statusLabel) return;
+  if (__statusTimer) { clearTimeout(__statusTimer); __statusTimer = 0; }
+  statusLabel.textContent = text || '';
+  if (text) {
+    __statusTimer = window.setTimeout(() => { statusLabel.textContent = ''; __statusTimer = 0; }, 3000);
+  }
+}function setLoading(active) {
+  if (typeof loadingEl !== 'undefined' && loadingEl) loadingEl.textContent = STR[LANG].loading;
+  isLoading = !!active;
+  if (listEl) listEl.classList.toggle('loading-active', !!active);
+  if (loadingEl) loadingEl.classList.toggle('hidden', !active);
+  if (filterInput) filterInput.disabled = !!active;
+  if (grepInput) grepInput.disabled = !!active;
+  refreshControls();
+  updateCount();
+}
 function requestExamples() { setLoading(true); vscode.postMessage({ type: 'requestExamples' }); }
 function readFile(path) { vscode.postMessage({ type: 'readFile', path }); }
 function grep(files, pattern) { vscode.postMessage({ type: 'grep', files, pattern }); }
@@ -1474,6 +1492,12 @@ function updateSelectionStyles() {
   document.querySelectorAll('#items li').forEach(li => {
     li.classList.toggle('selected', li.dataset.path === selectedPath);
   });
+}
+
+
+function refreshControls() {
+  if (typeof copyBtn !== 'undefined' && copyBtn) copyBtn.disabled = !selectedPath || isLoading;
+  if (typeof copyClipboardBtn !== 'undefined' && copyClipboardBtn) copyClipboardBtn.disabled = !selectedPath || !hasContent || isLoading;
 }
 
 function selectItem(it) {
@@ -1573,11 +1597,11 @@ window.addEventListener('message', event => {
   } else if (msg.type === 'copied') {
     const dest = typeof msg.dest === 'string' ? msg.dest : '';
     const label = dest ? dest.split(/[\\\/]/).pop() || '' : '';
-    setStatus(label ? 'プロジェクトにコピーしました: ' + label : 'プロジェクトにコピーしました');
+    setStatus(STR[LANG].statusCopiedProject(label));
   } else if (msg.type === 'clipboardCopied') {
     const p = typeof msg.path === 'string' ? msg.path : '';
     const label = p ? p.split(/[\\\/]/).pop() || '' : '';
-    setStatus(label ? 'クリップボードにコピーしました: ' + label : 'クリップボードにコピーしました');
+    setStatus(STR[LANG].statusCopiedClipboard(label));
   }
 });
 
@@ -1586,6 +1610,13 @@ requestExamples();
   </script>
 </body>
 </html>
+
+
+
+
+
+
+
 
 
 
