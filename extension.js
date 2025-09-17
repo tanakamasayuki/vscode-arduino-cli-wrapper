@@ -2718,6 +2718,19 @@ async function commandOpenSketchYamlHelper(ctx) {
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true }
   );
+  let helperSketchDir = (ctx && ctx.sketchDir) ? String(ctx.sketchDir) : '';
+
+  const guessSketchDirFromActiveEditor = () => {
+    const uri = vscode.window.activeTextEditor?.document?.uri;
+    if (!uri) return '';
+    const fsPath = uri.fsPath || '';
+    if (!fsPath) return '';
+    const lower = fsPath.toLowerCase();
+    if (lower.endsWith('.ino')) return path.dirname(fsPath);
+    if (path.basename(fsPath).toLowerCase() === 'sketch.yaml') return path.dirname(fsPath);
+    return '';
+  };
+
   try {
     const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'sketch.yaml.html');
     let html = await readTextFile(htmlUri);
@@ -2729,12 +2742,16 @@ async function commandOpenSketchYamlHelper(ctx) {
   // Try to initialize with selected profile's FQBN and libraries (if provided)
   (async () => {
     try {
-      let sketchDir = (ctx && ctx.sketchDir) ? String(ctx.sketchDir) : '';
+      let sketchDir = helperSketchDir;
+      if (!sketchDir) {
+        sketchDir = guessSketchDirFromActiveEditor();
+      }
       if (!sketchDir) {
         const ino = await pickInoFromWorkspace();
         if (!ino) return;
         sketchDir = path.dirname(ino);
       }
+      helperSketchDir = sketchDir;
       const yamlInfo = await readSketchYamlInfo(sketchDir);
       if (!yamlInfo || !yamlInfo.profiles || yamlInfo.profiles.length === 0) return;
       let prof = (ctx && ctx.profile && yamlInfo.profiles.includes(ctx.profile)) ? ctx.profile : '';
@@ -2758,12 +2775,20 @@ async function commandOpenSketchYamlHelper(ctx) {
   panel.webview.onDidReceiveMessage(async (msg) => {
     if (!msg || msg.type !== 'applyYaml') return;
     try {
-      let sketchDir = await detectSketchDirForStatus();
+      let sketchDir = helperSketchDir;
+      if (!sketchDir) {
+        sketchDir = guessSketchDirFromActiveEditor();
+      }
+      if (!sketchDir) {
+        sketchDir = await detectSketchDirForStatus();
+      }
       if (!sketchDir) {
         // Try to pick a sketch by .ino
         try {
           const ino = await pickInoFromWorkspace();
-          if (ino) sketchDir = path.dirname(ino);
+          if (ino) {
+            sketchDir = path.dirname(ino);
+          }
         } catch (_) { }
       }
       if (!sketchDir) {
@@ -2775,6 +2800,7 @@ async function commandOpenSketchYamlHelper(ctx) {
         }
         sketchDir = picked[0].fsPath;
       }
+      helperSketchDir = sketchDir;
       const { profileName, blockText } = extractProfileFromTemplateYaml(String(msg.yaml || ''));
       if (!profileName || !blockText) throw new Error('invalid YAML payload');
       const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
