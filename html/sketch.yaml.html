@@ -117,6 +117,7 @@
             if (match) visible++;
           });
           setStatus(`${visible} item(s) (exact match)`);
+          try { window.__INIT_PENDING__ = false; window.__CURRENT_BASEFQBN__ = exact; window.__CURRENT_EXTFQBN__ = exact; } catch (_) {}
           renderConfig(exact, dataMap[exact] || null);
         } else {
           let visible = 0;
@@ -957,5 +958,9 @@ function updateSummary() {
   </script>
 </body>
 </html>
+
+
+
+
 
 
