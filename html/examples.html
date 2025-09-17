@@ -1531,7 +1531,13 @@ function applyGrep() {
     renderList();
     return;
   }
-  const files = filtered.map(it => it.path);
+  // Always start from the full list (optionally respecting the current text filter)
+  let base = allItems;
+  if (filterInput && filterInput.value.trim()) {
+    const q = filterInput.value.trim().toLowerCase();
+    base = allItems.filter(it => it.label.toLowerCase().includes(q) || it.path.toLowerCase().includes(q));
+  }
+  const files = base.map(it => it.path);
   grep(files, pattern);
 }
 
@@ -1610,6 +1616,7 @@ requestExamples();
   </script>
 </body>
 </html>
+
 
 
 
