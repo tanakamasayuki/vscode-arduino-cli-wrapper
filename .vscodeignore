@@ -12,3 +12,4 @@ images/*.svg
 *.bat
 .gitignore
 temp
+AGENTS.md
