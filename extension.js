@@ -2666,6 +2666,7 @@ async function commandOpenSketchYamlHelper(ctx) {
       // Optionally reveal the file
       try { await vscode.window.showTextDocument(yamlUri); } catch { }
       updateStatusBar();
+      try { await vscode.commands.executeCommand('arduino-cli.refreshView'); } catch { }
     } catch (e) {
       vscode.window.showErrorMessage(t('yamlApplyError', { msg: e.message }));
     }
@@ -3296,4 +3297,5 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
   } catch { }
   return '';
 }
+
 
