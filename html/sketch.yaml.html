@@ -78,6 +78,7 @@
           li.appendChild(nameEl);
           li.appendChild(fqbnEl);
           li.addEventListener('click', () => {
+            try { window.__USER_CHANGED_OPTIONS__ = true; window.__INIT_PENDING__ = false; } catch (_) {}
             q.value = fqbn;
             applyFilter();
           });
@@ -117,7 +118,11 @@
             if (match) visible++;
           });
           setStatus(`${visible} item(s) (exact match)`);
-          try { window.__INIT_PENDING__ = false; window.__CURRENT_BASEFQBN__ = exact; window.__CURRENT_EXTFQBN__ = exact; } catch (_) {}
+          try {
+            window.__INIT_PENDING__ = false;
+            if (!window.__CURRENT_BASEFQBN__) window.__CURRENT_BASEFQBN__ = exact;
+            if (!window.__CURRENT_EXTFQBN__) window.__CURRENT_EXTFQBN__ = exact;
+          } catch (_) {}
           renderConfig(exact, dataMap[exact] || null);
         } else {
           let visible = 0;
@@ -842,9 +847,18 @@ function updateSummary() {
         });
       }
 
-      q.addEventListener('input', applyFilter);
-      q.addEventListener('change', applyFilter);
-      q.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') applyFilter(); });
+      const handleFilterTrigger = () => {
+        try { if (!window.__INIT_PENDING__) window.__USER_CHANGED_OPTIONS__ = true; } catch (_) {}
+        applyFilter();
+      };
+      q.addEventListener('input', handleFilterTrigger);
+      q.addEventListener('change', handleFilterTrigger);
+      q.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          try { if (!window.__INIT_PENDING__) window.__USER_CHANGED_OPTIONS__ = true; } catch (_) {}
+          applyFilter();
+        }
+      });
 
       // Load data
       fetch(DATA_URL + '?v=' + Date.now(), { cache: 'no-store' })
