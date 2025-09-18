@@ -1315,6 +1315,25 @@ function stringifyCommandTokens(tokens) {
   return tokens.map(quoteCommandToken).join(' ');
 }
 
+function ensureArduinoIncludeDirective(tokens) {
+  if (!Array.isArray(tokens)) return tokens;
+  let found = false;
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i] === '-include') {
+      const next = tokens[i + 1] || '';
+      if (next === 'Arduino.h' || stripArgumentQuotes(next) === 'Arduino.h') {
+        found = true;
+        break;
+      }
+    }
+  }
+  if (!found) {
+    const insertAt = tokens.length > 0 ? 1 : 0;
+    tokens.splice(insertAt, 0, '-include', 'Arduino.h');
+  }
+  return tokens;
+}
+
 function resolveCompileCommandsOutput(sketchDir) {
   const sketchUri = vscode.Uri.file(sketchDir);
   const folder = vscode.workspace.getWorkspaceFolder(sketchUri);
@@ -1433,6 +1452,7 @@ async function normalizeCompileCommandEntry(entry) {
   }
   if (tokens.length === 0) return;
   const expanded = await expandIprefixInTokens(tokens, baseDir);
+  ensureArduinoIncludeDirective(expanded);
   if (hasArguments) entry.arguments = expanded;
   if (hasCommand) {
     entry.command = stringifyCommandTokens(expanded);
