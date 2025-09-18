@@ -26,5 +26,7 @@
   "config.path.description": "Path to the arduino-cli executable (e.g. arduino-cli, arduino-cli.exe, or full path).",
   "config.additionalArgs.description": "Additional arguments to append to every arduino-cli invocation.",
   "config.verbose.description": "Add --verbose to compile/upload commands.",
+  "config.lint.m5gfxIncludes.description": "Headers treated as part of the M5GFX family for include-order linting.",
+  "config.lint.fsIncludes.description": "Headers treated as filesystem-related for include-order linting.",
   "view.arduinoCli": "Arduino CLI"
 }

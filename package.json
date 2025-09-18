@@ -147,6 +147,64 @@
           "type": "boolean",
           "default": true,
           "description": "%config.verbose.description%"
+        },
+        "arduino-cli-wrapper.lint.m5gfxIncludes": {
+          "type": "array",
+          "default": [
+            "M5Atom.h",
+            "M5AtomDisplay.h",
+            "M5AtomS3.h",
+            "M5Capsule.h",
+            "M5Core2.h",
+            "M5CoreInk.h",
+            "M5CoreS3.h",
+            "M5Dial.h",
+            "M5DinMeter.h",
+            "M5EPD.h",
+            "M5GFX.h",
+            "M5ModuleDisplay.h",
+            "M5ModuleRCA.h",
+            "M5NanoC6.h",
+            "M5PoECAM.h",
+            "M5Stack.h",
+            "M5Station.h",
+            "M5StickC.h",
+            "M5StickCPlus.h",
+            "M5StickCPlus2.h",
+            "M5TimerCAM.h",
+            "M5Unified.h",
+            "M5Unified.hpp",
+            "M5UnitGLASS.h",
+            "M5UnitGLASS2.h",
+            "M5UnitLCD.h",
+            "M5UnitMiniOLED.h",
+            "M5UnitOLED.h",
+            "M5UnitRCA.h"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "%config.lint.m5gfxIncludes.description%"
+        },
+        "arduino-cli-wrapper.lint.fsIncludes": {
+          "type": "array",
+          "default": [
+            "FFat.h",
+            "FS.h",
+            "HTTPClient.h",
+            "HTTPUpdate.h",
+            "HTTPUpdateServer.h",
+            "LittleFS.h",
+            "Middlewares.h",
+            "SD.h",
+            "SD_MMC.h",
+            "SPIFFS.h",
+            "WebServer.h"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "%config.lint.fsIncludes.description%"
         }
       }
     }

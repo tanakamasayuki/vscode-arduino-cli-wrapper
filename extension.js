@@ -87,6 +87,7 @@ const MSG = {
     enterSketchName: 'Enter new sketch name',
     sketchCreateStart: '[sketch] Creating at: {path}',
     sketchCreateDone: '[sketch] Created: {path}',
+    lintFsIncludeAfterM5: 'FS header {fsHeader} must appear before the M5GFX header {m5Header}.',
   },
   ja: {
     missingCli: 'Arduino CLI が見つかりませんでした: {exe}',
@@ -119,6 +120,7 @@ const MSG = {
     sketchYamlEmpty: '[sketch.yaml] dump-profile の取得結果が空でした（プロファイル追記はありません）',
     sketchYamlCreated: 'sketch.yaml を作成しました。',
     sketchYamlCreateDone: '[sketch.yaml] 作成完了: {path}',
+    lintFsIncludeAfterM5: 'FS系ヘッダー {fsHeader} は M5GFX系ヘッダー {m5Header} より前に記述してください。',
     defaultProfileSet: '[sketch.yaml] default_profile を設定: {name}',
     setFqbnPickTitle: 'FQBN を選択してください',
     setFqbnManual: 'FQBN を手入力…',
@@ -154,6 +156,181 @@ function t(key, vars) {
   if (!vars) return str;
   return str.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : ''));
 }
+
+const DEFAULT_M5GFX_HEADERS = [
+  'M5Atom.h',
+  'M5AtomDisplay.h',
+  'M5AtomS3.h',
+  'M5Capsule.h',
+  'M5Core2.h',
+  'M5CoreInk.h',
+  'M5CoreS3.h',
+  'M5Dial.h',
+  'M5DinMeter.h',
+  'M5EPD.h',
+  'M5GFX.h',
+  'M5ModuleDisplay.h',
+  'M5ModuleRCA.h',
+  'M5NanoC6.h',
+  'M5PoECAM.h',
+  'M5Stack.h',
+  'M5Station.h',
+  'M5StickC.h',
+  'M5StickCPlus.h',
+  'M5StickCPlus2.h',
+  'M5TimerCAM.h',
+  'M5Unified.h',
+  'M5Unified.hpp',
+  'M5UnitGLASS.h',
+  'M5UnitGLASS2.h',
+  'M5UnitLCD.h',
+  'M5UnitMiniOLED.h',
+  'M5UnitOLED.h',
+  'M5UnitRCA.h'
+];
+
+const DEFAULT_FS_HEADERS = [
+  'FFat.h',
+  'FS.h',
+  'HTTPClient.h',
+  'HTTPUpdate.h',
+  'HTTPUpdateServer.h',
+  'LittleFS.h',
+  'Middlewares.h',
+  'SD.h',
+  'SD_MMC.h',
+  'SPIFFS.h',
+  'WebServer.h'
+];
+
+let includeOrderDiagnostics;
+let includeOrderConfig = { m5: new Set(), fs: new Set() };
+
+function setupIncludeOrderLint(context) {
+  includeOrderConfig = loadIncludeOrderConfig();
+  includeOrderDiagnostics = vscode.languages.createDiagnosticCollection('arduinoCliIncludeOrder');
+  context.subscriptions.push(includeOrderDiagnostics);
+
+  const revalidate = (doc) => lintIncludeOrderDocument(doc);
+
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(revalidate),
+    vscode.workspace.onDidChangeTextDocument((event) => revalidate(event.document)),
+    vscode.workspace.onDidCloseTextDocument((doc) => {
+      try { if (includeOrderDiagnostics) includeOrderDiagnostics.delete(doc.uri); } catch { }
+    }),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      try {
+        if (event.affectsConfiguration('arduino-cli-wrapper.lint.m5gfxIncludes') ||
+            event.affectsConfiguration('arduino-cli-wrapper.lint.fsIncludes')) {
+          includeOrderConfig = loadIncludeOrderConfig();
+          lintAllOpenIncludeOrderTargets();
+        }
+      } catch { }
+    })
+  );
+
+  lintAllOpenIncludeOrderTargets();
+}
+
+function lintAllOpenIncludeOrderTargets() {
+  try {
+    for (const doc of vscode.workspace.textDocuments) {
+      lintIncludeOrderDocument(doc);
+    }
+  } catch { }
+}
+
+function lintIncludeOrderDocument(document) {
+  if (!includeOrderDiagnostics || !document) return;
+  const uri = document.uri;
+  if (!uri) return;
+  const fileName = document.fileName || uri.fsPath || '';
+  if (typeof fileName !== 'string' || !fileName.toLowerCase().endsWith('.ino')) {
+    includeOrderDiagnostics.delete(uri);
+    return;
+  }
+
+  let text;
+  try { text = document.getText(); } catch { text = ''; }
+  if (!text) {
+    includeOrderDiagnostics.delete(uri);
+    return;
+  }
+
+  const lines = text.split(/\r?\n/);
+  const diagnostics = [];
+  let sawM5 = false;
+  let lastM5Name = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const info = extractIncludeInfo(lines[i]);
+    if (!info) continue;
+    const normalized = normalizeHeaderName(info.baseName);
+    if (includeOrderConfig.m5.has(normalized)) {
+      sawM5 = true;
+      lastM5Name = info.baseName;
+      continue;
+    }
+    if (sawM5 && includeOrderConfig.fs.has(normalized)) {
+      const message = t('lintFsIncludeAfterM5', { fsHeader: info.baseName, m5Header: lastM5Name });
+      const range = new vscode.Range(
+        new vscode.Position(i, info.startColumn),
+        new vscode.Position(i, lines[i].length)
+      );
+      const diagnostic = new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Error);
+      diagnostic.code = 'M5GfxFsIncludeOrder';
+      diagnostics.push(diagnostic);
+    }
+  }
+
+  if (diagnostics.length > 0) includeOrderDiagnostics.set(uri, diagnostics);
+  else includeOrderDiagnostics.delete(uri);
+}
+
+function loadIncludeOrderConfig() {
+  const cfg = vscode.workspace.getConfiguration('arduino-cli-wrapper');
+  const m5List = parseHeaderList(cfg.get('lint.m5gfxIncludes'), DEFAULT_M5GFX_HEADERS);
+  const fsList = parseHeaderList(cfg.get('lint.fsIncludes'), DEFAULT_FS_HEADERS);
+  return {
+    m5: new Set(m5List.map((name) => normalizeHeaderName(name))),
+    fs: new Set(fsList.map((name) => normalizeHeaderName(name)))
+  };
+}
+
+function parseHeaderList(value, fallback) {
+  if (!Array.isArray(value)) return fallback.slice();
+  const filtered = [];
+  for (const entry of value) {
+    if (typeof entry === 'string') {
+      const trimmed = entry.trim();
+      if (trimmed) filtered.push(trimmed);
+    }
+  }
+  return filtered.length ? filtered : fallback.slice();
+}
+
+function extractIncludeInfo(line) {
+  if (typeof line !== 'string') return undefined;
+  const match = line.match(/^\s*#\s*include\s*[<"]([^>"]+)[>"]/);
+  if (!match) return undefined;
+  const target = match[1].trim();
+  if (!target) return undefined;
+  const baseName = headerBasename(target);
+  const hashIndex = line.indexOf('#');
+  const whitespaceIndex = line.search(/\S/);
+  const startColumn = hashIndex >= 0 ? hashIndex : (whitespaceIndex >= 0 ? whitespaceIndex : 0);
+  return { target, baseName, startColumn };
+}
+
+function normalizeHeaderName(header) {
+  return headerBasename(header).toLowerCase();
+}
+
+function headerBasename(header) {
+  return String(header || '').split(/[\/]/).pop();
+}
+
 
 /**
  * Read extension configuration from VS Code settings.
@@ -1563,6 +1740,7 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
  */
 function activate(context) {
   extContext = context;
+  setupIncludeOrderLint(context);
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('arduino-cli.refreshView', () => {
