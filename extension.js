@@ -15,7 +15,6 @@ let output;
 let extContext;
 let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusList, statusListAll;
 let monitorTerminal;
-let lastCompilerPath = '';
 // Log terminal (ANSI capable, no command execution)
 let logTerminal;
 let logTermWriteEmitter;
@@ -39,12 +38,15 @@ const MSG = {
     pickBoardOrFqbn: 'Select a connected board or enter FQBN',
     enterFqbn: 'Enter FQBN (e.g., arduino:avr:uno)',
     enterPort: 'Enter serial port (e.g., COM3, /dev/ttyACM0)',
-    includeCollecting: 'Collecting includePath…',
-    cppPropsUpdated: 'Updated c_cpp_properties.json',
-    includeHeader: 'includePath:',
     intellisenseStart: 'IntelliSense update start ({reason})',
     intellisenseDone: 'IntelliSense update done',
     intellisenseFail: 'IntelliSense update failed: {msg}',
+    compileCommandsUpdated: 'Updated compile_commands.json ({count} entries)',
+    compileCommandsNoInoEntries: 'No .ino entries found in compile_commands.json.',
+    compileCommandsBuildPathMissing: 'Unable to resolve build.path; skipped compile_commands.json update.',
+    compileCommandsSourceMissing: 'compile_commands.json not found: {path}',
+    compileCommandsParseError: 'Failed to parse compile_commands.json: {msg}',
+    compileCommandsInvalidFormat: 'compile_commands.json has unexpected format.',
     sketchYamlCreateStart: '[sketch.yaml] Create start: {dir}',
     sketchYamlExistsOpen: 'sketch.yaml already exists. Open it?',
     open: 'Open',
@@ -98,12 +100,15 @@ const MSG = {
     pickBoardOrFqbn: '接続中のボードを選択するか FQBN を入力',
     enterFqbn: 'FQBN を入力（例: arduino:avr:uno）',
     enterPort: 'ポートを入力（例: COM3, /dev/ttyACM0）',
-    includeCollecting: '[IntelliSense] includePath を収集中…',
-    cppPropsUpdated: '[IntelliSense] c_cpp_properties.json を更新しました',
-    includeHeader: '[IntelliSense] includePath:',
     intellisenseStart: '[IntelliSense] 更新開始 ({reason})',
     intellisenseDone: '[IntelliSense] 更新完了',
     intellisenseFail: '[IntelliSense] 更新失敗: {msg}',
+    compileCommandsUpdated: '[IntelliSense] compile_commands.json を更新しました (エントリ数: {count})',
+    compileCommandsNoInoEntries: '[IntelliSense] compile_commands.json に .ino エントリが見つかりませんでした。',
+    compileCommandsBuildPathMissing: '[IntelliSense] build.path を取得できませんでした。更新をスキップします。',
+    compileCommandsSourceMissing: '[IntelliSense] build.path に compile_commands.json が見つかりませんでした: {path}',
+    compileCommandsParseError: '[IntelliSense] compile_commands.json の解析に失敗しました: {msg}',
+    compileCommandsInvalidFormat: '[IntelliSense] compile_commands.json の形式が不正です。',
     sketchYamlCreateStart: '[sketch.yaml] 作成開始: {dir}',
     sketchYamlExistsOpen: 'sketch.yaml は既に存在します。開きますか？',
     open: '開く',
@@ -667,7 +672,7 @@ async function getArduinoCliVersionString() {
   await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, args, { shell: false });
     child.stdout.on('data', d => { stdout += d.toString(); });
-    child.stderr.on('data', () => {});
+    child.stderr.on('data', () => { });
     child.on('error', reject);
     child.on('close', code => code === 0 ? resolve() : reject(new Error(`version exit ${code}`)));
   });
@@ -700,7 +705,7 @@ async function fetchLatestArduinoCliTag() {
       res.on('error', reject);
     });
     req.on('error', reject);
-    req.setTimeout(8000, () => { try { req.destroy(new Error('timeout')); } catch(_){} });
+    req.setTimeout(8000, () => { try { req.destroy(new Error('timeout')); } catch (_) { } });
   });
   try {
     const json = JSON.parse(body || '{}');
@@ -784,6 +789,41 @@ async function commandCompile() {
   args.push(sketchDir);
   try {
     // Always use the output channel and update IntelliSense during the build
+    await compileWithIntelliSense(sketchDir, args);
+  } catch (e) {
+    showError(e);
+  }
+}
+
+/**
+ * Manually refresh IntelliSense by invoking a compile that exports
+ * compile_commands.json without uploading.
+ */
+async function commandConfigureIntelliSense() {
+  if (!(await ensureCliReady())) return;
+  const ino = await pickInoFromWorkspace();
+  if (!ino) return;
+  const sketchDir = path.dirname(ino);
+  const cfg = getConfig();
+
+  const yamlInfo = await readSketchYamlInfo(sketchDir);
+  const args = ['compile'];
+  if (cfg.verbose) args.push('--verbose');
+  if (yamlInfo && yamlInfo.profiles.length > 0) {
+    const profile = await resolveProfileName(yamlInfo);
+    if (!profile) return;
+    args.push('--profile', profile);
+  } else {
+    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
+    if (!fqbn) {
+      const set = await commandSetFqbn(true);
+      if (!set) return;
+      fqbn = extContext.workspaceState.get(STATE_FQBN, '');
+    }
+    args.push('--fqbn', fqbn);
+  }
+  args.push(sketchDir);
+  try {
     await compileWithIntelliSense(sketchDir, args);
   } catch (e) {
     showError(e);
@@ -1112,372 +1152,213 @@ async function runExternal(exe, args, opts = {}) {
   });
 }
 
-/**
- * Convenience wrapper: compute include paths and write c_cpp_properties.json
- * for a given sketch directory.
- */
-async function updateIntelliSenseForSketch(sketchDir, reason) {
-  try {
-    const include = await computeIncludePaths(sketchDir);
-    await writeCppProps(sketchDir, include, reason);
-  } catch (e) {
-    const channel = getOutput();
-    channel.appendLine(t('intellisenseFail', { msg: e.message }));
-  }
-}
-
-// Compute include paths without running an extra verbose compile.
-async function computeStaticIncludePaths(sketchDir) {
-  const yamlInfo = await readSketchYamlInfo(sketchDir);
-  let profileName = yamlInfo?.defaultProfile || (yamlInfo?.profiles && yamlInfo.profiles[0]) || '';
-  let vendorArch = '';
-  let version = '';
-  if (yamlInfo && yamlInfo.profiles.length > 0) {
-    // Try to reuse dump-profile embedded in sketch.yaml
-    let profileYaml = '';
-    try {
-      const text = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
-      const mHasProfiles = /\nprofiles\s*:/m.test(text);
-      if (mHasProfiles) profileYaml = text;
-    } catch { }
-    const parsed = parsePlatformFromProfileYaml(profileYaml, profileName);
-    if (parsed) { vendorArch = parsed.vendorArch; version = parsed.version; }
-  }
-  if (!vendorArch) {
-    const fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    const parts = fqbn.split(':');
-    if (parts.length >= 2) vendorArch = parts[0] + ':' + parts[1];
-  }
-
-  const { dataDir, userDir } = await getCliConfigDirs();
-  const include = [];
-
-  if (vendorArch && version && dataDir) {
-    const [vendor, arch] = vendorArch.split(':');
-    const platformPath = path.join(dataDir, 'packages', vendor, 'hardware', arch, version);
-    include.push(normalizeIncludePath(platformPath + '/cores/**'));
-    include.push(normalizeIncludePath(platformPath + '/variants/**'));
-    include.push(normalizeIncludePath(platformPath + '/libraries/**'));
-  }
-  if (dataDir) {
-    include.push(normalizeIncludePath(path.join(dataDir, 'packages', '**/hardware/**/**/libraries/**')));
-  }
-  if (userDir) {
-    include.push(normalizeIncludePath(path.join(userDir, 'libraries', '**')));
-  }
-
-  // ESP-IDF include globs removed per request
-
-  // Dedup and filter existing bases
-  const seen = new Set();
-  const deduped = include.filter(p => (p && !seen.has(p) && seen.add(p)));
-  const checks = await Promise.all(deduped.map(async (p) => {
-    try {
-      const base = getGlobBase(p);
-      if (!base) return false;
-      return await pathExists(vscode.Uri.file(base));
-    } catch { return false; }
-  }));
-  return deduped.filter((_, i) => checks[i]);
-}
-
-/**
- * Merge and write `.vscode/c_cpp_properties.json` for the sketch.
- * - Preserves existing configurations and only adds/overwrites when needed.
- * - Targets the configuration named `Arduino` (creates it if missing).
- * - Appends new includePath entries without removing user-defined paths.
- */
-async function writeCppProps(sketchDir, include, reason) {
-  try {
-    const channel = getOutput();
-    const vscodeDir = vscode.Uri.file(path.join(sketchDir, '.vscode'));
-    try { await vscode.workspace.fs.createDirectory(vscodeDir); } catch { }
-    const cppPropsUri = vscode.Uri.file(path.join(sketchDir, '.vscode', 'c_cpp_properties.json'));
-
-    // Load existing file if present
-    let current = null;
-    let rawText = '';
-    try {
-      rawText = await readTextFile(cppPropsUri);
-      try { current = JSON.parse(rawText); } catch { current = null; }
-    } catch { current = null; }
-
-    const ensureConfigShape = (obj) => {
-      if (!obj || typeof obj !== 'object') obj = {};
-      if (!('version' in obj)) obj.version = 4;
-      if (!Array.isArray(obj.configurations)) obj.configurations = [];
-      return obj;
-    };
-    // Work on a deep copy to avoid mutating `current` which is used
-    // to detect changes later.
-    const cfgObj = ensureConfigShape(current ? JSON.parse(JSON.stringify(current)) : {});
-    // Find or create our target configuration
-    let idx = cfgObj.configurations.findIndex(c => c && c.name === 'Arduino');
-    if (idx < 0 && cfgObj.configurations.length === 1 && !cfgObj.configurations[0].name) {
-      // unnamed single config: treat as our target
-      idx = 0;
-      cfgObj.configurations[0].name = 'Arduino';
-    }
-    if (idx < 0) {
-      cfgObj.configurations.push({ name: 'Arduino' });
-      idx = cfgObj.configurations.length - 1;
-    }
-    const target = cfgObj.configurations[idx] || {};
-
-    // Strategy flags
-    const forceEmptyInclude = typeof reason === 'string' && /clean/i.test(reason);
-    const isStreaming = typeof reason === 'string' && /streaming/i.test(reason);
-    const isFinalize = typeof reason === 'string' && /(finalize|prune)/i.test(reason);
-
-    // Start from current includePath
-    let existingIncludes = Array.isArray(target.includePath) ? target.includePath.slice() : [];
-    if (forceEmptyInclude) existingIncludes = [];
-
-    // Optionally prune non-existent paths when not streaming (to minimize churn during build)
-    if (!isStreaming && existingIncludes.length) {
-      try {
-        const checks = await Promise.all(existingIncludes.map(async (p) => {
-          try {
-            const base = getGlobBase(String(p));
-            if (!base) return false;
-            return await pathExists(vscode.Uri.file(base));
-          } catch { return false; }
-        }));
-        existingIncludes = existingIncludes.filter((_, i) => checks[i]);
-      } catch { /* ignore */ }
-    }
-    let finalIncludes;
-    if (isFinalize) {
-      // After build completes: replace with the final filtered set (prune unused)
-      const seen = new Set();
-      finalIncludes = [];
-      for (const p of include || []) {
-        const s = String(p || '');
-        if (!seen.has(s)) { finalIncludes.push(s); seen.add(s); }
-      }
-    } else {
-      // During streaming or manual updates: only add new entries, keep existing
-      finalIncludes = existingIncludes.slice();
-      const seen = new Set(finalIncludes);
-      for (const p of include || []) {
-        const s = String(p || '');
-        if (!seen.has(s)) { finalIncludes.push(s); seen.add(s); }
-      }
-    }
-    // Update compilerPath if we discovered one; otherwise keep existing
-    if (lastCompilerPath) {
-      target.compilerPath = lastCompilerPath;
-    }
-    // Ensure required defaults but do not clobber user changes
-    if (!('defines' in target)) target.defines = Array.isArray(target.defines) ? target.defines : [];
-    // Prefer newer language standards for ESP32 family (esp32, esp32-c3, etc.).
-    const fqbnForStd = extContext?.workspaceState.get(STATE_FQBN, '') || '';
-    const compilerPathStr = String(lastCompilerPath || target.compilerPath || '');
-    const looksEsp32FromFqbn = /^esp32:/i.test(fqbnForStd);
-    const looksEsp32FromInclude = existingIncludes.some(s => /(^|\/)esp32[^/]*(\/|$)/i.test(String(s)));
-    const looksEsp32FromCompiler = /esp32|xtensa-esp32|riscv32-esp-elf/i.test(compilerPathStr);
-    const isEsp32Family = looksEsp32FromFqbn || looksEsp32FromInclude || looksEsp32FromCompiler;
-    if (isEsp32Family) {
-      target.cStandard = 'c17';
-      target.cppStandard = 'c++23';
-    } else {
-      if (!('cStandard' in target)) target.cStandard = 'c11';
-      if (!('cppStandard' in target)) target.cppStandard = 'c++17';
-    }
-    if (!('intelliSenseMode' in target)) target.intelliSenseMode = 'gcc-x64';
-    target.includePath = finalIncludes;
-    cfgObj.configurations[idx] = target;
-
-    // If nothing changed, skip write. Compare against the original JSON text
-    // when available; otherwise against a minified snapshot of `current`.
-    const prevText = rawText ? rawText.trim() : (current ? JSON.stringify(current) : '');
-    const nextText = JSON.stringify(cfgObj);
-    if (prevText !== nextText) {
-      await writeTextFile(cppPropsUri, JSON.stringify(cfgObj, null, 2));
-    }
-  } catch (e) {
-    const channel = getOutput();
-    channel.appendLine(t('intellisenseFail', { msg: e.message }));
-  }
-}
-
-// Run compile and update IntelliSense during the build by parsing verbose lines.
+// Run compile and update IntelliSense by exporting compile_commands.json.
 async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-  const finalArgs = [...baseArgs, ...args];
-  const channel = getOutput();
-  const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
+  const originalArgs = Array.isArray(args) ? args.slice() : [];
+  if (originalArgs.length === 0 || originalArgs[0] !== 'compile') {
+    originalArgs.unshift('compile');
+  }
+  if (!originalArgs.includes(sketchDir)) {
+    originalArgs.push(sketchDir);
+  }
+
+  const compileArgs = originalArgs.slice();
+  const sketchIdx = compileArgs.lastIndexOf(sketchDir);
+
+  const finalArgs = [...baseArgs, ...compileArgs];
   const term = getAnsiLogTerminal();
   term.terminal.show(true);
+  const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
   term.write(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}\r\n`);
   term.write(`${ANSI.dim}(cwd: ${sketchDir})${ANSI.reset}\r\n`);
-  const cleanReset = Boolean(opts.emptyIncludePath) || finalArgs.includes('--clean');
 
-  // Base includes derived from sketch.yaml and Arduino CLI directories.
-  const staticIncludes = await computeStaticIncludePaths(sketchDir);
-  let dynamicSet = new Set();
-  let iprefix = '';
-  let buffer = '';
-  let wroteInitial = false;
-  let pendingWrite = null;
-  let lastFilteredCount = 0;
-  let lastFinalFiltered = [];
-  if (cleanReset) {
-    try { await writeCppProps(sketchDir, [], 'compile: clean reset includePath'); } catch { }
-  }
-  // Throttle writes to avoid excessive file I/O while the compiler is verbose.
-  let writeRequested = false;
-  const scheduleWrite = async () => {
-    if (pendingWrite) { writeRequested = true; return; }
-    pendingWrite = (async () => {
-      try {
-        do {
-          writeRequested = false;
-          let combined = [];
-          const seen = new Set();
-          for (const p of [...staticIncludes, ...Array.from(dynamicSet).map(normalizeIncludePath)]) {
-            if (p && !seen.has(p)) { seen.add(p); combined.push(p); }
-          }
-          // ESP-IDF include globs removed per request
-          // filter existing bases
-          const checks = await Promise.all(combined.map(async (p) => {
-            try {
-              const base = getGlobBase(p);
-              if (!base) return false;
-              return await pathExists(vscode.Uri.file(base));
-            } catch { return false; }
-          }));
-          const filtered = combined.filter((_, i) => checks[i]);
-          lastFilteredCount = filtered.length;
-          lastFinalFiltered = filtered.slice();
-          await writeCppProps(sketchDir, filtered, 'compile: streaming');
-        } while (writeRequested);
-      } finally {
-        pendingWrite = null;
-      }
-    })();
-  };
-
-  // Start the compile process without a shell to avoid quoting pitfalls.
-  const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
-  // Stream raw output directly to pseudo terminal to preserve ANSI/CR behavior
-  child.stdout.on('data', (d) => {
-    const raw = d.toString();
-    const norm = raw.replace(/\r?\n/g, '\r\n');
-    term.write(norm);
-    buffer += raw;
-    processBuffer();
-  });
-  child.stderr.on('data', (d) => {
-    const raw = d.toString();
-    const norm = raw.replace(/\r?\n/g, '\r\n');
-    term.write(norm);
-    buffer += raw;
-    processBuffer();
-  });
-  const inoObjRe = /\.(?:ino|pde)\.cpp\.o"?\s*$/i;
-  const iRe = /(?:^|\s)"?-I(?:"([^"]+)"|(\S+))/g;
-  const isystemRe = /(?:^|\s)"?-isystem(?:"([^"]+)"|(\S+))/g;
-  const iprefixRe = /(?:^|\s)"?-iprefix\s+(?:"([^"]+)"|(\S+))/g;
-  const atFileRe = /(?:^|\s)"?@(?:"([^"]+)"|(\S+))/g;
-  // Parse one compile line to extract include-related tokens.
-  function processLine(line) {
-    // Accept lines that contain include-related tokens, not only .ino.cpp.o
-    const hasTokens = line.includes('-I') || line.includes('-isystem') || line.includes('-iprefix') || /(^|\s)@/.test(line);
-    if (!hasTokens) return;
-    if (!wroteInitial) {
-      // Mark we have started seeing compile lines
-      wroteInitial = true;
-    }
-    if (!lastCompilerPath) {
-      try {
-        const m = line.match(/^\s*(?:"([^"]+)"|([^\s]+))/);
-        const exePath = m ? (m[1] || m[2] || '') : '';
-        if (exePath) lastCompilerPath = normalizeIncludePath(exePath);
-      } catch { }
-    }
-    let m;
-    while ((m = iRe.exec(line)) !== null) {
-      const p = resolveIncludePath(sketchDir, m[1] || m[2] || '');
-      if (p) { dynamicSet.add(p); }
-    }
-    while ((m = iprefixRe.exec(line)) !== null) {
-      const p = resolveIncludePath(sketchDir, m[1] || m[2] || '');
-      if (p) { iprefix = p; dynamicSet.add(p); }
-    }
-    while ((m = isystemRe.exec(line)) !== null) {
-      const p = resolveIncludePath(sketchDir, m[1] || m[2] || '');
-      if (p) { dynamicSet.add(p); }
-    }
-    // Parse @response files to include additional -I/-isystem values
-    let am;
-    while ((am = atFileRe.exec(line)) !== null) {
-      const f = (am[1] || am[2] || '').trim();
-      if (!f) continue;
-      (async () => {
-        try {
-          const uri = vscode.Uri.file(f.replace(/"/g, ''));
-          const content = await readTextFile(uri);
-          const tokens = content.match(/(?:"[^"\r\n]*"|[^\s"\r\n]+)/g) || [];
-          for (let i = 0; i < tokens.length; i++) {
-            const tok = tokens[i];
-            if (tok === '-I' || tok === '-isystem') {
-              const val = tokens[i + 1] || '';
-              i++;
-              const pathArg = resolveIncludePath(sketchDir, val);
-              if (pathArg) { dynamicSet.add(pathArg); }
-            } else if (tok.startsWith('-I')) {
-              const pathArg = resolveIncludePath(sketchDir, tok.slice(2));
-              if (pathArg) { dynamicSet.add(pathArg); }
-            } else if (tok.startsWith('"-I')) {
-              const pathArg = resolveIncludePath(sketchDir, tok.slice(3));
-              if (pathArg) { dynamicSet.add(pathArg); }
-            } else if (tok.startsWith('"-isystem')) {
-              const pathArg = resolveIncludePath(sketchDir, tok.slice(9));
-              if (pathArg) { dynamicSet.add(pathArg); }
-            } else if (tok === '-iwithprefixbefore') {
-              const rel = normalizeIncludePath(tokens[i + 1] || '');
-              i++;
-              if (iprefix && rel) {
-                const full = resolveIncludePath(sketchDir, path.join(iprefix, rel));
-                dynamicSet.add(full);
-              }
-            }
-          }
-          scheduleWrite();
-        } catch (_) { /* ignore */ }
-      })();
-    }
-    scheduleWrite();
-  }
-  // Accumulate chunked output and process it by line.
-  function processBuffer() {
-    let idx;
-    while ((idx = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 1);
-      processLine(line);
-    }
-  }
+  const channel = getOutput();
   return new Promise((resolve, reject) => {
-    child.on('error', (e) => { channel.appendLine(`\n[error] ${e.message}`); reject(e); });
+    const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
+    const pump = (chunk) => {
+      const raw = chunk.toString();
+      term.write(raw.replace(/\r?\n/g, '\r\n'));
+    };
+    child.stdout.on('data', pump);
+    child.stderr.on('data', pump);
+    child.on('error', (err) => {
+      channel.appendLine(`[error] ${err.message}`);
+      reject(err);
+    });
     child.on('close', async (code) => {
-      // Flush remaining buffer
-      if (buffer) processLine(buffer);
-      // Final write after process ends
-      await scheduleWrite();
-      // Prune unused and non-existent paths to minimize includePath size
-      try { await writeCppProps(sketchDir, lastFinalFiltered, 'compile: finalize prune'); } catch { }
-      if (cfg.verbose) {
-        channel.appendLine(`[include-stream] final includePath count=${lastFilteredCount}`);
+      term.write(`\r\n${ANSI.bold}${(code === 0 ? ANSI.green : ANSI.red)}[exit ${code}]${ANSI.reset}\r\n`);
+      if (code !== 0) {
+        reject(new Error(`arduino-cli exited with code ${code}`));
+        return;
       }
-      term.write(`\r\n${ANSI.bold}${ANSI.green}[exit ${code}]${ANSI.reset}\r\n`);
-      if (code === 0) resolve({ code });
-      else reject(new Error(`arduino-cli exited with code ${code}`));
+      try {
+        await ensureCompileCommandsSetting(sketchDir);
+        const buildPath = await detectBuildPathForCompile(exe, baseArgs, originalArgs, sketchDir);
+        if (!buildPath) {
+          channel.appendLine(t('compileCommandsBuildPathMissing'));
+        } else {
+          const count = await updateCompileCommandsFromBuild(sketchDir, buildPath);
+          if (count > 0) {
+            channel.appendLine(t('compileCommandsUpdated', { count }));
+          } else if (count === 0) {
+            channel.appendLine(t('compileCommandsNoInoEntries'));
+          }
+        }
+      } catch (err) {
+        channel.appendLine(`[warn] ${err.message}`);
+      }
+      resolve({ code });
     });
   });
+}
+
+async function detectBuildPathForCompile(exe, baseArgs, args, sketchDir) {
+  const derivedArgs = Array.isArray(args) ? args.slice() : [];
+  if (derivedArgs.length === 0 || derivedArgs[0] !== 'compile') {
+    derivedArgs.unshift('compile');
+  }
+  if (!derivedArgs.includes(sketchDir)) {
+    derivedArgs.push(sketchDir);
+  }
+  if (!derivedArgs.includes('--show-properties')) {
+    const idx = derivedArgs.lastIndexOf(sketchDir);
+    const insertIdx = idx >= 0 ? idx : derivedArgs.length;
+    derivedArgs.splice(insertIdx, 0, '--show-properties');
+  }
+  const skipFlags = new Set(['--export-compile-commands', '--clean']);
+  const cleanedArgs = derivedArgs.filter((arg) => !skipFlags.has(arg));
+  const finalArgs = [...baseArgs, ...cleanedArgs];
+  let stdout = '';
+  let stderr = '';
+  await new Promise((resolve, reject) => {
+    const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`show-properties exit ${code}${stderr ? `: ${stderr.trim()}` : ''}`));
+    });
+  });
+  for (const line of stdout.split(/\r?\n/)) {
+    const idx = line.indexOf('=');
+    if (idx > 0) {
+      const key = line.slice(0, idx).trim();
+      if (key === 'build.path') {
+        return line.slice(idx + 1).trim();
+      }
+    }
+  }
+  return '';
+}
+
+async function ensureCompileCommandsSetting(sketchDir) {
+  try {
+    const sketchUri = vscode.Uri.file(sketchDir);
+    const folder = vscode.workspace.getWorkspaceFolder(sketchUri);
+    const target = folder ? vscode.ConfigurationTarget.WorkspaceFolder : vscode.ConfigurationTarget.Workspace;
+    const config = vscode.workspace.getConfiguration(undefined, folder ? folder.uri : sketchUri);
+    const current = config.get('C_Cpp.default.compileCommands');
+    if (current === '.vscode/compile_commands.json') return false;
+    await config.update('C_Cpp.default.compileCommands', '.vscode/compile_commands.json', target);
+    return true;
+  } catch (err) {
+    const channel = getOutput();
+    channel.appendLine(`[warn] Failed to update settings: ${err.message}`);
+    return false;
+  }
+}
+
+async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
+  try {
+    const sourcePath = path.join(buildPath, 'compile_commands.json');
+    const sourceUri = vscode.Uri.file(sourcePath);
+    const sourceExists = await pathExists(sourceUri);
+    if (!sourceExists) {
+      getOutput().appendLine(t('compileCommandsSourceMissing', { path: sourcePath }));
+      return -1;
+    }
+    let parsed;
+    try {
+      const raw = await readTextFile(sourceUri);
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      getOutput().appendLine(t('compileCommandsParseError', { msg: err.message }));
+      return -1;
+    }
+    if (!Array.isArray(parsed)) {
+      getOutput().appendLine(t('compileCommandsInvalidFormat'));
+      return -1;
+    }
+    const filtered = [];
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== 'object') continue;
+      const fileValue = typeof entry.file === 'string' ? entry.file : '';
+      if (!fileValue) continue;
+      const normalized = fileValue.replace(/\\/g, '/');
+      if (!/\.ino\.cpp$/i.test(normalized)) continue;
+      const baseName = normalized.split('/').pop();
+      if (!baseName) continue;
+      const inoName = baseName.replace(/\.cpp$/i, '');
+      const clone = JSON.parse(JSON.stringify(entry));
+      clone.file = inoName;
+      filtered.push(clone);
+    }
+    if (filtered.length === 0) {
+      return 0;
+    }
+
+    const vscodeDirUri = vscode.Uri.file(path.join(sketchDir, '.vscode'));
+    try { await vscode.workspace.fs.createDirectory(vscodeDirUri); } catch { }
+    const destUri = vscode.Uri.file(path.join(sketchDir, '.vscode', 'compile_commands.json'));
+
+    let existing = [];
+    if (await pathExists(destUri)) {
+      try {
+        const raw = await readTextFile(destUri);
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) existing = arr;
+      } catch {
+        existing = [];
+      }
+    }
+
+    const result = [];
+    const indexByKey = new Map();
+    const makeKey = (entry) => {
+      const dir = typeof entry.directory === 'string' ? entry.directory : '';
+      const file = typeof entry.file === 'string' ? entry.file : '';
+      return `${dir}||${file}`;
+    };
+    for (const entry of existing) {
+      if (!entry || typeof entry !== 'object') continue;
+      const key = makeKey(entry);
+      if (key) {
+        indexByKey.set(key, result.length);
+        result.push(entry);
+      }
+    }
+    for (const entry of filtered) {
+      const key = makeKey(entry);
+      if (!key) continue;
+      const clone = JSON.parse(JSON.stringify(entry));
+      if (indexByKey.has(key)) {
+        result[indexByKey.get(key)] = clone;
+      } else {
+        indexByKey.set(key, result.length);
+        result.push(clone);
+      }
+    }
+
+    await writeTextFile(destUri, JSON.stringify(result, null, 2) + '\n');
+    return filtered.length;
+  } catch (err) {
+    getOutput().appendLine(`[warn] ${err.message}`);
+    return -1;
+  }
 }
 
 // ESP-IDF include glob augmentation removed per request
@@ -1658,7 +1539,7 @@ class CommandItem extends vscode.TreeItem {
       title: label,
       arguments: [{ action, sketchDir, profile }]
     };
-    this.id = `cmd:${action}|${sketchDir}|${profile||''}|${label}`;
+    this.id = `cmd:${action}|${sketchDir}|${profile || ''}|${label}`;
     this.parent = parent;
   }
 }
@@ -2386,226 +2267,6 @@ function parsePlatformFromProfileYaml(profileYaml, preferProfileName) {
 }
 
 /**
- * Build includePath globs for IntelliSense using:
- * - sketch.yaml profiles (and dump-profile when available)
- * - Arduino CLI config directories (platform, variants, libraries)
- * - dynamic `-I` / `-isystem` from verbose compile output
- */
-async function computeIncludePaths(sketchDir) {
-  const yamlInfo = await readSketchYamlInfo(sketchDir);
-  let profileName = yamlInfo?.defaultProfile || (yamlInfo?.profiles && yamlInfo.profiles[0]) || '';
-  let vendorArch = '';
-  let version = '';
-  if (yamlInfo && yamlInfo.profiles.length > 0) {
-    // Reuse dump-profile if present (from createSketchYaml), else fetch quickly
-    let profileYaml = '';
-    try {
-      const text = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
-      const mHasProfiles = /\nprofiles\s*:/m.test(text);
-      if (mHasProfiles) profileYaml = text;
-    } catch { }
-    if (!profileYaml) {
-      // fallback to on-demand dump-profile using default FQBN if available
-      const fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-      profileYaml = await getDumpProfileYaml(fqbn, sketchDir);
-    }
-    const parsed = parsePlatformFromProfileYaml(profileYaml, profileName);
-    if (parsed) { vendorArch = parsed.vendorArch; version = parsed.version; }
-  }
-  if (!vendorArch) {
-    // Fallback to current FQBN
-    const fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    const parts = fqbn.split(':');
-    if (parts.length >= 2) vendorArch = parts[0] + ':' + parts[1];
-  }
-
-  const { dataDir, userDir } = await getCliConfigDirs();
-  const include = [];
-
-  if (vendorArch && version && dataDir) {
-    const [vendor, arch] = vendorArch.split(':');
-    const platformPath = path.join(dataDir, 'packages', vendor, 'hardware', arch, version);
-    include.push(normalizeIncludePath(platformPath + '/cores/**'));
-    include.push(normalizeIncludePath(platformPath + '/variants/**'));
-    include.push(normalizeIncludePath(platformPath + '/libraries/**'));
-  }
-  if (dataDir) {
-    include.push(normalizeIncludePath(path.join(dataDir, 'packages', '**/hardware/**/**/libraries/**')));
-  }
-  if (userDir) {
-    include.push(normalizeIncludePath(path.join(userDir, 'libraries', '**')));
-  }
-  // Note: we no longer use --show-properties for include paths.
-  // Also collect -I flags from verbose compile command lines (*.ino.cpp.o)
-  const verboseIPaths = await getIncludePathsFromVerboseCompile(sketchDir);
-  for (const p of verboseIPaths) include.push(normalizeIncludePath(p));
-  // ESP-IDF include globs removed per request
-  // Dedup
-  const seen = new Set();
-  const deduped = include.filter(p => (p && !seen.has(p) && seen.add(p)));
-
-  // Keep only paths whose base exists (for globs, check the base directory)
-  const checks = await Promise.all(deduped.map(async (p) => {
-    try {
-      const base = getGlobBase(p);
-      if (!base) return false;
-      return await pathExists(vscode.Uri.file(base));
-    } catch { return false; }
-  }));
-  return deduped.filter((_, i) => checks[i]);
-}
-
-/**
- * Manually update c_cpp_properties.json for the chosen sketch directory.
- * Computes include paths and writes the merged configuration.
- */
-async function commandConfigureIntelliSense() {
-  if (!(await ensureCliReady())) return;
-  const ino = await pickInoFromWorkspace();
-  if (!ino) return;
-  const sketchDir = path.dirname(ino);
-  const channel = getOutput();
-  channel.show(true);
-  channel.appendLine(t('includeCollecting'));
-  const include = await computeIncludePaths(sketchDir);
-  const compilerPath = lastCompilerPath || undefined;
-  const vscodeDir = vscode.Uri.file(path.join(sketchDir, '.vscode'));
-  try { await vscode.workspace.fs.createDirectory(vscodeDir); } catch { }
-  const cppPropsUri = vscode.Uri.file(path.join(sketchDir, '.vscode', 'c_cpp_properties.json'));
-  const config = {
-    version: 4,
-    configurations: [
-      {
-        name: 'Arduino',
-        includePath: include,
-        defines: [],
-        compilerPath,
-        cStandard: 'c11',
-        cppStandard: 'c++17',
-        intelliSenseMode: 'gcc-x64'
-      }
-    ]
-  };
-  await writeTextFile(cppPropsUri, JSON.stringify(config, null, 2));
-  channel.appendLine(t('cppPropsUpdated'));
-  channel.appendLine(t('includeHeader'));
-  for (const p of include) channel.appendLine('  - ' + p);
-  await vscode.window.showTextDocument(cppPropsUri);
-}
-
-
-/**
- * Run a verbose compile (no upload) and parse emitted compiler lines
- * to collect include paths (-I, -isystem, -iprefix and @response files).
- */
-async function getIncludePathsFromVerboseCompile(sketchDir) {
-  if (!(await ensureCliReady())) return [];
-  const cfg = getConfig();
-  const exe = cfg.exe || 'arduino-cli';
-  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-  const args = [...baseArgs, 'compile', '--verbose'];
-  // Clear previous value to always reflect the latest
-  lastCompilerPath = '';
-  const yamlInfo = await readSketchYamlInfo(sketchDir);
-  if (yamlInfo && yamlInfo.profiles.length > 0) {
-    const profile = yamlInfo.defaultProfile || yamlInfo.profiles[0];
-    args.push('--profile', profile);
-  } else {
-    const fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (fqbn) args.push('--fqbn', fqbn);
-  }
-  args.push(sketchDir);
-  let out = '';
-  let err = '';
-  try {
-    await new Promise((resolve, reject) => {
-      const child = cp.spawn(exe, args, { shell: process.platform === 'win32' });
-      child.stdout.on('data', d => { out += d.toString(); });
-      child.stderr.on('data', d => { err += d.toString(); });
-      child.on('error', e => reject(e));
-      child.on('close', code => code === 0 ? resolve() : resolve()); // continue parsing even if non-zero exit
-    });
-  } catch (_) { }
-  const text = (out + '\n' + err);
-  const lines = text.split(/\r?\n/);
-  const results = new Set();
-  const inoObjRe = /\.(?:ino|pde)\.cpp\.o"?\s*$/i; // legacy: may not match preprocess lines
-  const iRe = /(?:^|\s)"?-I(?:"([^"]+)"|(\S+))/g;
-  const isystemRe = /(?:^|\s)"?-isystem(?:"([^"]+)"|(\S+))/g;
-  const iprefixRe = /(?:^|\s)"?-iprefix\s+(?:"([^"]+)"|(\S+))/g;
-  const atFileRe = /(?:^|\s)"?@(?:"([^"]+)"|(\S+))/g;
-  const clean = (p) => resolveIncludePath(sketchDir, p || '');
-  let iprefix = '';
-  for (const line of lines) {
-    const hasTokens = line.includes('-I') || line.includes('-isystem') || line.includes('-iprefix') || /(^|\s)@/.test(line);
-    if (!hasTokens) continue;
-    // Pick and store the first token (compiler executable)
-    if (!lastCompilerPath) {
-      try {
-        const m = line.match(/^\s*(?:"([^"]+)"|([^\s]+))/);
-        const exePath = m ? (m[1] || m[2] || '') : '';
-        if (exePath) lastCompilerPath = normalizeIncludePath(exePath);
-      } catch { /* noop */ }
-    }
-    // collect -I
-    let m;
-    while ((m = iRe.exec(line)) !== null) {
-      const p = clean(m[1] || m[2]);
-      if (p) results.add(p);
-    }
-    // collect -iprefix
-    while ((m = iprefixRe.exec(line)) !== null) {
-      const p = clean(m[1] || m[2]);
-      if (p) {
-        iprefix = p; // remember last iprefix
-        results.add(p);
-      }
-    }
-    // collect -isystem
-    while ((m = isystemRe.exec(line)) !== null) {
-      const p = clean(m[1] || m[2]);
-      if (p) results.add(p);
-    }
-    // process @response files for includes
-    let am;
-    while ((am = atFileRe.exec(line)) !== null) {
-      const f = (am[1] || am[2] || '').trim();
-      if (!f) continue;
-      try {
-        const uri = vscode.Uri.file(f.replace(/"/g, ''));
-        const content = await readTextFile(uri);
-        // extract -I and -isystem and -iwithprefixbefore
-        const tokens = content.match(/(?:"[^"\r\n]*"|[^\s"\r\n]+)/g) || [];
-        for (let i = 0; i < tokens.length; i++) {
-          const tok = tokens[i];
-          if (tok === '-I' || tok === '-isystem') {
-            const val = tokens[i + 1] || '';
-            i++;
-            const pathArg = clean(val);
-            if (pathArg) results.add(pathArg);
-          } else if (tok.startsWith('-I')) {
-            const pathArg = clean(tok.slice(2));
-            if (pathArg) results.add(pathArg);
-          } else if (tok.startsWith('"-I')) {
-            const pathArg = clean(tok.slice(3));
-            if (pathArg) results.add(pathArg);
-          } else if (tok.startsWith('"-isystem')) {
-            const pathArg = clean(tok.slice(9));
-            if (pathArg) results.add(pathArg);
-          } else if (tok === '-iwithprefixbefore') {
-            const rel = normalizeIncludePath(tokens[i + 1] || '');
-            i++;
-            if (iprefix && rel) results.add(resolveIncludePath(sketchDir, path.join(iprefix, rel)));
-          }
-        }
-      } catch (_) { }
-    }
-  }
-  return Array.from(results);
-}
-
-
-/**
  * Create `sketch.yaml` in the current sketch directory.
  * If FQBN is selected, append dump-profile profiles and set default_profile.
  */
@@ -2851,7 +2512,7 @@ function extractProfileFromTemplateYaml(text) {
     if (/^\S/.test(s)) { end = i; break; }
     const m = s.match(/^\s{2,}([^\s:#][^:]*)\s*:\s*$/);
     if (m) {
-      const ind = (s.match(/^(\s+)/) || [,''])[1];
+      const ind = (s.match(/^(\s+)/) || [, ''])[1];
       if (ind && ind.length === baseIndent.length) { end = i; break; }
     }
   }
@@ -2941,7 +2602,7 @@ async function getLibrariesFromSketchYaml(sketchDir, profileName) {
 /**
  * Open a webview that lists Arduino examples from:
  * - Platform path detected via `compile --show-properties` (runtime.platform.path/build.board.platform.path)
- * - Libraries listed in sketch.yaml, mapped to includePath entries in c_cpp_properties.json
+ * - Libraries listed in sketch.yaml, mapped via compile_commands.json include paths
  * Provides filtering, grep, preview, and copy-to-project features.
  */
 async function commandOpenExamplesBrowser(ctx) {
@@ -3052,9 +2713,9 @@ async function collectExamplesForCurrentSketch(preferSketchDir = '') {
       for (const it of items) list.push(it);
     }
   } catch { }
-  // Library examples via sketch.yaml libraries + c_cpp_properties.json includePath
+  // Library examples via sketch.yaml libraries + compile_commands.json include paths
   try {
-    const libRoots = await detectLibraryRootsFromCppProps(sketchDir);
+    const libRoots = await detectLibraryRootsFromCompileCommands(sketchDir);
     for (const r of libRoots) {
       const items = await scanExamplesUnderRoot(r, 'library');
       for (const it of items) list.push(it);
@@ -3162,7 +2823,7 @@ async function findFilesWithExtension(baseUri, ext, maxDepth = 5, depth = 0) {
   return out;
 }
 
-async function detectLibraryRootsFromCppProps(sketchDir) {
+async function detectLibraryRootsFromCompileCommands(sketchDir) {
   const roots = new Set();
   // Read libraries from sketch.yaml
   let libs = [];
@@ -3173,33 +2834,70 @@ async function detectLibraryRootsFromCppProps(sketchDir) {
   } catch { }
   const libNames = libs.map(x => String(x.name || '').trim()).filter(Boolean);
   if (libNames.length === 0) return Array.from(roots);
-  // Read c_cpp_properties.json
+  const libNamesLower = libNames.map(name => name.toLowerCase());
+  const commandsUri = vscode.Uri.file(path.join(sketchDir, '.vscode', 'compile_commands.json'));
+  let entries = [];
   try {
-    const cppUri = vscode.Uri.file(path.join(sketchDir, '.vscode', 'c_cpp_properties.json'));
-    const txt = await readTextFile(cppUri);
-    const json = JSON.parse(txt);
-    const conf = Array.isArray(json.configurations) && json.configurations.length > 0 ? json.configurations[0] : json;
-    const include = Array.isArray(conf.includePath) ? conf.includePath : [];
-    for (let p of include) {
-      if (!p) continue;
-      p = String(p);
-      // Normalize glob tail and trailing separator
-      p = p.replace(/[\\/]+\*\*.*$/, '');
-      p = p.replace(/[\\/]+$/, '');
-      // If path points into a library's src, search from the parent of src
-      // Handle cases like: .../libraries/<lib>/src or deeper under src
-      const parts = p.split(/[\\/]+/);
-      const idxSrc = parts.map(s => s.toLowerCase()).lastIndexOf('src');
-      if (idxSrc >= 0) {
-        p = parts.slice(0, idxSrc).join(path.sep);
+    const raw = await readTextFile(commandsUri);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) entries = parsed;
+  } catch { entries = []; }
+
+  const cleanToken = (token) => String(token || '').replace(/^"|"$/g, '');
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue;
+    const baseDir = typeof entry.directory === 'string' && entry.directory ? entry.directory : sketchDir;
+    let tokens = [];
+    if (Array.isArray(entry.arguments)) {
+      tokens = entry.arguments.map(cleanToken);
+    } else if (typeof entry.command === 'string') {
+      tokens = (entry.command.match(/(?:"[^"\r\n]*"|[^\s"\r\n]+)/g) || []).map(cleanToken);
+    }
+    if (tokens.length === 0) continue;
+    for (let i = 0; i < tokens.length; i++) {
+      let tok = tokens[i];
+      if (!tok) continue;
+      let includePath = '';
+      if (tok === '-I' || tok === '-isystem') {
+        includePath = tokens[i + 1] || '';
+        i++;
+      } else if (tok.startsWith('-I')) {
+        includePath = tok.slice(2);
+      } else if (tok.startsWith('-isystem')) {
+        includePath = tok.slice(8);
       }
-      for (const name of libNames) {
-        const segMatch = p.split(/[\\/]+/).some(seg => seg.toLowerCase() === name.toLowerCase());
-        if (segMatch) roots.add(p);
+      if (!includePath) continue;
+      includePath = cleanToken(includePath);
+      if (!includePath) continue;
+      let absolute = includePath;
+      if (!path.isAbsolute(absolute)) {
+        try { absolute = path.resolve(baseDir, absolute); } catch { absolute = includePath; }
+      }
+      absolute = path.normalize(absolute).replace(/[\\/]+$/, '');
+      if (!absolute) continue;
+      const segments = absolute.split(/[\\/]+/);
+      const segmentsLower = segments.map(s => s.toLowerCase());
+      for (const nameLower of libNamesLower) {
+        if (segmentsLower.includes(nameLower)) {
+          let rootCandidate = absolute;
+          const idxSrc = segmentsLower.lastIndexOf('src');
+          if (idxSrc >= 0) {
+            rootCandidate = segments.slice(0, idxSrc).join(path.sep);
+          }
+          roots.add(path.normalize(rootCandidate));
+        }
       }
     }
-  } catch { }
-  return Array.from(roots);
+  }
+
+  const verified = [];
+  for (const r of roots) {
+    try {
+      const uri = vscode.Uri.file(r);
+      if (await pathExists(uri)) verified.push(r);
+    } catch { }
+  }
+  return verified;
 }
 
 async function copyExampleToProject(inoPath) {
@@ -3221,7 +2919,7 @@ async function copyExampleToProject(inoPath) {
   // Rename primary .ino to match dest folder
   try {
     const files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(destDir));
-    const ino = files.find(([n,t]) => t === vscode.FileType.File && /\.ino$/i.test(n));
+    const ino = files.find(([n, t]) => t === vscode.FileType.File && /\.ino$/i.test(n));
     if (ino) {
       const oldPath = vscode.Uri.file(path.join(destDir, ino[0]));
       const newPath = vscode.Uri.file(path.join(destDir, path.basename(destDir) + '.ino'));
@@ -3375,7 +3073,7 @@ function getPortFromSketchYamlText(text, profileName) {
       const mPort = line.match(/^\s{4}port\s*:\s*(.+)\s*$/);
       if (mPort) return mPort[1].trim().replace(/^"|"$/g, '');
     }
-  } catch {}
+  } catch { }
   return '';
 }
 
@@ -3401,7 +3099,6 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
         }
       }
     }
-  } catch {}
+  } catch { }
   return '';
 }
-
