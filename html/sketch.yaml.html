@@ -348,10 +348,8 @@
             if (pkgUrl) {
               lines.push('        platform_index_url: ' + pkgUrl);
             }
-            lines.push('    libraries:');
-            if (selectedLibs.size === 0) {
-              lines.push('      - ');
-            } else {
+            if (selectedLibs.size > 0) {
+              lines.push('    libraries:');
               for (const [name, ver] of selectedLibs.entries()) {
                 const display = typeof ver === 'string' && ver ? `${name} (${ver})` : name;
                 lines.push('      - ' + display);
@@ -414,13 +412,11 @@
         function patchLibrariesInYaml(yamlText, profileName, libs) {
           try {
             const lines = String(yamlText || '').split(/\r?\n/);
-            // Find profiles section
             let pStart = -1; let pEnd = lines.length;
             for (let i = 0; i < lines.length; i++) {
               if (/^\s*profiles\s*:\s*$/.test(lines[i])) { pStart = i; for (let j = i + 1; j < lines.length; j++) { if (/^\S/.test(lines[j])) { pEnd = j; break; } } break; }
             }
-            if (pStart < 0) return yamlText; // not a wrapped YAML
-            // Find target profile start
+            if (pStart < 0) return yamlText;
             let profStart = -1; let profEnd = pEnd;
             let profName = String(profileName || '').trim();
             for (let i = pStart + 1; i < pEnd; i++) {
@@ -433,25 +429,41 @@
             }
             if (profStart < 0) return yamlText;
             if (profEnd <= profStart) profEnd = pEnd;
-            // Find libraries block inside profile
             let libHeader = -1; let libEnd = -1;
             for (let i = profStart + 1; i < profEnd; i++) {
-              if (/^\s{4}libraries\s*:\s*$/.test(lines[i])) { libHeader = i; libEnd = i + 1; for (let j = i + 1; j < profEnd; j++) { if (/^\s{6}-\s*/.test(lines[j])) { libEnd = j + 1; continue; } if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\S/.test(lines[j]) || /^\s*default_profile\s*:\s*/.test(lines[j])) { break; } }
-                break; }
+              if (/^\s{4}libraries\s*:\s*$/.test(lines[i])) {
+                libHeader = i;
+                libEnd = i + 1;
+                for (let j = i + 1; j < profEnd; j++) {
+                  if (/^\s{6}-\s*/.test(lines[j])) { libEnd = j + 1; continue; }
+                  if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\S/.test(lines[j]) || /^\s*default_profile\s*:\s*/.test(lines[j])) { break; }
+                }
+                break;
+              }
             }
-            const header = '    libraries:';
-            const items = (Array.isArray(libs) && libs.length > 0) ? libs.map(x => '      - ' + (x.version ? `${x.name} (${x.version})` : x.name)) : ['      - '];
+            const formatted = [];
+            if (Array.isArray(libs)) {
+              for (const entry of libs) {
+                const name = entry && entry.name ? String(entry.name).trim() : '';
+                if (!name) continue;
+                const ver = entry && entry.version ? String(entry.version).trim() : '';
+                formatted.push('      - ' + (ver ? name + ' (' + ver + ')' : name));
+              }
+            }
+            const hasLibs = formatted.length > 0;
             if (libHeader >= 0) {
-              // Replace existing block
-              const before = lines.slice(0, libHeader).join('\n');
-              const after = lines.slice(libEnd >= 0 ? libEnd : libHeader + 1).join('\n');
-              return [before, header, ...items, after].join('\n');
+              const beforeArr = lines.slice(0, libHeader);
+              const afterArr = lines.slice(libEnd >= 0 ? libEnd : libHeader + 1);
+              if (!hasLibs) {
+                return beforeArr.concat(afterArr).join('\n').replace(/\n{3,}/g, '\n\n');
+              }
+              return beforeArr.concat(['    libraries:', ...formatted], afterArr).join('\n');
             }
-            // Insert before profile end
-            const before = lines.slice(0, profEnd).join('\n');
-            const after = lines.slice(profEnd).join('\n');
-            const glue = before.endsWith('\n') ? '' : '\n';
-            return [before, glue + header, ...items, after].join('\n');
+            if (!hasLibs) return yamlText;
+            const beforeArr = lines.slice(0, profEnd);
+            const afterArr = lines.slice(profEnd);
+            const block = ['    libraries:', ...formatted];
+            return beforeArr.concat(block, afterArr).join('\n').replace(/\n{3,}/g, '\n\n');
           } catch (_) { return yamlText; }
         }
 
