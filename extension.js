@@ -1481,9 +1481,10 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
       return 0;
     }
 
-    const vscodeDirUri = vscode.Uri.file(path.join(sketchDir, '.vscode'));
+    const outputInfo = resolveCompileCommandsOutput(sketchDir);
+    const vscodeDirUri = vscode.Uri.file(outputInfo.vscodeDir);
     try { await vscode.workspace.fs.createDirectory(vscodeDirUri); } catch { }
-    const destUri = vscode.Uri.file(path.join(sketchDir, '.vscode', 'compile_commands.json'));
+    const destUri = outputInfo.destUri;
 
     let existing = [];
     if (await pathExists(destUri)) {
@@ -3007,7 +3008,8 @@ async function detectLibraryRootsFromCompileCommands(sketchDir) {
   const libNames = libs.map(x => String(x.name || '').trim()).filter(Boolean);
   if (libNames.length === 0) return Array.from(roots);
   const libNamesLower = libNames.map(name => name.toLowerCase());
-  const commandsUri = vscode.Uri.file(path.join(sketchDir, '.vscode', 'compile_commands.json'));
+  const outputInfo = resolveCompileCommandsOutput(sketchDir);
+  const commandsUri = outputInfo.destUri;
   let entries = [];
   try {
     const raw = await readTextFile(commandsUri);
