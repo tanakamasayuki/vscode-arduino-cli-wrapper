@@ -1272,6 +1272,175 @@ async function ensureCompileCommandsSetting(sketchDir) {
   }
 }
 
+// Expand GCC -iprefix/-iwithprefixbefore arguments into -I entries for IntelliSense.
+const ARGUMENT_TOKEN_PATTERN = /(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s"'\r\n]+)/g;
+
+function stripArgumentQuotes(token) {
+  if (typeof token !== 'string') return '';
+  const len = token.length;
+  if (len >= 2) {
+    const first = token[0];
+    const last = token[len - 1];
+    if ((first === '"' && last === '"') || (first === '\'' && last === '\'')) {
+      let inner = token.slice(1, -1);
+      if (first === '"') inner = inner.replace(/\\"/g, '"');
+      if (first === '\'') inner = inner.replace(/\\'/g, '\'');
+      return inner;
+    }
+  }
+  return token;
+}
+
+function joinIprefixPath(prefix, suffix) {
+  if (!prefix) return suffix || '';
+  if (!suffix) return prefix;
+  if (suffix.startsWith('/') || suffix.startsWith('\\')) return prefix + suffix;
+  const last = prefix[prefix.length - 1];
+  if (last === '/' || last === '\\') return prefix + suffix;
+  const sep = prefix.includes('\\') && !prefix.includes('/') ? '\\' : '/';
+  return `${prefix}${sep}${suffix}`;
+}
+
+function needsCommandQuoting(token) {
+  return token === '' || /[\s"]/.test(token);
+}
+
+function quoteCommandToken(token) {
+  if (token === '') return '""';
+  if (!needsCommandQuoting(token)) return token;
+  return '"' + token.replace(/(["\\])/g, '\\$1') + '"';
+}
+
+function stringifyCommandTokens(tokens) {
+  return tokens.map(quoteCommandToken).join(' ');
+}
+
+function resolveCompileCommandsOutput(sketchDir) {
+  const sketchUri = vscode.Uri.file(sketchDir);
+  const folder = vscode.workspace.getWorkspaceFolder(sketchUri);
+  const root = folder ? folder.uri.fsPath : sketchDir;
+  const vscodeDir = path.join(root, '.vscode');
+  return {
+    root,
+    vscodeDir,
+    destPath: path.join(vscodeDir, 'compile_commands.json'),
+    destUri: vscode.Uri.file(path.join(vscodeDir, 'compile_commands.json')),
+  };
+}
+
+async function readResponseFileArgs(ref, baseDir) {
+  let target = typeof ref === 'string' ? ref : '';
+  if (!target) return [];
+  if (target.startsWith('@')) target = target.slice(1);
+  target = stripArgumentQuotes(target);
+  if (!target) return [];
+  let resolved = target;
+  try {
+    if (baseDir && !path.isAbsolute(resolved)) {
+      resolved = path.resolve(baseDir, resolved);
+    }
+  } catch { }
+  try {
+    const uri = vscode.Uri.file(resolved);
+    const content = await readTextFile(uri);
+    const matches = content.match(ARGUMENT_TOKEN_PATTERN);
+    if (!matches) return [];
+    return matches.map(stripArgumentQuotes);
+  } catch {
+    return [];
+  }
+}
+
+async function expandIprefixInTokens(tokens, baseDir) {
+  if (!Array.isArray(tokens) || tokens.length === 0) return tokens || [];
+  const out = tokens.map((tok) => {
+    if (typeof tok === 'string') return tok;
+    if (tok === undefined || tok === null) return '';
+    return String(tok);
+  });
+  const iprefixKey = '-iprefix';
+  const iwithKey = '-iwithprefixbefore';
+  for (let i = 0; i < out.length;) {
+    const current = out[i];
+    if (typeof current !== 'string') { out[i] = String(current || ''); continue; }
+    let prefix = '';
+    let consume = 0;
+    if (current === iprefixKey) {
+      prefix = stripArgumentQuotes(out[i + 1] || '');
+      consume = 2;
+    } else if (current.startsWith(iprefixKey)) {
+      prefix = stripArgumentQuotes(current.slice(iprefixKey.length));
+      if (prefix.startsWith('=')) prefix = prefix.slice(1);
+      consume = 1;
+    }
+    if (consume === 0) { i++; continue; }
+    out.splice(i, consume);
+    if (!prefix) continue;
+    let scan = i;
+    while (scan < out.length) {
+      let tok = out[scan];
+      if (typeof tok !== 'string') {
+        tok = String(tok || '');
+        out[scan] = tok;
+      }
+      if (tok.startsWith('@')) {
+        const resp = await readResponseFileArgs(tok, baseDir);
+        if (resp.length > 0) {
+          out.splice(scan, 1, ...resp);
+          continue;
+        }
+        out.splice(scan, 1);
+        continue;
+      }
+      if (tok === iwithKey) {
+        const next = out[scan + 1];
+        const suffix = stripArgumentQuotes(next || '');
+        const removeCount = next === undefined ? 1 : 2;
+        out.splice(scan, removeCount);
+        if (suffix) {
+          out.splice(scan, 0, `-I${joinIprefixPath(prefix, suffix)}`);
+          scan++;
+        }
+        continue;
+      }
+      if (tok.startsWith(iwithKey)) {
+        let suffix = stripArgumentQuotes(tok.slice(iwithKey.length));
+        if (suffix.startsWith('=')) suffix = suffix.slice(1);
+        out.splice(scan, 1);
+        if (suffix) {
+          out.splice(scan, 0, `-I${joinIprefixPath(prefix, suffix)}`);
+          scan++;
+        }
+        continue;
+      }
+      break;
+    }
+  }
+  return out;
+}
+
+async function normalizeCompileCommandEntry(entry) {
+  if (!entry || typeof entry !== 'object') return;
+  const baseDir = typeof entry.directory === 'string' ? entry.directory : '';
+  const hasArguments = Array.isArray(entry.arguments);
+  const hasCommand = typeof entry.command === 'string' && entry.command.trim().length > 0;
+  let tokens = [];
+  if (hasArguments) {
+    tokens = entry.arguments.map((tok) => (typeof tok === 'string' ? tok : (tok === undefined || tok === null) ? '' : String(tok)));
+  } else if (hasCommand) {
+    const matches = entry.command.match(ARGUMENT_TOKEN_PATTERN);
+    if (matches) tokens = matches.map(stripArgumentQuotes);
+  }
+  if (tokens.length === 0) return;
+  const expanded = await expandIprefixInTokens(tokens, baseDir);
+  if (hasArguments) entry.arguments = expanded;
+  if (hasCommand) {
+    entry.command = stringifyCommandTokens(expanded);
+  } else if (!hasArguments) {
+    entry.command = stringifyCommandTokens(expanded);
+  }
+}
+
 async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
   try {
     const sourcePath = path.join(buildPath, 'compile_commands.json');
@@ -1304,6 +1473,7 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
       if (!baseName) continue;
       const inoName = baseName.replace(/\.cpp$/i, '');
       const clone = JSON.parse(JSON.stringify(entry));
+      await normalizeCompileCommandEntry(clone);
       clone.file = inoName;
       filtered.push(clone);
     }
@@ -1335,6 +1505,7 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
     };
     for (const entry of existing) {
       if (!entry || typeof entry !== 'object') continue;
+      await normalizeCompileCommandEntry(entry);
       const key = makeKey(entry);
       if (key) {
         indexByKey.set(key, result.length);
@@ -1345,6 +1516,7 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
       const key = makeKey(entry);
       if (!key) continue;
       const clone = JSON.parse(JSON.stringify(entry));
+      await normalizeCompileCommandEntry(clone);
       if (indexByKey.has(key)) {
         result[indexByKey.get(key)] = clone;
       } else {
@@ -3102,3 +3274,4 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
   } catch { }
   return '';
 }
+
