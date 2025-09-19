@@ -148,6 +148,23 @@
           "default": true,
           "description": "%config.verbose.description%"
         },
+        "arduino-cli-wrapper.compileWarnings": {
+          "type": "string",
+          "enum": [
+            "none",
+            "default",
+            "more",
+            "all"
+          ],
+          "default": "default",
+          "description": "%config.compileWarnings.description%",
+          "enumDescriptions": [
+            "%config.compileWarnings.enum.none%",
+            "%config.compileWarnings.enum.default%",
+            "%config.compileWarnings.enum.more%",
+            "%config.compileWarnings.enum.all%"
+          ]
+        },
         "arduino-cli-wrapper.lint.m5gfxIncludes": {
           "type": "array",
           "default": [

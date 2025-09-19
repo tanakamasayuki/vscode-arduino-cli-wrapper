@@ -92,6 +92,7 @@ Tips:
 - `arduino-cli-wrapper.path`: Path to the `arduino-cli` executable
 - `arduino-cli-wrapper.additionalArgs`: Extra arguments appended to every invocation (array)
 - `arduino-cli-wrapper.verbose`: Adds `--verbose` to compile/upload
+- `arduino-cli-wrapper.compileWarnings`: Warning level passed to `arduino-cli compile` (`--warnings`)
 
 ## Requirements
 

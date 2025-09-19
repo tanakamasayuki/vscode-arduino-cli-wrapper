@@ -11,6 +11,7 @@ const STATE_FQBN = 'arduino-cli.selectedFqbn';
 const STATE_PORT = 'arduino-cli.selectedPort';
 const STATE_BAUD = 'arduino-cli.selectedBaud';
 const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
+const VALID_WARNING_LEVELS = new Set(['none', 'default', 'more', 'all']);
 let output;
 let extContext;
 let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusList, statusListAll;
@@ -343,13 +344,24 @@ function getConfig() {
     useTerminal: cfg.get('arduino-cli-wrapper.useTerminal', false),
     extra: cfg.get('arduino-cli-wrapper.additionalArgs', []),
     verbose: cfg.get('arduino-cli-wrapper.verbose', false),
+    warnings: cfg.get('arduino-cli-wrapper.compileWarnings', 'default'),
   };
+}
+
+function containsWarningsFlag(list) {
+  if (!Array.isArray(list)) return false;
+  for (let i = 0; i < list.length; i += 1) {
+    const value = String(list[i] ?? '');
+    if (value === '--warnings' || value.startsWith('--warnings=')) return true;
+  }
+  return false;
 }
 
 /**
  * Lazily create and return the shared output channel.
  * All CLI logs and helper diagnostics are routed here.
  */
+
 function getOutput() {
   if (!output) {
     // Provide a terminal-backed logging channel with OutputChannel-like API
@@ -1340,6 +1352,13 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   }
   if (!originalArgs.includes(sketchDir)) {
     originalArgs.push(sketchDir);
+  }
+  const normalizedWarnings = typeof cfg.warnings === 'string' ? cfg.warnings.toLowerCase() : '';
+  const warningsLevel = VALID_WARNING_LEVELS.has(normalizedWarnings) ? normalizedWarnings : '';
+  if (warningsLevel && !containsWarningsFlag(baseArgs) && !containsWarningsFlag(originalArgs)) {
+    const sketchIdx = originalArgs.lastIndexOf(sketchDir);
+    const insertIdx = sketchIdx >= 0 ? sketchIdx : originalArgs.length;
+    originalArgs.splice(insertIdx, 0, '--warnings', warningsLevel);
   }
 
   const compileArgs = originalArgs.slice();

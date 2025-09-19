@@ -26,6 +26,11 @@
   "config.path.description": "Path to the arduino-cli executable (e.g. arduino-cli, arduino-cli.exe, or full path).",
   "config.additionalArgs.description": "Additional arguments to append to every arduino-cli invocation.",
   "config.verbose.description": "Add --verbose to compile/upload commands.",
+  "config.compileWarnings.description": "Select the warning level passed to arduino-cli compile (--warnings).",
+  "config.compileWarnings.enum.none": "Disable compiler warnings.",
+  "config.compileWarnings.enum.default": "Use Arduino CLI's default warning level.",
+  "config.compileWarnings.enum.more": "Enable extra compiler warnings.",
+  "config.compileWarnings.enum.all": "Enable all compiler warnings.",
   "config.lint.m5gfxIncludes.description": "Headers treated as part of the M5GFX family for include-order linting.",
   "config.lint.fsIncludes.description": "Headers treated as filesystem-related for include-order linting.",
   "view.arduinoCli": "Arduino CLI"

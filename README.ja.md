@@ -92,6 +92,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - `arduino-cli-wrapper.path`: `arduino-cli` 実行ファイルのパス
 - `arduino-cli-wrapper.additionalArgs`: すべての呼び出しに付与する追加引数（配列）
 - `arduino-cli-wrapper.verbose`: コンパイル/書き込み時に `--verbose` を付与
+- `arduino-cli-wrapper.compileWarnings`: `arduino-cli compile` に渡す警告レベル (`--warnings`) を指定
 
 ## 要件
 
