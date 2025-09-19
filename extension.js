@@ -2225,7 +2225,31 @@ async function commandBuildCheck() {
         errors: errCount,
       }));
 
-      if (!success && typeof code === 'number' && code !== 0) {
+      if (success) {
+        try {
+          await ensureCompileCommandsSetting(sketchDir);
+          let buildPath = '';
+          if (data?.builder_result && typeof data.builder_result.build_path === 'string') {
+            buildPath = data.builder_result.build_path.trim();
+          }
+          if (!buildPath) {
+            const detectArgs = ['compile', '--profile', profile, '--warnings=all', sketchDir];
+            buildPath = await detectBuildPathForCompile(exe, [], detectArgs, sketchDir);
+          }
+          if (!buildPath) {
+            channel.appendLine(t('compileCommandsBuildPathMissing'));
+          } else {
+            const count = await updateCompileCommandsFromBuild(sketchDir, buildPath);
+            if (count > 0) {
+              channel.appendLine(t('compileCommandsUpdated', { count }));
+            } else if (count === 0) {
+              channel.appendLine(t('compileCommandsNoInoEntries'));
+            }
+          }
+        } catch (err) {
+          channel.appendLine(`[warn] ${err.message}`);
+        }
+      } else if (typeof code === 'number' && code !== 0) {
         channel.appendLine(t('buildCheckCliError', { sketch: sketchLabel, profile, code: String(code) }));
       }
 
