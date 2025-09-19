@@ -736,7 +736,7 @@ function updateSummary() {
             cb.id = id;
             cb.checked = selectedLibs.has(name);
             cb.addEventListener('change', () => {
-              if (cb.checked) { selectedLibs.set(name, ver || true); } else { selectedLibs.delete(name); }
+              if (cb.checked) { selectedLibs.set(name, ver ? ver : ''); } else { selectedLibs.delete(name); }
               // User interacted with libraries; allow YAML libraries patching from now on
               try { window.__ALLOW_LIB_PATCH__ = true; } catch (_) {}
               updateSummary();
@@ -798,9 +798,12 @@ function updateSummary() {
         function collectLibVersionMismatches() {
           const mismatches = [];
           for (const [name, ver] of selectedLibs.entries()) {
-            if (typeof ver !== 'string' || !ver) continue;
+            const current = (typeof ver === 'string') ? ver.trim() : '';
             const latest = findLatestVersionByName(name);
-            if (latest && latest !== ver) mismatches.push({ type: 'lib', name, current: ver, latest });
+            if (!latest) continue;
+            if (!current || current !== latest) {
+              mismatches.push({ type: 'lib', name, current, latest });
+            }
           }
           return mismatches;
         }
@@ -808,11 +811,16 @@ function updateSummary() {
           try {
             const init = window.__INIT_STATE__ || {};
             const initId = init.platformId || '';
-            const initVer = init.platformVersion || '';
+            const initVer = typeof init.platformVersion === 'string' ? init.platformVersion : '';
             const parts = fqbn.split(':');
             const platformId = parts.length >= 2 ? (parts[0] + ':' + parts[1]) : fqbn;
             const latestVer = (detail && typeof detail.version === 'string') ? detail.version : '';
-            if (initId && platformId && initId === platformId && initVer && latestVer && initVer !== latestVer) {
+            if (!initId || !platformId || initId !== platformId) return null;
+            if (!latestVer) return null;
+            if (!initVer) {
+              return { type: 'platform', name: platformId, current: '', latest: latestVer };
+            }
+            if (initVer !== latestVer) {
               return { type: 'platform', name: platformId, current: initVer, latest: latestVer };
             }
           } catch (_) {}
@@ -823,8 +831,16 @@ function updateSummary() {
           const platformMM = collectPlatformMismatch();
           const libMM = collectLibVersionMismatches();
           const lines = [];
-          if (platformMM) lines.push((ja ? '\u30d7\u30e9\u30c3\u30c8\u30d5\u30a9\u30fc\u30e0' : 'Platform') + ` ${platformMM.name}: ${platformMM.current} -> ${platformMM.latest}`);
-          libMM.forEach(m => lines.push(`${m.name}: ${m.current} -> ${m.latest}`));
+          if (platformMM) {
+            const currentLabel = platformMM.current ? platformMM.current : (ja ? '\u672a\u6307\u5b9a' : 'Unspecified');
+            const latestLabel = platformMM.latest ? platformMM.latest : (ja ? '\u6700\u65b0' : 'Latest');
+            lines.push((ja ? '\u30d7\u30e9\u30c3\u30c8\u30d5\u30a9\u30fc\u30e0' : 'Platform') + ` ${platformMM.name}: ${currentLabel} -> ${latestLabel}`);
+          }
+          libMM.forEach(m => {
+            const currentLabel = m.current ? m.current : (ja ? '\u672a\u6307\u5b9a' : 'Unspecified');
+            const latestLabel = m.latest ? m.latest : (ja ? '\u6700\u65b0' : 'Latest');
+            lines.push(`${m.name}: ${currentLabel} -> ${latestLabel}`);
+          });
           mmList.textContent = lines.join('\n');
           const count = lines.length;
           mmHeader.textContent = ja ? '\u66f4\u65b0\u53ef\u80fd\u306a\u9805\u76ee' : 'Updates available';
@@ -967,7 +983,7 @@ function updateSummary() {
             data.libraries.forEach(row => {
               const name = (row && row.name) ? String(row.name) : '';
               const ver = (row && row.version) ? String(row.version) : '';
-              if (name) selectedLibs.set(name, ver || true);
+              if (name) selectedLibs.set(name, ver ? ver : '');
             });
             // If library list already loaded, re-render and update summary
             try { if (libsCache !== null) { renderLibs(); } } catch (_) {}
@@ -984,6 +1000,7 @@ function updateSummary() {
   </script>
 </body>
 </html>
+
 
 
 

@@ -2629,9 +2629,9 @@ function parsePlatformFromProfileYaml(profileYaml, preferProfileName) {
       continue;
     }
     // Match either "      platform: ... (x.y.z)" or list item "      - platform: ... (x.y.z)"
-    const mPlat = line.match(/^\s{6}(?:-\s*)?platform\s*:\s*([A-Za-z0-9_:-]+)\s*\(([^)]+)\)\s*$/);
+    const mPlat = line.match(/^\s{6}(?:-\s*)?platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
     if (mPlat && (!targetKey || targetKey === currentKey)) {
-      return { vendorArch: mPlat[1], version: mPlat[2] };
+      return { vendorArch: mPlat[1], version: mPlat[2] ? mPlat[2] : '' };
     }
   }
   return null;
