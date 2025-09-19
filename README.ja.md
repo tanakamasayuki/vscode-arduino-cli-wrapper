@@ -11,6 +11,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - List All Boards (listall): すべてのボード一覧。実行時にフィルター入力可（`arduino-cli board listall <filter>` に渡します）
 - Compile Sketch: スケッチをコンパイル（プロファイルまたは FQBN を使用）
 - Clean Compile: `--clean` でクリーンビルド。最初に includePath を空にし、ビルドで検出したパスのみを追加
+- Build Check: すべての sketch.yaml プロファイルを `--warnings=all` 付きでコンパイルし、警告/エラー件数を集計
 - Upload Sketch: ビルドしてから書き込み。選択したポートとプロファイル/FQBNを使用。必要に応じてモニタを一時停止・再開
 - Monitor Serial: シリアルモニタを起動（ポートとボーレートを選択）
 - Open Helper: sketch.yaml ヘルパーの Web ビューを開き、プロファイル/ライブラリを確認・反映

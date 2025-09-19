@@ -82,6 +82,17 @@ const MSG = {
     cliCheckStart: '[cli] Checking arduino-cli…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] Failed to run arduino-cli. Please configure arduino-cli-wrapper.path or install arduino-cli.',
+    buildCheckStart: '[build-check] Scanning sketch.yaml files…',
+    buildCheckNoWorkspace: '[build-check] No workspace folder is open.',
+    buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found.',
+    buildCheckSkipNoProfiles: '[build-check] {sketch} skipped (no profiles defined in sketch.yaml).',
+    buildCheckCompileStart: '[build-check] {sketch} ({profile}) compiling…',
+    buildCheckStatusSuccess: 'SUCCESS',
+    buildCheckStatusFailed: 'FAILED',
+    buildCheckCompileResult: '[build-check] {sketch} ({profile}) {status} warnings:{warnings} errors:{errors}',
+    buildCheckParseError: '[build-check] Failed to parse JSON output for {sketch} ({profile}): {msg}',
+    buildCheckCliError: '[build-check] Compile failed to run for {sketch} ({profile}): exit {code}',
+    buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
     yamlApplied: 'Applied profile to sketch.yaml: {name}',
     yamlApplyError: 'Failed to apply to sketch.yaml: {msg}',
     yamlNoSketchDir: 'Could not determine a sketch folder in this workspace.',
@@ -146,6 +157,17 @@ const MSG = {
     cliCheckStart: '[cli] arduino-cli を確認中…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] arduino-cli の実行に失敗しました。arduino-cli のインストールまたは設定 (arduino-cli-wrapper.path) を行ってください。',
+    buildCheckStart: '[build-check] sketch.yaml を走査しています…',
+    buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。',
+    buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。',
+    buildCheckSkipNoProfiles: '[build-check] {sketch} をスキップしました (sketch.yaml にプロファイルがありません)。',
+    buildCheckCompileStart: '[build-check] {sketch} ({profile}) をコンパイル中…',
+    buildCheckStatusSuccess: '成功',
+    buildCheckStatusFailed: '失敗',
+    buildCheckCompileResult: '[build-check] {sketch} ({profile}) {status} 警告:{warnings}件 エラー:{errors}件',
+    buildCheckParseError: '[build-check] {sketch} ({profile}) の JSON 出力解析に失敗しました: {msg}',
+    buildCheckCliError: '[build-check] {sketch} ({profile}) のコンパイル実行に失敗しました (終了コード {code})。',
+    buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
     yamlApplied: 'sketch.yaml にプロファイルを反映しました: {name}',
     yamlApplyError: 'sketch.yaml への反映に失敗しました: {msg}',
     yamlNoSketchDir: 'ワークスペース内のスケッチフォルダを特定できませんでした。',
@@ -1796,6 +1818,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.boardDetails', commandBoardDetails),
     vscode.commands.registerCommand('arduino-cli.runArbitrary', commandRunArbitrary),
     vscode.commands.registerCommand('arduino-cli.compile', commandCompile),
+    vscode.commands.registerCommand('arduino-cli.buildCheck', commandBuildCheck),
     vscode.commands.registerCommand('arduino-cli.cleanCompile', commandCleanCompile),
     vscode.commands.registerCommand('arduino-cli.upload', commandUpload),
     vscode.commands.registerCommand('arduino-cli.monitor', commandMonitor),
@@ -2081,6 +2104,191 @@ async function commandExpandAllTree() {
  * Perform a clean build by invoking `arduino-cli compile --clean`.
  * Uses profile when available; otherwise requires FQBN.
  */
+/**
+ * Compile every profile defined in each sketch.yaml under the workspace.
+ * Ignores user compile settings and forces --warnings=all with JSON diagnostics.
+ */
+async function commandBuildCheck() {
+  if (!(await ensureCliReady())) return;
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    vscode.window.showWarningMessage(t('buildCheckNoWorkspace'));
+    return;
+  }
+  const channel = getOutput();
+  channel.show(true);
+  channel.appendLine(t('buildCheckStart'));
+
+  const sketches = [];
+  const seenDirs = new Set();
+  for (const folder of folders) {
+    const pattern = new vscode.RelativePattern(folder, '**/sketch.yaml');
+    let matches = [];
+    try { matches = await vscode.workspace.findFiles(pattern); } catch { matches = []; }
+    for (const uri of matches) {
+      const sketchDir = path.dirname(uri.fsPath);
+      if (seenDirs.has(sketchDir)) continue;
+      seenDirs.add(sketchDir);
+      sketches.push({ sketchDir, uri, folder });
+    }
+  }
+
+  if (sketches.length === 0) {
+    channel.appendLine(t('buildCheckNoSketchYaml'));
+    return;
+  }
+
+  const cfg = getConfig();
+  const exe = cfg.exe || 'arduino-cli';
+  const totals = { total: 0, success: 0, failed: 0, warnings: 0, errors: 0 };
+
+  for (const entry of sketches) {
+    const { sketchDir, uri, folder } = entry;
+    const wsFolder = vscode.workspace.getWorkspaceFolder(uri) || folder;
+    let sketchLabel = sketchDir;
+    if (wsFolder) {
+      let relPath = path.relative(wsFolder.uri.fsPath, sketchDir);
+      if (!relPath) relPath = '.';
+      relPath = relPath.split(path.sep).join('/');
+      sketchLabel = wsFolder.name + '/' + relPath;
+    }
+
+    const yamlInfo = await readSketchYamlInfo(sketchDir);
+    const uniqueProfiles = yamlInfo && Array.isArray(yamlInfo.profiles)
+      ? Array.from(new Set(yamlInfo.profiles.filter(p => typeof p === 'string' && p.trim().length > 0)))
+      : [];
+    let profiles = uniqueProfiles;
+    if (yamlInfo && yamlInfo.defaultProfile && uniqueProfiles.includes(yamlInfo.defaultProfile)) {
+      profiles = uniqueProfiles.filter(p => p !== yamlInfo.defaultProfile);
+      profiles.push(yamlInfo.defaultProfile);
+    }
+
+    if (!profiles || profiles.length === 0) {
+      channel.appendLine(t('buildCheckSkipNoProfiles', { sketch: sketchLabel }));
+      continue;
+    }
+
+    for (const profile of profiles) {
+      totals.total += 1;
+      channel.appendLine(t('buildCheckCompileStart', { sketch: sketchLabel, profile }));
+      let runResult;
+      try {
+        runResult = await runBuildCheckCompile(exe, sketchDir, profile);
+      } catch (err) {
+        totals.failed += 1;
+        const codeText = err && typeof err.code !== 'undefined' ? String(err.code) : err && err.message ? err.message : 'spawn error';
+        channel.appendLine(t('buildCheckCliError', { sketch: sketchLabel, profile, code: codeText }));
+        continue;
+      }
+
+      const { code, stdout, stderr } = runResult;
+      const parsed = parseBuildCheckJson(stdout);
+      if (!parsed.data) {
+        totals.failed += 1;
+        channel.appendLine(t('buildCheckParseError', { sketch: sketchLabel, profile, msg: parsed.error || 'unknown' }));
+        if (typeof code === 'number' && code !== 0) {
+          channel.appendLine(t('buildCheckCliError', { sketch: sketchLabel, profile, code: String(code) }));
+        }
+        if (stderr && stderr.trim()) {
+          const stderrNormalized = stderr.replace(/\r\n/g, '\n').trim();
+          if (stderrNormalized) {
+            channel.append(stderrNormalized.endsWith('\n') ? stderrNormalized : stderrNormalized + '\n');
+          }
+        }
+        continue;
+      }
+
+      const data = parsed.data;
+      const success = !!data.success;
+      if (success) totals.success += 1;
+      else totals.failed += 1;
+
+      const diagnostics = Array.isArray(data?.builder_result?.diagnostics)
+        ? data.builder_result.diagnostics
+        : [];
+      let warnCount = 0;
+      let errCount = 0;
+      for (const diag of diagnostics) {
+        const severity = String(diag?.severity || '').toUpperCase();
+        if (severity === 'WARNING') warnCount += 1;
+        else if (severity === 'ERROR') errCount += 1;
+      }
+      totals.warnings += warnCount;
+      totals.errors += errCount;
+
+      const statusLabel = t(success ? 'buildCheckStatusSuccess' : 'buildCheckStatusFailed');
+      channel.appendLine(t('buildCheckCompileResult', {
+        sketch: sketchLabel,
+        profile,
+        status: statusLabel,
+        warnings: warnCount,
+        errors: errCount,
+      }));
+
+      if (!success && typeof code === 'number' && code !== 0) {
+        channel.appendLine(t('buildCheckCliError', { sketch: sketchLabel, profile, code: String(code) }));
+      }
+
+      const compilerErr = typeof data.compiler_err === 'string' ? data.compiler_err.trim() : '';
+      if ((warnCount > 0 || errCount > 0 || !success) && compilerErr) {
+        const normalized = compilerErr.replace(/\r\n/g, '\n');
+        channel.append(normalized.endsWith('\n') ? normalized : normalized + '\n');
+      } else if (!success && stderr && stderr.trim()) {
+        const stderrNormalized = stderr.replace(/\r\n/g, '\n').trim();
+        if (stderrNormalized) {
+          channel.append(stderrNormalized.endsWith('\n') ? stderrNormalized : stderrNormalized + '\n');
+        }
+      }
+    }
+  }
+
+  channel.appendLine(t('buildCheckSummary', {
+    total: totals.total,
+    success: totals.success,
+    failed: totals.failed,
+    warnings: totals.warnings,
+    errors: totals.errors,
+  }));
+}
+
+function parseBuildCheckJson(raw) {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!text) return { data: null, error: 'empty output' };
+  try {
+    return { data: JSON.parse(text), error: '' };
+  } catch (err) {
+    const start = text.lastIndexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start >= 0 && end >= start) {
+      const candidate = text.slice(start, end + 1);
+      try { return { data: JSON.parse(candidate), error: '' }; } catch (err2) {
+        return { data: null, error: err2.message };
+      }
+    }
+    return { data: null, error: err.message };
+  }
+}
+
+async function runBuildCheckCompile(exe, sketchDir, profile) {
+  const args = ['compile', '--profile', profile, '--warnings=all', '--json', sketchDir];
+  const channel = getOutput();
+  const displayExe = needsPwshCallOperator() ? '& ' + quoteArg(exe) : quoteArg(exe);
+  channel.appendLine(ANSI.cyan + '$ ' + displayExe + ' ' + args.map(quoteArg).join(' ') + ANSI.reset);
+  channel.appendLine(ANSI.dim + '(cwd: ' + sketchDir + ')' + ANSI.reset);
+  return new Promise((resolve, reject) => {
+    const child = cp.spawn(exe, args, { cwd: sketchDir, shell: false });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      resolve({ code, stdout, stderr });
+    });
+  });
+}
+
+
 async function commandCleanCompile() {
   if (!(await ensureCliReady())) return;
   const ino = await pickInoFromWorkspace();

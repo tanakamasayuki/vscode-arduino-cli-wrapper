@@ -81,6 +81,10 @@
         "title": "%cmd.compile%"
       },
       {
+        "command": "arduino-cli.buildCheck",
+        "title": "%cmd.buildCheck%"
+      },
+      {
         "command": "arduino-cli.cleanCompile",
         "title": "%cmd.cleanCompile%"
       },

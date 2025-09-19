@@ -33,5 +33,6 @@
   "config.compileWarnings.enum.all": "Enable all compiler warnings.",
   "config.lint.m5gfxIncludes.description": "Headers treated as part of the M5GFX family for include-order linting.",
   "config.lint.fsIncludes.description": "Headers treated as filesystem-related for include-order linting.",
-  "view.arduinoCli": "Arduino CLI"
+  "view.arduinoCli": "Arduino CLI",
+  "cmd.buildCheck": "Arduino CLI: Build Check"
 }
