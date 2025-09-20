@@ -41,6 +41,10 @@
         "title": "%cmd.examples%"
       },
       {
+        "command": "arduino-cli.inspector",
+        "title": "%cmd.inspect%"
+      },
+      {
         "command": "arduino-cli.expandAll",
         "title": "%cmd.expandAll%"
       },

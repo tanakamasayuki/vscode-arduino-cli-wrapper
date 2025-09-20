@@ -100,6 +100,57 @@ const MSG = {
     sketchCreateStart: '[sketch] Creating at: {path}',
     sketchCreateDone: '[sketch] Created: {path}',
     lintFsIncludeAfterM5: 'FS header {fsHeader} must appear before the M5GFX header {m5Header}.',
+    inspectorPanelTitle: 'Sketch Inspector',
+    inspectorSelectSketch: 'Sketch',
+    inspectorSelectProfile: 'Profile',
+    inspectorProfileNone: 'Use current FQBN',
+    inspectorRunButton: 'Analyze',
+    inspectorStatusIdle: 'Ready',
+    inspectorStatusNoSketch: 'No sketches detected in the workspace.',
+    inspectorStatusPreparing: 'Preparing analysis...',
+    inspectorStatusRunning: 'Analyzing...',
+    inspectorAnalysisSuccess: 'Analysis complete.',
+    inspectorAnalysisFailed: 'Analysis failed: {msg}',
+    inspectorTabSummary: 'Summary',
+    inspectorTabDiagnostics: 'Diagnostics',
+    inspectorTabSections: 'Sections',
+    inspectorTabSymbols: 'Top Symbols',
+    inspectorTabLibraries: 'Libraries',
+    inspectorTabBuildProps: 'Build Properties',
+    inspectorTabPartitions: 'partitions.csv',
+    inspectorTabSdkconfig: 'sdkconfig',
+    inspectorTabRawJson: 'Raw JSON',
+    inspectorSummaryBuildPath: 'Build path',
+    inspectorSummarySketch: 'Sketch',
+    inspectorSummaryProfile: 'Profile',
+    inspectorSummaryWarnings: 'Warnings',
+    inspectorSummaryErrors: 'Errors',
+    inspectorSummaryFlash: 'Flash (text)',
+    inspectorSummaryData: 'RAM (data)',
+    inspectorSummaryUnknown: 'Unknown',
+    inspectorTableNoData: 'No data',
+    inspectorDiagnosticsHeaderSeverity: 'Severity',
+    inspectorDiagnosticsHeaderMessage: 'Message',
+    inspectorDiagnosticsHeaderLocation: 'Location',
+    inspectorMapHeaderSymbol: 'Symbol',
+    inspectorMapHeaderSize: 'Size (bytes)',
+    inspectorMapHeaderObject: 'Object file',
+    inspectorMapHeaderSection: 'Section',
+    inspectorSectionsHeaderName: 'Section',
+    inspectorSectionsHeaderUsed: 'Used',
+    inspectorSectionsHeaderMax: 'Max',
+    inspectorLibrariesHeaderName: 'Library',
+    inspectorLibrariesHeaderVersion: 'Version',
+    inspectorLibrariesHeaderLocation: 'Source',
+    inspectorBuildPropsHeaderKey: 'Key',
+    inspectorBuildPropsHeaderValue: 'Value',
+    inspectorFileLoadError: 'Failed to load file: {name}',
+    inspectorRequestInProgress: 'Analysis already running. Please wait.',
+    inspectorNoSelectionWarn: 'Select a sketch before running analysis.',
+    inspectorMapMissing: 'Map file not found under the build path.',
+    inspectorMapParseFailed: 'Failed to analyze map file: {msg}',
+    inspectorMapNoSymbols: 'No symbols parsed from the map file.',
+    inspectorOpenInEditor: 'Open in Editor',
   },
   ja: {
     missingCli: 'Arduino CLI が見つかりませんでした: {exe}',
@@ -133,6 +184,57 @@ const MSG = {
     sketchYamlCreated: 'sketch.yaml を作成しました。',
     sketchYamlCreateDone: '[sketch.yaml] 作成完了: {path}',
     lintFsIncludeAfterM5: 'FS系ヘッダー {fsHeader} は M5GFX系ヘッダー {m5Header} より前に記述してください。',
+    inspectorPanelTitle: 'スケッチインスペクター',
+    inspectorSelectSketch: 'スケッチ',
+    inspectorSelectProfile: 'プロファイル',
+    inspectorProfileNone: '現在のFQBNを使用',
+    inspectorRunButton: '分析',
+    inspectorStatusIdle: '待機中',
+    inspectorStatusNoSketch: 'ワークスペースにスケッチが見つかりません。',
+    inspectorStatusPreparing: '準備中...',
+    inspectorStatusRunning: '分析中...',
+    inspectorAnalysisSuccess: '分析が完了しました。',
+    inspectorAnalysisFailed: '分析に失敗しました: {msg}',
+    inspectorTabSummary: 'サマリー',
+    inspectorTabDiagnostics: '診断',
+    inspectorTabSections: 'セクション',
+    inspectorTabSymbols: '大きいシンボル',
+    inspectorTabLibraries: 'ライブラリ',
+    inspectorTabBuildProps: 'ビルドプロパティ',
+    inspectorTabPartitions: 'partitions.csv',
+    inspectorTabSdkconfig: 'sdkconfig',
+    inspectorTabRawJson: 'JSON 出力',
+    inspectorSummaryBuildPath: 'ビルドパス',
+    inspectorSummarySketch: 'スケッチ',
+    inspectorSummaryProfile: 'プロファイル',
+    inspectorSummaryWarnings: '警告',
+    inspectorSummaryErrors: 'エラー',
+    inspectorSummaryFlash: 'フラッシュ (text)',
+    inspectorSummaryData: 'RAM (data)',
+    inspectorSummaryUnknown: '不明',
+    inspectorTableNoData: 'データがありません',
+    inspectorDiagnosticsHeaderSeverity: '重大度',
+    inspectorDiagnosticsHeaderMessage: 'メッセージ',
+    inspectorDiagnosticsHeaderLocation: '位置',
+    inspectorMapHeaderSymbol: 'シンボル',
+    inspectorMapHeaderSize: 'サイズ (バイト)',
+    inspectorMapHeaderObject: 'オブジェクトファイル',
+    inspectorMapHeaderSection: 'セクション',
+    inspectorSectionsHeaderName: 'セクション',
+    inspectorSectionsHeaderUsed: '使用量',
+    inspectorSectionsHeaderMax: '上限',
+    inspectorLibrariesHeaderName: 'ライブラリ',
+    inspectorLibrariesHeaderVersion: 'バージョン',
+    inspectorLibrariesHeaderLocation: '取得元',
+    inspectorBuildPropsHeaderKey: 'キー',
+    inspectorBuildPropsHeaderValue: '値',
+    inspectorFileLoadError: 'ファイルを読み込めませんでした: {name}',
+    inspectorRequestInProgress: '別の分析が進行中です。完了までお待ちください。',
+    inspectorNoSelectionWarn: '分析するスケッチを選択してください。',
+    inspectorMapMissing: 'ビルドパスにマップファイルが見つかりません。',
+    inspectorMapParseFailed: 'マップファイルの分析に失敗しました: {msg}',
+    inspectorMapNoSymbols: 'マップファイルからシンボルを解析できませんでした。',
+    inspectorOpenInEditor: 'エディターで開く',
     defaultProfileSet: '[sketch.yaml] default_profile を設定: {name}',
     setFqbnPickTitle: 'FQBN を選択してください',
     setFqbnManual: 'FQBN を手入力…',
@@ -1802,6 +1904,7 @@ function activate(context) {
         if (action === 'monitor') return commandMonitor();
         if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
         if (action === 'examples') return commandOpenExamplesBrowser({ sketchDir, profile });
+        if (action === 'inspect') return commandOpenInspector({ sketchDir, profile });
         if (action === 'refreshView') return vscode.commands.executeCommand('arduino-cli.refreshView');
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
         if (action === 'setBaud') return vscode.commands.executeCommand('arduino-cli.setBaud');
@@ -1811,6 +1914,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.sketchNew', commandSketchNew),
     vscode.commands.registerCommand('arduino-cli.expandAll', commandExpandAllTree),
     vscode.commands.registerCommand('arduino-cli.examples', () => commandOpenExamplesBrowser({})),
+    vscode.commands.registerCommand('arduino-cli.inspector', () => commandOpenInspector({})),
     vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
     vscode.commands.registerCommand('arduino-cli.listBoards', commandListBoards),
@@ -1965,6 +2069,7 @@ function defaultCommandItems(dir, profile, parent) {
     new CommandItem('Monitor', 'monitor', dir, profile, parent),
     new CommandItem('Open Helper', 'helper', dir, profile, parent),
     new CommandItem('Open Examples', 'examples', dir, profile, parent),
+    new CommandItem('Inspect', 'inspect', dir, profile, parent),
   ];
 }
 
@@ -1975,6 +2080,7 @@ function globalCommandItems() {
     new CommandItem('List Boards', 'listBoards', '', ''),
     new CommandItem('List All Boards', 'listAllBoards', '', ''),
     new CommandItem('Open Helper', 'helper', '', ''),
+    new CommandItem('Open Inspector', 'inspect', '', ''),
     new CommandItem('Refresh View', 'refreshView', '', ''),
     new CommandItem('New Sketch', 'sketchNew', '', ''),
     new CommandItem('Run Command', 'runArbitrary', '', ''),
@@ -3223,6 +3329,553 @@ async function getLibrariesFromSketchYaml(sketchDir, profileName) {
 }
 
 /**
+ * Open the sketch inspector webview and provide memory/build analysis.
+ * @param {{sketchDir?:string, profile?:string}|undefined} ctx
+ */
+async function commandOpenInspector(ctx) {
+  const panel = vscode.window.createWebviewPanel(
+    'arduinoCliInspector',
+    t('inspectorPanelTitle'),
+    vscode.ViewColumn.Active,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  const initialContext = {
+    sketchDir: ctx && typeof ctx.sketchDir === 'string' ? ctx.sketchDir : '',
+    profile: ctx && typeof ctx.profile === 'string' ? ctx.profile : ''
+  };
+  const state = {
+    running: false,
+    lastFiles: {}
+  };
+  let disposed = false;
+  panel.onDidDispose(() => {
+    disposed = true;
+    state.running = false;
+    state.lastFiles = {};
+  });
+
+  try {
+    const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'inspector.html');
+    const html = await readTextFile(htmlUri);
+    panel.webview.html = html;
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    panel.webview.html = `<html><body><h3>${t('inspectorPanelTitle')}</h3><pre>${escapeHtml(msg)}</pre></body></html>`;
+    showError(err);
+  }
+
+  const sendInit = async () => {
+    if (disposed) return;
+    try {
+      const sketches = await collectInspectorSketches(initialContext.sketchDir);
+      panel.webview.postMessage({
+        type: 'init',
+        locale: _isJa ? 'ja' : 'en',
+        strings: buildInspectorStrings(),
+        sketches,
+        context: initialContext
+      });
+    } catch (err) {
+      showError(err);
+      panel.webview.postMessage({ type: 'initError', message: err && err.message ? err.message : String(err) });
+    }
+  };
+
+  panel.webview.onDidReceiveMessage(async (msg) => {
+    if (disposed || !msg || typeof msg !== 'object') return;
+    try {
+      switch (msg.type) {
+        case 'ready':
+        case 'requestRefresh':
+          await sendInit();
+          break;
+        case 'requestAnalysis': {
+          if (state.running) {
+            panel.webview.postMessage({ type: 'analysisDenied', reason: 'busy', message: t('inspectorRequestInProgress') });
+            return;
+          }
+          const sketchDir = typeof msg.sketchDir === 'string' ? msg.sketchDir : '';
+          if (!sketchDir) {
+            panel.webview.postMessage({ type: 'analysisDenied', reason: 'noSketch', message: t('inspectorNoSelectionWarn') });
+            return;
+          }
+          const profile = typeof msg.profile === 'string' ? msg.profile : '';
+          const inoPath = typeof msg.inoPath === 'string' ? msg.inoPath : '';
+          const requestId = typeof msg.requestId === 'number' ? msg.requestId : Date.now();
+          state.running = true;
+          panel.webview.postMessage({ type: 'analysisStatus', status: 'start', requestId });
+          try {
+            const result = await runInspectorAnalysis({ sketchDir, profile, inoPath });
+            state.lastFiles = result.filesMeta || {};
+            panel.webview.postMessage({ type: 'analysisResult', requestId, ...result.payload });
+          } catch (err) {
+            panel.webview.postMessage({
+              type: 'analysisResult',
+              requestId,
+              success: false,
+              message: err && err.message ? err.message : String(err)
+            });
+          } finally {
+            state.running = false;
+          }
+          break;
+        }
+        case 'requestFile': {
+          const key = typeof msg.key === 'string' ? msg.key : '';
+          if (!key) return;
+          const info = state.lastFiles[key];
+          if (!info || !info.path) {
+            panel.webview.postMessage({ type: 'fileContent', key, error: t('inspectorFileLoadError', { name: key }) });
+            return;
+          }
+          try {
+            const content = await readTextFile(vscode.Uri.file(info.path));
+            panel.webview.postMessage({
+              type: 'fileContent',
+              key,
+              content,
+              path: info.path,
+              size: info.size || content.length
+            });
+          } catch (err) {
+            const detail = err && err.message ? err.message : String(err);
+            panel.webview.postMessage({ type: 'fileContent', key, error: `${t('inspectorFileLoadError', { name: key })} ${detail}`.trim() });
+          }
+          break;
+        }
+        case 'openFile': {
+          const key = typeof msg.key === 'string' ? msg.key : '';
+          let target = '';
+          if (key && state.lastFiles[key] && state.lastFiles[key].path) {
+            target = state.lastFiles[key].path;
+          } else if (typeof msg.path === 'string') {
+            target = msg.path;
+          }
+          if (!target) return;
+          try {
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
+            await vscode.window.showTextDocument(doc, { preview: false });
+          } catch (err) {
+            showError(err);
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      showError(err);
+    }
+  });
+}
+
+/** Build localized UI strings for the inspector webview. */
+function buildInspectorStrings() {
+  const keys = ['open',
+    'inspectorPanelTitle',
+    'inspectorSelectSketch',
+    'inspectorSelectProfile',
+    'inspectorProfileNone',
+    'inspectorRunButton',
+    'inspectorStatusIdle',
+    'inspectorStatusNoSketch',
+    'inspectorStatusPreparing',
+    'inspectorStatusRunning',
+    'inspectorAnalysisSuccess',
+    'inspectorAnalysisFailed',
+    'inspectorTabSummary',
+    'inspectorTabDiagnostics',
+    'inspectorTabSections',
+    'inspectorTabSymbols',
+    'inspectorTabLibraries',
+    'inspectorTabBuildProps',
+    'inspectorTabPartitions',
+    'inspectorTabSdkconfig',
+    'inspectorTabRawJson',
+    'inspectorSummaryBuildPath',
+    'inspectorSummarySketch',
+    'inspectorSummaryProfile',
+    'inspectorSummaryWarnings',
+    'inspectorSummaryErrors',
+    'inspectorSummaryFlash',
+    'inspectorSummaryData',
+    'inspectorSummaryUnknown',
+    'inspectorTableNoData',
+    'inspectorDiagnosticsHeaderSeverity',
+    'inspectorDiagnosticsHeaderMessage',
+    'inspectorDiagnosticsHeaderLocation',
+    'inspectorMapHeaderSymbol',
+    'inspectorMapHeaderSize',
+    'inspectorMapHeaderObject',
+    'inspectorMapHeaderSection',
+    'inspectorSectionsHeaderName',
+    'inspectorSectionsHeaderUsed',
+    'inspectorSectionsHeaderMax',
+    'inspectorLibrariesHeaderName',
+    'inspectorLibrariesHeaderVersion',
+    'inspectorLibrariesHeaderLocation',
+    'inspectorBuildPropsHeaderKey',
+    'inspectorBuildPropsHeaderValue',
+    'inspectorFileLoadError',
+    'inspectorRequestInProgress',
+    'inspectorNoSelectionWarn',
+    'inspectorMapMissing',
+    'inspectorMapParseFailed',
+    'inspectorMapNoSymbols',
+    'inspectorOpenInEditor'
+  ];
+  const result = {};
+  for (const key of keys) {
+    result[key] = t(key);
+  }
+  return result;
+}
+
+async function collectInspectorSketches(preferSketchDir = '') {
+  const sketches = await findSketches();
+  const preferNormalized = preferSketchDir ? path.normalize(preferSketchDir) : '';
+  const items = [];
+  for (const sketch of sketches) {
+    const dir = sketch.dir;
+    if (!dir) continue;
+    const dirUri = vscode.Uri.file(dir);
+    const inos = [];
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(dirUri);
+      for (const [name, kind] of entries) {
+        if (kind === vscode.FileType.File && name.toLowerCase().endsWith('.ino')) {
+          inos.push({ path: path.join(dir, name), name });
+        }
+      }
+    } catch (_) { }
+    if (inos.length === 0) continue;
+    const yamlInfo = await readSketchYamlInfo(dir);
+    const profiles = yamlInfo && Array.isArray(yamlInfo.profiles)
+      ? yamlInfo.profiles.filter(Boolean).map(String)
+      : [];
+    const defaultProfile = yamlInfo && typeof yamlInfo.defaultProfile === 'string' ? yamlInfo.defaultProfile : '';
+    items.push({
+      sketchDir: dir,
+      label: sketch.name || path.basename(dir),
+      relative: workspaceRelativePath(dir),
+      inos,
+      defaultIno: inos[0]?.path || '',
+      profiles,
+      defaultProfile,
+      preferred: preferNormalized && path.normalize(dir) === preferNormalized
+    });
+  }
+  items.sort((a, b) => {
+    if (a.preferred && !b.preferred) return -1;
+    if (!a.preferred && b.preferred) return 1;
+    return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
+  });
+  return items;
+}
+
+function workspaceRelativePath(fsPath) {
+  try {
+    const folders = vscode.workspace.workspaceFolders || [];
+    for (const folder of folders) {
+      if (!folder || !folder.uri) continue;
+      const rel = path.relative(folder.uri.fsPath, fsPath);
+      if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+        return `${folder.name}/${rel.split(path.sep).join('/')}`;
+      }
+    }
+  } catch (_) { }
+  return fsPath;
+}
+
+async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
+  if (!(await ensureCliReady())) {
+    throw new Error(t('cliCheckFail', {}));
+  }
+  const cfg = getConfig();
+  const exe = cfg.exe || 'arduino-cli';
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const args = ['compile', '--warnings=all', '--json'];
+  let usedProfile = '';
+  let usedFqbn = '';
+  if (profile) {
+    args.push('--profile', profile);
+    usedProfile = profile;
+  } else {
+    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!fqbn) {
+      const set = await commandSetFqbn(true);
+      if (!set) throw new Error(t('setFqbnUnsetWarn'));
+      fqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+      if (!fqbn) throw new Error(t('setFqbnUnsetWarn'));
+    }
+    args.push('--fqbn', fqbn);
+    usedFqbn = fqbn;
+  }
+  args.push(sketchDir);
+  const finalArgs = [...baseArgs, ...args];
+  const channel = getOutput();
+  const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : quoteArg(exe);
+  channel.appendLine(`[inspector] $ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}`);
+  channel.appendLine(`[inspector] (cwd: ${sketchDir})`);
+  let stdout = '';
+  let stderr = '';
+  const code = await new Promise((resolve, reject) => {
+    const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('error', reject);
+    child.on('close', resolve);
+  });
+  const parsed = parseBuildCheckJson(stdout);
+  if (!parsed.data) {
+    const detail = parsed.error || (stderr && stderr.trim()) || `exit ${code}`;
+    throw new Error(t('inspectorAnalysisFailed', { msg: detail }));
+  }
+  const data = parsed.data;
+  const builder = data && typeof data === 'object' ? data.builder_result || {} : {};
+  const buildPath = typeof builder.build_path === 'string' ? builder.build_path : '';
+  const diagnostics = Array.isArray(builder.diagnostics) ? builder.diagnostics : [];
+  const diagRecords = diagnostics.map(formatInspectorDiagnostic);
+  const warnings = diagRecords.filter(d => d.severity === 'WARNING').length;
+  const errors = diagRecords.filter(d => d.severity === 'ERROR').length;
+  const sections = Array.isArray(builder.executable_sections_size)
+    ? builder.executable_sections_size.map(cleanSectionSize)
+    : [];
+  const mapInfo = await analyzeInspectorMap(buildPath, sketchDir);
+  const libraries = Array.isArray(builder.used_libraries)
+    ? builder.used_libraries.map(formatInspectorLibrary)
+    : [];
+  const buildProps = Array.isArray(builder.build_properties)
+    ? builder.build_properties.map(formatBuildProp).filter(Boolean)
+    : [];
+  const filesMeta = await gatherInspectorFiles(buildPath, mapInfo.mapPath);
+  const payload = {
+    success: !!data.success,
+    message: data.success ? t('inspectorAnalysisSuccess') : t('inspectorAnalysisFailed', { msg: stderr.trim() || `exit ${code}` }),
+    summary: {
+      sketchDir,
+      inoPath,
+      profile,
+      usedProfile,
+      usedFqbn,
+      buildPath,
+      warnings,
+      errors,
+      exitCode: code,
+      relativeSketch: workspaceRelativePath(sketchDir)
+    },
+    diagnostics: diagRecords,
+    sections,
+    map: mapInfo.payload,
+    libraries,
+    buildProps,
+    compilerOut: typeof data.compiler_out === 'string' ? data.compiler_out : '',
+    compilerErr: typeof data.compiler_err === 'string' ? data.compiler_err : '',
+    rawJson: JSON.stringify(data, null, 2),
+    files: filesMeta.public
+  };
+  return { payload, filesMeta: filesMeta.private };
+}
+
+function formatInspectorDiagnostic(diag) {
+  const severity = String(diag?.severity || '').toUpperCase();
+  const message = String(diag?.message || '').trim();
+  const location = diag?.location || {};
+  const file = typeof location.file === 'string' ? location.file : '';
+  const line = typeof location.line === 'number' ? location.line : undefined;
+  const column = typeof location.column === 'number' ? location.column : undefined;
+  return {
+    severity,
+    message,
+    file,
+    relative: file ? workspaceRelativePath(file) : '',
+    line,
+    column
+  };
+}
+
+function formatInspectorLibrary(lib) {
+  return {
+    name: String(lib?.name || ''),
+    version: String(lib?.version || ''),
+    location: String(lib?.location || ''),
+    sourceDir: String(lib?.source_dir || ''),
+    installDir: String(lib?.install_dir || '')
+  };
+}
+
+function formatBuildProp(entry) {
+  const text = String(entry || '');
+  const idx = text.indexOf('=');
+  if (idx <= 0) return null;
+  const key = text.slice(0, idx).trim();
+  const value = text.slice(idx + 1).trim();
+  if (!key) return null;
+  return { key, value };
+}
+
+function cleanSectionSize(entry) {
+  return {
+    name: String(entry?.name || ''),
+    size: Number(entry?.size || 0),
+    max: Number(entry?.max_size || 0)
+  };
+}
+
+async function gatherInspectorFiles(buildPath, mapPath) {
+  const privateMap = {};
+  const publicMap = {};
+  if (buildPath) {
+    const targets = [
+      { key: 'partitions', name: 'partitions.csv' },
+      { key: 'sdkconfig', name: 'sdkconfig' }
+    ];
+    for (const target of targets) {
+      const full = path.join(buildPath, target.name);
+      try {
+        const uri = vscode.Uri.file(full);
+        const stat = await vscode.workspace.fs.stat(uri);
+        privateMap[target.key] = { path: full, size: stat.size || 0 };
+        publicMap[target.key] = { path: full, size: stat.size || 0 };
+      } catch (_) { }
+    }
+  }
+  if (mapPath) {
+    try {
+      const stat = await vscode.workspace.fs.stat(vscode.Uri.file(mapPath));
+      privateMap.map = { path: mapPath, size: stat.size || 0 };
+      publicMap.map = { path: mapPath, size: stat.size || 0 };
+    } catch (_) { }
+  }
+  return { private: privateMap, public: publicMap };
+}
+
+async function analyzeInspectorMap(buildPath, sketchDir) {
+  const warnings = [];
+  if (!buildPath) {
+    warnings.push(t('inspectorMapMissing'));
+    return { mapPath: '', payload: { sections: [], topSymbols: [], topObjects: [], warnings } };
+  }
+  let mapPath = '';
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(buildPath));
+    for (const [name, kind] of entries) {
+      if (kind === vscode.FileType.File && name.toLowerCase().endsWith('.map')) {
+        mapPath = path.join(buildPath, name);
+        break;
+      }
+    }
+  } catch (_) { }
+  if (!mapPath) {
+    warnings.push(t('inspectorMapMissing'));
+    return { mapPath: '', payload: { sections: [], topSymbols: [], topObjects: [], warnings } };
+  }
+  let text = '';
+  try {
+    text = await readTextFile(vscode.Uri.file(mapPath));
+  } catch (err) {
+    warnings.push(t('inspectorMapParseFailed', { msg: err && err.message ? err.message : String(err) }));
+    return { mapPath, payload: { sections: [], topSymbols: [], topObjects: [], warnings } };
+  }
+  const entries = parseMapEntries(text);
+  if (!entries.length) {
+    warnings.push(t('inspectorMapNoSymbols'));
+    return { mapPath, payload: { sections: [], topSymbols: [], topObjects: [], warnings } };
+  }
+  const bySection = new Map();
+  const byObject = new Map();
+  for (const entry of entries) {
+    const sec = bySection.get(entry.root) || { name: entry.root, size: 0, count: 0 };
+    sec.size += entry.size;
+    sec.count += 1;
+    bySection.set(entry.root, sec);
+    const objKey = entry.objectFile;
+    const obj = byObject.get(objKey) || { objectFile: objKey, size: 0, count: 0 };
+    obj.size += entry.size;
+    obj.count += 1;
+    byObject.set(objKey, obj);
+  }
+  const sections = Array.from(bySection.values()).sort((a, b) => b.size - a.size);
+  const topSymbols = entries
+    .slice()
+    .sort((a, b) => b.size - a.size)
+    .slice(0, 50)
+    .map((entry) => ({
+      symbol: entry.symbol,
+      section: entry.root,
+      size: entry.size,
+      object: workspaceRelativePath(entry.objectFile)
+    }));
+  const topObjects = Array.from(byObject.values())
+    .sort((a, b) => b.size - a.size)
+    .slice(0, 30)
+    .map((entry) => ({
+      object: workspaceRelativePath(entry.objectFile),
+      size: entry.size,
+      count: entry.count
+    }));
+  return {
+    mapPath,
+    payload: {
+      sections,
+      topSymbols,
+      topObjects,
+      warnings
+    }
+  };
+}
+
+function parseMapEntries(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const entries = [];
+  let pendingSection = '';
+  for (const raw of lines) {
+    const line = raw || '';
+    const full = line.match(/^\s+\.(\S+)\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s+(.+)$/);
+    if (full) {
+      const entry = buildMapEntry(full[1], full[2], full[3], full[4]);
+      if (entry) entries.push(entry);
+      pendingSection = '';
+      continue;
+    }
+    const header = line.match(/^\s+\.(\S+)\s*$/);
+    if (header) {
+      pendingSection = header[1];
+      continue;
+    }
+    const cont = line.match(/^\s+0x([0-9a-fA-F]+)\s+0x([0-9a-fA-F]+)\s+(.+)$/);
+    if (pendingSection && cont) {
+      const entry = buildMapEntry(pendingSection, cont[1], cont[2], cont[3]);
+      if (entry) entries.push(entry);
+      pendingSection = '';
+    }
+  }
+  return entries;
+}
+
+function buildMapEntry(sectionName, addrHex, sizeHex, tail) {
+  const size = parseInt(sizeHex, 16);
+  if (!Number.isFinite(size) || size <= 0) return null;
+  const address = parseInt(addrHex, 16);
+  const objectMatch = (tail || '').match(/^(.*?)(?:\s+\(([^()]+)\))?\s*$/);
+  const objectFile = objectMatch ? String(objectMatch[1] || '').trim() : String(tail || '').trim();
+  const symSuffix = objectMatch && objectMatch[2] ? objectMatch[2].trim() : '';
+  const raw = sectionName.startsWith('.') ? sectionName.slice(1) : sectionName;
+  const dotIdx = raw.indexOf('.');
+  const root = dotIdx >= 0 ? raw.slice(0, dotIdx) : raw;
+  const symbol = dotIdx >= 0 ? raw.slice(dotIdx + 1) : raw;
+  return {
+    root,
+    section: sectionName,
+    symbol: symSuffix || symbol,
+    address,
+    size,
+    objectFile
+  };
+}
+
+function escapeHtml(text) {
+  return String(text || '').replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] || ch));
+}
+/**
  * Open a webview that lists Arduino examples from:
  * - Platform path detected via `compile --show-properties` (runtime.platform.path/build.board.platform.path)
  * - Libraries listed in sketch.yaml, mapped via compile_commands.json include paths
@@ -3726,5 +4379,3 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
   } catch { }
   return '';
 }
-
-

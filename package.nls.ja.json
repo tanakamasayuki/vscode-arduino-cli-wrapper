@@ -34,5 +34,6 @@
   "config.lint.m5gfxIncludes.description": "include 順チェックで M5GFX 系として扱うヘッダーファイル一覧",
   "config.lint.fsIncludes.description": "include 順チェックで FS 系として扱うヘッダーファイル一覧",
   "view.arduinoCli": "Arduino CLI",
-  "cmd.buildCheck": "Arduino CLI: ビルドチェック"
+  "cmd.buildCheck": "Arduino CLI: ビルドチェック",
+  "cmd.inspect": "スケッチインスペクターを開く"
 }

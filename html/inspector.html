@@ -1,0 +1,413 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inspector</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; margin: 16px; line-height: 1.5; }
+    h1 { margin: 0 0 12px; font-size: 1.4rem; }
+    .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+    label { display: flex; flex-direction: column; font-size: 0.85rem; min-width: 180px; }
+    select { padding: 6px 8px; font-size: 0.95rem; }
+    button { padding: 6px 14px; font-size: 0.95rem; cursor: pointer; }
+    .status { min-width: 160px; font-size: 0.9rem; opacity: 0.8; }
+    .tabs { border-top: 1px solid rgba(128,128,128,0.4); }
+    .tab-bar { display: flex; gap: 6px; padding: 10px 0; }
+    .tab-bar button { border: 1px solid rgba(128,128,128,0.4); background: transparent; border-radius: 4px; padding: 6px 12px; }
+    .tab-bar button.active { background: rgba(128,128,128,0.15); }
+    .tab { display: none; }
+    .tab.active { display: block; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 0.9rem; }
+    th, td { border: 1px solid rgba(128,128,128,0.3); padding: 6px 8px; text-align: left; }
+    th { background: rgba(128,128,128,0.15); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
+    pre { background: rgba(128,128,128,0.12); padding: 10px; overflow-x: auto; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 6px; }
+    .pill.warn { background: rgba(255,193,7,0.2); color: #b07a00; }
+    .pill.err { background: rgba(220,53,69,0.2); color: #a11a2b; }
+    .flex-row { display: flex; gap: 24px; flex-wrap: wrap; }
+    .box { flex: 1 1 240px; border: 1px solid rgba(128,128,128,0.3); border-radius: 6px; padding: 12px; }
+    .box h2 { margin: 0 0 8px; font-size: 1rem; }
+    .file-actions { display: flex; gap: 8px; margin: 6px 0; align-items: center; }
+    .file-content { max-height: 360px; overflow: auto; border: 1px solid rgba(128,128,128,0.3); padding: 8px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Sketch Inspector</h1>
+  <div class="controls">
+    <label>
+      <span id="labelSketch">Sketch</span>
+      <select id="sketchSelect"></select>
+    </label>
+    <label>
+      <span id="labelProfile">Profile</span>
+      <select id="profileSelect"></select>
+    </label>
+    <button id="analyzeBtn">Analyze</button>
+    <span id="status" class="status">Idle</span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab-bar">
+      <button data-tab="summary" class="active">Summary</button>
+      <button data-tab="diagnostics">Diagnostics</button>
+      <button data-tab="map">Map</button>
+      <button data-tab="libraries">Libraries</button>
+      <button data-tab="build">Build</button>
+      <button data-tab="files">Files</button>
+      <button data-tab="raw">Raw JSON</button>
+    </div>
+    <div id="tab-summary" class="tab active">
+      <div id="summaryContent"></div>
+    </div>
+    <div id="tab-diagnostics" class="tab">
+      <div id="diagnosticsContent"></div>
+    </div>
+    <div id="tab-map" class="tab">
+      <div id="mapContent"></div>
+    </div>
+    <div id="tab-libraries" class="tab">
+      <div id="librariesContent"></div>
+    </div>
+    <div id="tab-build" class="tab">
+      <div id="buildPropsContent"></div>
+    </div>
+    <div id="tab-files" class="tab">
+      <div id="filesContent"></div>
+    </div>
+    <div id="tab-raw" class="tab">
+      <pre id="rawJson" class="mono"></pre>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const vscode = acquireVsCodeApi();
+      const state = {
+        strings: {},
+        sketches: [],
+        files: {},
+        currentAnalysis: null,
+        analysisRequestId: 0
+      };
+
+      const titleEl = document.getElementById('title');
+      const sketchSelect = document.getElementById('sketchSelect');
+      const profileSelect = document.getElementById('profileSelect');
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      const statusEl = document.getElementById('status');
+      const summaryContent = document.getElementById('summaryContent');
+      const diagnosticsContent = document.getElementById('diagnosticsContent');
+      const mapContent = document.getElementById('mapContent');
+      const librariesContent = document.getElementById('librariesContent');
+      const buildPropsContent = document.getElementById('buildPropsContent');
+      const filesContent = document.getElementById('filesContent');
+      const rawJsonEl = document.getElementById('rawJson');
+      const tabButtons = Array.from(document.querySelectorAll('.tab-bar button'));
+      const tabs = {
+        summary: document.getElementById('tab-summary'),
+        diagnostics: document.getElementById('tab-diagnostics'),
+        map: document.getElementById('tab-map'),
+        libraries: document.getElementById('tab-libraries'),
+        build: document.getElementById('tab-build'),
+        files: document.getElementById('tab-files'),
+        raw: document.getElementById('tab-raw')
+      };
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function setStrings(strings) {
+        state.strings = strings || {};
+        if (strings.inspectorPanelTitle) titleEl.textContent = strings.inspectorPanelTitle;
+        if (strings.inspectorSelectSketch) document.getElementById('labelSketch').textContent = strings.inspectorSelectSketch;
+        if (strings.inspectorSelectProfile) document.getElementById('labelProfile').textContent = strings.inspectorSelectProfile;
+        if (strings.inspectorStatusIdle) setStatus(strings.inspectorStatusIdle);
+        if (strings.inspectorRunButton) analyzeBtn.textContent = strings.inspectorRunButton;
+        if (strings.inspectorTabSummary) tabButtons[0].textContent = strings.inspectorTabSummary;
+        if (strings.inspectorTabDiagnostics) tabButtons[1].textContent = strings.inspectorTabDiagnostics;
+        if (strings.inspectorTabMap) tabButtons[2].textContent = strings.inspectorTabMap;
+        if (strings.inspectorTabLibraries) tabButtons[3].textContent = strings.inspectorTabLibraries;
+        if (strings.inspectorTabBuildProps) tabButtons[4].textContent = strings.inspectorTabBuildProps;
+        if (strings.inspectorTabPartitions) tabButtons[5].textContent = strings.inspectorTabPartitions + ' / ' + strings.inspectorTabSdkconfig;
+        if (strings.inspectorTabRawJson) tabButtons[6].textContent = strings.inspectorTabRawJson;
+      }
+
+      function populateSketches(sketches, context) {
+        state.sketches = sketches || [];
+        sketchSelect.innerHTML = '';
+        if (!state.sketches.length) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = state.strings.inspectorStatusNoSketch || 'No sketches';
+          sketchSelect.appendChild(opt);
+          sketchSelect.disabled = true;
+          setStatus(state.strings.inspectorStatusNoSketch || 'No sketches detected.');
+          return;
+        }
+        sketchSelect.disabled = false;
+
+        for (const item of state.sketches) {
+          const opt = document.createElement('option');
+          opt.value = item.sketchDir;
+          const label = item.label;
+          opt.textContent = label;
+          if (item.relative && item.relative !== item.sketchDir) {
+            opt.title = item.relative;
+          }
+          sketchSelect.appendChild(opt);
+        }
+
+        const prefer = context && context.sketchDir ? context.sketchDir : '';
+        if (prefer && state.sketches.some(s => s.sketchDir === prefer)) {
+          sketchSelect.value = prefer;
+        } else {
+          sketchSelect.selectedIndex = 0;
+        }
+        updateProfileSelect(context && context.profile ? context.profile : '');
+      }
+
+      function updateProfileSelect(preferProfile) {
+        const sketch = state.sketches.find(s => s.sketchDir === sketchSelect.value);
+        profileSelect.innerHTML = '';
+        const noneOption = document.createElement('option');
+        noneOption.value = '';
+        noneOption.textContent = state.strings.inspectorProfileNone || 'Use current FQBN';
+        profileSelect.appendChild(noneOption);
+        if (sketch && sketch.profiles && sketch.profiles.length) {
+          for (const prof of sketch.profiles) {
+            const opt = document.createElement('option');
+            opt.value = prof;
+            opt.textContent = prof;
+            profileSelect.appendChild(opt);
+          }
+          if (preferProfile && sketch.profiles.includes(preferProfile)) {
+            profileSelect.value = preferProfile;
+          } else if (sketch.defaultProfile && sketch.profiles.includes(sketch.defaultProfile)) {
+            profileSelect.value = sketch.defaultProfile;
+          }
+        }
+      }
+
+      function requestAnalysis() {
+        const sketchDir = sketchSelect.value;
+        if (!sketchDir) {
+          setStatus(state.strings.inspectorNoSelectionWarn || 'Select a sketch first.');
+          return;
+        }
+        const requestId = Date.now();
+        state.analysisRequestId = requestId;
+        vscode.postMessage({
+          type: 'requestAnalysis',
+          sketchDir,
+          profile: profileSelect.value,
+          requestId
+        });
+      }
+
+      function switchTab(tabId) {
+        tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+        Object.keys(tabs).forEach(key => {
+          tabs[key].classList.toggle('active', key === tabId);
+        });
+      }
+
+      function renderSummary(payload) {
+        const summary = payload.summary || {};
+        const sections = payload.sections || [];
+        const mapWarnings = (payload.map && payload.map.warnings) || [];
+        const libs = payload.libraries || [];
+        const str = state.strings;
+        const warnPill = summary.warnings ? `<span class="pill warn">${str.inspectorSummaryWarnings || 'Warnings'}: ${summary.warnings}</span>` : '';
+        const errPill = summary.errors ? `<span class="pill err">${str.inspectorSummaryErrors || 'Errors'}: ${summary.errors}</span>` : '';
+        const entries = [
+          { label: str.inspectorSummarySketch || 'Sketch', value: summary.relativeSketch || summary.sketchDir || '' },
+          { label: str.inspectorSummaryProfile || 'Profile', value: summary.usedProfile || summary.profile || str.inspectorProfileNone || '' },
+          { label: 'FQBN', value: summary.usedFqbn || '-' },
+          { label: str.inspectorSummaryBuildPath || 'Build path', value: summary.buildPath || '-' },
+          { label: 'Exit', value: typeof summary.exitCode === 'number' ? summary.exitCode : '' }
+        ];
+        const sectionRows = sections.map((s) => `<tr><td>${s.name}</td><td class="mono">${s.size.toLocaleString()}</td><td class="mono">${s.max ? s.max.toLocaleString() : '-'}</td></tr>`).join('');
+        summaryContent.innerHTML = `
+          <div class="flex-row">
+            <div class="box">
+              <h2>${str.inspectorTabSummary || 'Summary'} ${warnPill} ${errPill}</h2>
+              <dl>
+                ${entries.map(item => `<dt>${item.label}</dt><dd class="mono">${item.value || '-'}</dd>`).join('')}
+              </dl>
+            </div>
+            <div class="box">
+              <h2>${str.inspectorSectionsHeaderName || 'Section usage'}</h2>
+              <table>
+                <thead><tr><th>${str.inspectorSectionsHeaderName || 'Section'}</th><th>${str.inspectorSectionsHeaderUsed || 'Used'}</th><th>${str.inspectorSectionsHeaderMax || 'Max'}</th></tr></thead>
+                <tbody>${sectionRows || `<tr><td colspan="3">${str.inspectorTableNoData || 'No data'}</td></tr>`}</tbody>
+              </table>
+            </div>
+          </div>
+          ${mapWarnings.length ? `<p>${mapWarnings.map(w => `?? ${w}`).join('<br />')}</p>` : ''}
+        `;
+      }
+
+      function renderDiagnostics(diagnostics) {
+        const rows = diagnostics && diagnostics.length ? diagnostics.map((d) => {
+          const loc = d.file ? `${d.relative || d.file}${d.line ? `:${d.line}` : ''}` : '';
+          return `<tr><td>${d.severity}</td><td>${escapeHtml(d.message)}</td><td class="mono">${escapeHtml(loc)}</td></tr>`;
+        }).join('') : `<tr><td colspan="3">${state.strings.inspectorTableNoData || 'No data'}</td></tr>`;
+        diagnosticsContent.innerHTML = `
+          <table>
+            <thead><tr><th>${state.strings.inspectorDiagnosticsHeaderSeverity || 'Severity'}</th><th>${state.strings.inspectorDiagnosticsHeaderMessage || 'Message'}</th><th>${state.strings.inspectorDiagnosticsHeaderLocation || 'Location'}</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+
+      function renderMap(mapPayload) {
+        const sections = mapPayload.sections || [];
+        const symbols = mapPayload.topSymbols || [];
+        const objects = mapPayload.topObjects || [];
+        const sectionRows = sections.map((s) => `<tr><td>${escapeHtml(s.name)}</td><td class="mono">${s.size.toLocaleString()}</td><td>${s.count}</td></tr>`).join('');
+        const symbolRows = symbols.map((s) => `<tr><td>${escapeHtml(s.symbol)}</td><td class="mono">${s.size.toLocaleString()}</td><td>${escapeHtml(s.section)}</td><td class="mono">${escapeHtml(s.object)}</td></tr>`).join('');
+        const objectRows = objects.map((o) => `<tr><td>${escapeHtml(o.object)}</td><td class="mono">${o.size.toLocaleString()}</td><td>${o.count}</td></tr>`).join('');
+        mapContent.innerHTML = `
+          <h2>${state.strings.inspectorSectionsHeaderName || 'Sections'}</h2>
+          <table>
+            <thead><tr><th>${state.strings.inspectorSectionsHeaderName || 'Section'}</th><th>${state.strings.inspectorSectionsHeaderUsed || 'Used'}</th><th>#</th></tr></thead>
+            <tbody>${sectionRows || `<tr><td colspan="3">${state.strings.inspectorTableNoData || 'No data'}</td></tr>`}</tbody>
+          </table>
+          <h2>${state.strings.inspectorTabSymbols || 'Top Symbols'}</h2>
+          <table>
+            <thead><tr><th>${state.strings.inspectorMapHeaderSymbol || 'Symbol'}</th><th>${state.strings.inspectorMapHeaderSize || 'Size'}</th><th>${state.strings.inspectorMapHeaderSection || 'Section'}</th><th>${state.strings.inspectorMapHeaderObject || 'Object'}</th></tr></thead>
+            <tbody>${symbolRows || `<tr><td colspan="4">${state.strings.inspectorTableNoData || 'No data'}</td></tr>`}</tbody>
+          </table>
+          <h2>${state.strings.inspectorMapHeaderObject || 'Objects'}</h2>
+          <table>
+            <thead><tr><th>${state.strings.inspectorMapHeaderObject || 'Object'}</th><th>${state.strings.inspectorMapHeaderSize || 'Size'}</th><th>#</th></tr></thead>
+            <tbody>${objectRows || `<tr><td colspan="3">${state.strings.inspectorTableNoData || 'No data'}</td></tr>`}</tbody>
+          </table>
+        `;
+      }
+
+      function renderLibraries(libraries) {
+        const rows = libraries && libraries.length ? libraries.map((lib) => `<tr><td>${escapeHtml(lib.name)}</td><td>${escapeHtml(lib.version)}</td><td class="mono">${escapeHtml(lib.location || lib.installDir || '')}</td></tr>`).join('') : `<tr><td colspan="3">${state.strings.inspectorTableNoData || 'No data'}</td></tr>`;
+        librariesContent.innerHTML = `
+          <table>
+            <thead><tr><th>${state.strings.inspectorLibrariesHeaderName || 'Library'}</th><th>${state.strings.inspectorLibrariesHeaderVersion || 'Version'}</th><th>${state.strings.inspectorLibrariesHeaderLocation || 'Source'}</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+
+      function renderBuildProps(buildProps) {
+        const rows = buildProps && buildProps.length ? buildProps.map((p) => `<tr><td>${escapeHtml(p.key)}</td><td class="mono">${escapeHtml(p.value)}</td></tr>`).join('') : `<tr><td colspan="2">${state.strings.inspectorTableNoData || 'No data'}</td></tr>`;
+        buildPropsContent.innerHTML = `
+          <table>
+            <thead><tr><th>${state.strings.inspectorBuildPropsHeaderKey || 'Key'}</th><th>${state.strings.inspectorBuildPropsHeaderValue || 'Value'}</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+
+      function renderFiles(files) {
+        state.files = files || {};
+        const entries = Object.entries(files || {});
+        if (!entries.length) {
+          filesContent.innerHTML = `<p>${state.strings.inspectorTableNoData || 'No data'}</p>`;
+          return;
+        }
+        const rows = entries.map(([key, info]) => {
+          const label = key === 'partitions' ? 'partitions.csv' : key === 'sdkconfig' ? 'sdkconfig' : key;
+          const viewBtn = key === 'map' ? `<button data-file="${key}" data-action="open">${state.strings.inspectorOpenInEditor || 'Open in Editor'}</button>` : `<button data-file="${key}" data-action="load">${state.strings.open || 'Open'}</button>`;
+          return `<div class="file-actions"><span class="mono">${label}</span><span class="mono">${(info.size || 0).toLocaleString()} bytes</span>${viewBtn}</div><pre id="file-${key}" class="file-content hidden"></pre>`;
+        }).join('');
+        filesContent.innerHTML = rows;
+      }
+
+      function handleFileContent(message) {
+        const key = message.key;
+        const pre = document.getElementById(`file-${key}`);
+        if (!pre) return;
+        if (message.error) {
+          pre.textContent = message.error;
+          pre.classList.remove('hidden');
+          return;
+        }
+        pre.textContent = message.content || '';
+        pre.classList.remove('hidden');
+      }
+
+      function escapeHtml(text) {
+        return String(text || '').replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] || ch));
+      }
+
+      sketchSelect.addEventListener('change', () => updateProfileSelect(''));
+      analyzeBtn.addEventListener('click', () => requestAnalysis());
+      tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+      filesContent.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const key = target.getAttribute('data-file');
+        const action = target.getAttribute('data-action');
+        if (!key || !action) return;
+        if (action === 'load') {
+          vscode.postMessage({ type: 'requestFile', key });
+        } else if (action === 'open') {
+          vscode.postMessage({ type: 'openFile', key });
+        }
+      });
+
+      window.addEventListener('message', (event) => {
+        const msg = event.data || {};
+        switch (msg.type) {
+          case 'init':
+            setStrings(msg.strings || {});
+            populateSketches(msg.sketches || [], msg.context || {});
+            break;
+          case 'initError':
+            setStatus(msg.message || 'Init error');
+            break;
+          case 'analysisStatus':
+            if (msg.status === 'start') setStatus(state.strings.inspectorStatusRunning || 'Analyzing�c');
+            break;
+          case 'analysisDenied':
+            setStatus(msg.message || 'Busy');
+            break;
+          case 'analysisResult':
+            if (msg.requestId && msg.requestId !== state.analysisRequestId) return;
+            if (msg.success) {
+              setStatus(msg.message || state.strings.inspectorAnalysisSuccess || 'Done');
+              renderSummary(msg);
+              renderDiagnostics(msg.diagnostics || []);
+              renderMap(msg.map || {});
+              renderLibraries(msg.libraries || []);
+              renderBuildProps(msg.buildProps || []);
+              renderFiles(msg.files || {});
+              rawJsonEl.textContent = msg.rawJson || '';
+            } else {
+              setStatus(msg.message || state.strings.inspectorAnalysisFailed || 'Failed');
+            }
+            break;
+          case 'fileContent':
+            handleFileContent(msg);
+            break;
+        }
+      });
+
+      vscode.postMessage({ type: 'ready' });
+    })();
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
