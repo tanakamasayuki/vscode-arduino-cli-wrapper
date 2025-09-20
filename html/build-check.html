@@ -1,0 +1,316 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Build Check Report</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; margin: 16px; line-height: 1.5; }
+    h1 { margin: 0 0 16px; font-size: 1.4rem; }
+    h2 { margin: 24px 0 12px; font-size: 1.1rem; }
+    .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px; border: 1px solid rgba(128,128,128,0.3); border-radius: 8px; }
+    .totals { display: flex; gap: 16px; flex-wrap: wrap; }
+    .metric { min-width: 110px; }
+    .metric .label { display: block; font-size: 0.8rem; opacity: 0.7; }
+    .metric .value { font-size: 1.2rem; font-weight: 600; }
+    .meta { font-size: 0.85rem; opacity: 0.8; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { border: 1px solid rgba(128,128,128,0.3); padding: 6px 8px; text-align: left; }
+    th { background: rgba(128,128,128,0.15); font-weight: 600; }
+    tr.success { background: rgba(46, 204, 113, 0.12); }
+    tr.failure { background: rgba(231, 76, 60, 0.12); }
+    tr.message-row td { font-style: italic; font-size: 0.85rem; opacity: 0.85; }
+    ul { margin: 0; padding-left: 20px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
+    .small { font-size: 0.85rem; opacity: 0.85; }
+    .no-data { font-style: italic; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Build Check Report</h1>
+  <div class="summary">
+    <div class="totals">
+      <div class="metric">
+        <span class="label" id="labelTotal">Total</span>
+        <span class="value" id="totalCount">0</span>
+      </div>
+      <div class="metric">
+        <span class="label" id="labelSuccess">Success</span>
+        <span class="value" id="successCount">0</span>
+      </div>
+      <div class="metric">
+        <span class="label" id="labelFailed">Failed</span>
+        <span class="value" id="failedCount">0</span>
+      </div>
+      <div class="metric">
+        <span class="label" id="labelWarnings">Warnings</span>
+        <span class="value" id="warningsCount">0</span>
+      </div>
+      <div class="metric">
+        <span class="label" id="labelErrors">Errors</span>
+        <span class="value" id="errorsCount">0</span>
+      </div>
+    </div>
+    <div class="meta" id="generatedAt">&nbsp;</div>
+  </div>
+
+  <section>
+    <h2 id="resultsHeading">Per Profile</h2>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th id="colSketch">Sketch</th>
+          <th id="colProfile">Profile</th>
+          <th id="colResult">Result</th>
+          <th id="colWarnings">Warnings</th>
+          <th id="colErrors">Errors</th>
+          <th id="colPlatform">Platform</th>
+          <th id="colLibraries">Libraries</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 id="platformsHeading">Platforms</h2>
+    <ul id="platformsList" class="small"></ul>
+  </section>
+
+  <section>
+    <h2 id="librariesHeading">Libraries</h2>
+    <table id="librariesTable">
+      <thead>
+        <tr>
+          <th id="libName">Library</th>
+          <th id="libVersion">Version</th>
+          <th id="libSource">Source</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <script>
+    (function() {
+      const vscode = acquireVsCodeApi();
+      const state = {
+        strings: {},
+        report: { totals: { total: 0, success: 0, failed: 0, warnings: 0, errors: 0 }, results: [], generatedAt: '' },
+        locale: 'en'
+      };
+
+      const titleEl = document.getElementById('title');
+      const totalEl = document.getElementById('totalCount');
+      const successEl = document.getElementById('successCount');
+      const failedEl = document.getElementById('failedCount');
+      const warningsEl = document.getElementById('warningsCount');
+      const errorsEl = document.getElementById('errorsCount');
+      const generatedEl = document.getElementById('generatedAt');
+      const resultsTableBody = document.querySelector('#resultsTable tbody');
+      const platformsList = document.getElementById('platformsList');
+      const librariesBody = document.querySelector('#librariesTable tbody');
+
+      vscode.postMessage({ type: 'ready' });
+
+      window.addEventListener('message', (event) => {
+        const msg = event.data;
+        if (!msg || msg.type !== 'report') return;
+        const payload = msg.payload || {};
+        state.strings = payload.strings || {};
+        state.report = payload.report || state.report;
+        state.locale = payload.locale || state.locale;
+        render();
+      });
+
+      function render() {
+        applyStrings();
+        renderSummary();
+        renderResults();
+        renderPlatforms();
+        renderLibraries();
+      }
+
+      function applyStrings() {
+        titleEl.textContent = state.strings.buildReportTitle || 'Build Check Report';
+        document.getElementById('resultsHeading').textContent = state.strings.buildReportResultsHeading || 'Per Profile';
+        document.getElementById('platformsHeading').textContent = state.strings.buildReportPlatformsHeading || 'Platforms';
+        document.getElementById('librariesHeading').textContent = state.strings.buildReportLibrariesHeading || 'Libraries';
+        document.getElementById('colSketch').textContent = state.strings.buildReportTableSketch || 'Sketch';
+        document.getElementById('colProfile').textContent = state.strings.buildReportTableProfile || 'Profile';
+        document.getElementById('colResult').textContent = state.strings.buildReportTableResult || 'Result';
+        document.getElementById('colWarnings').textContent = state.strings.buildReportTableWarnings || 'Warnings';
+        document.getElementById('colErrors').textContent = state.strings.buildReportTableErrors || 'Errors';
+        document.getElementById('colPlatform').textContent = state.strings.buildReportTablePlatform || 'Platform';
+        document.getElementById('colLibraries').textContent = state.strings.buildReportTableLibraries || 'Libraries';
+        document.getElementById('labelTotal').textContent = state.strings.buildReportTotalsHeading || 'Total';
+        document.getElementById('labelSuccess').textContent = state.strings.buildCheckStatusSuccess || 'Success';
+        document.getElementById('labelFailed').textContent = state.strings.buildCheckStatusFailed || 'Failed';
+        document.getElementById('labelWarnings').textContent = state.strings.buildReportSummaryWarnings || 'Warnings';
+        document.getElementById('labelErrors').textContent = state.strings.buildReportSummaryErrors || 'Errors';
+        document.getElementById('libName').textContent = state.strings.buildReportLibraryColumnName || 'Library';
+        document.getElementById('libVersion').textContent = state.strings.buildReportLibraryColumnVersion || 'Version';
+        document.getElementById('libSource').textContent = state.strings.buildReportLibraryColumnSource || 'Source';
+      }
+
+      function renderSummary() {
+        const totals = state.report.totals || { total: 0, success: 0, failed: 0, warnings: 0, errors: 0 };
+        totalEl.textContent = totals.total;
+        successEl.textContent = totals.success;
+        failedEl.textContent = totals.failed;
+        warningsEl.textContent = totals.warnings;
+        errorsEl.textContent = totals.errors;
+        if (state.report.generatedAt) {
+          const date = new Date(state.report.generatedAt);
+          const formatted = isNaN(date.getTime()) ? state.report.generatedAt : date.toLocaleString(state.locale || undefined);
+          generatedEl.textContent = `${state.strings.buildReportGeneratedAt || 'Generated at'}: ${formatted}`;
+        } else {
+          generatedEl.textContent = '';
+        }
+      }
+
+      function renderResults() {
+        const results = Array.isArray(state.report.results) ? state.report.results : [];
+        resultsTableBody.innerHTML = '';
+        if (results.length === 0) {
+          const row = document.createElement('tr');
+          const cell = document.createElement('td');
+          cell.colSpan = 7;
+          cell.className = 'no-data';
+          cell.textContent = state.strings.buildReportNoData || 'No build results.';
+          row.appendChild(cell);
+          resultsTableBody.appendChild(row);
+          return;
+        }
+        for (const res of results) {
+          const row = document.createElement('tr');
+          row.className = res.success ? 'success' : 'failure';
+          row.innerHTML = [
+            escapeHtml(res.sketchLabel || ''),
+            escapeHtml(res.profile || ''),
+            escapeHtml(res.success ? (state.strings.buildReportResultSuccess || 'Success') : (state.strings.buildReportResultFailure || 'Failed')),
+            String(res.warnings ?? 0),
+            String(res.errors ?? 0),
+            escapeHtml(res.platformLabel || ''),
+            formatLibrariesCell(res.libraries)
+          ].map((value) => `<td>${value}</td>`).join('');
+          resultsTableBody.appendChild(row);
+
+          if (res.message) {
+            const messageRow = document.createElement('tr');
+            messageRow.className = 'message-row';
+            const cell = document.createElement('td');
+            cell.colSpan = 7;
+            cell.textContent = res.message;
+            messageRow.appendChild(cell);
+            resultsTableBody.appendChild(messageRow);
+          }
+        }
+      }
+
+      function formatLibrariesCell(list) {
+        if (!Array.isArray(list) || list.length === 0) return '—';
+        const parts = list.map((lib) => {
+          if (!lib) return '';
+          const name = lib.name || '';
+          const version = lib.version ? ` @ ${lib.version}` : '';
+          return escapeHtml(`${name}${version}`);
+        }).filter(Boolean);
+        return parts.length ? parts.join('<br/>') : '—';
+      }
+
+      function renderPlatforms() {
+        const results = Array.isArray(state.report.results) ? state.report.results : [];
+        platformsList.innerHTML = '';
+        const entries = [];
+        const map = new Map();
+        for (const res of results) {
+          const plat = res.platform || {};
+          const build = plat.build || {};
+          const board = plat.board || {};
+          if (build.id) {
+            const key = `build:${build.id}@${build.version || ''}`;
+            if (!map.has(key)) {
+              map.set(key, `${escapeHtml(build.id)}${build.version ? escapeHtml(' @ ' + build.version) : ''}`);
+            }
+          }
+          if (board.id && (!build.id || board.id !== build.id || board.version !== build.version)) {
+            const key = `board:${board.id}@${board.version || ''}`;
+            if (!map.has(key)) {
+              map.set(key, `${escapeHtml(board.id)}${board.version ? escapeHtml(' @ ' + board.version) : ''}`);
+            }
+          }
+        }
+        map.forEach((value) => entries.push(value));
+        entries.sort((a, b) => a.localeCompare(b, state.locale || undefined, { sensitivity: 'base' }));
+        if (entries.length === 0) {
+          const li = document.createElement('li');
+          li.className = 'no-data';
+          li.textContent = state.strings.buildReportNoData || 'No build results.';
+          platformsList.appendChild(li);
+          return;
+        }
+        for (const entry of entries) {
+          const li = document.createElement('li');
+          li.innerHTML = entry;
+          platformsList.appendChild(li);
+        }
+      }
+
+      function renderLibraries() {
+        const results = Array.isArray(state.report.results) ? state.report.results : [];
+        librariesBody.innerHTML = '';
+        const libMap = new Map();
+        for (const res of results) {
+          const libs = Array.isArray(res.libraries) ? res.libraries : [];
+          for (const lib of libs) {
+            if (!lib || !lib.name) continue;
+            const version = lib.version || '';
+            const key = `${lib.name}@@${version}`;
+            if (!libMap.has(key)) {
+              libMap.set(key, { name: lib.name, version, sources: new Set() });
+            }
+            const entry = libMap.get(key);
+            if (lib.location) entry.sources.add(lib.location);
+          }
+        }
+        const rows = Array.from(libMap.values());
+        if (rows.length === 0) {
+          const row = document.createElement('tr');
+          const cell = document.createElement('td');
+          cell.colSpan = 3;
+          cell.className = 'no-data';
+          cell.textContent = state.strings.buildReportNoData || 'No build results.';
+          row.appendChild(cell);
+          librariesBody.appendChild(row);
+          return;
+        }
+        rows.sort((a, b) => a.name.localeCompare(b.name, state.locale || undefined, { sensitivity: 'base' }));
+        for (const rowData of rows) {
+          const row = document.createElement('tr');
+          const sources = Array.from(rowData.sources.values()).join(', ');
+          const sourceDisplay = sources ? escapeHtml(sources) : '—';
+          row.innerHTML = [
+            escapeHtml(rowData.name),
+            escapeHtml(rowData.version || ''),
+            sourceDisplay
+          ].map((value) => `<td>${value}</td>`).join('');
+          librariesBody.appendChild(row);
+        }
+      }
+
+      function escapeHtml(input) {
+        return String(input || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+    })();
+  </script>
+</body>
+</html>
+
+
+
+

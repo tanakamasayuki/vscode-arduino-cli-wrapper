@@ -151,6 +151,28 @@ const MSG = {
     inspectorMapParseFailed: 'Failed to analyze map file: {msg}',
     inspectorMapNoSymbols: 'No symbols parsed from the map file.',
     inspectorOpenInEditor: 'Open in Editor',
+    buildReportTitle: 'Build Check Report',
+    buildReportSummaryHeading: 'Summary',
+    buildReportTotalsHeading: 'Totals',
+    buildReportGeneratedAt: 'Generated at',
+    buildReportResultsHeading: 'Per Profile',
+    buildReportTableSketch: 'Sketch',
+    buildReportTableProfile: 'Profile',
+    buildReportTableResult: 'Result',
+    buildReportTableWarnings: 'Warnings',
+    buildReportTableErrors: 'Errors',
+    buildReportTablePlatform: 'Platform',
+    buildReportTableLibraries: 'Libraries',
+    buildReportNoData: 'No build results.',
+    buildReportResultSuccess: 'Success',
+    buildReportResultFailure: 'Failed',
+    buildReportPlatformsHeading: 'Platforms',
+    buildReportLibrariesHeading: 'Libraries',
+    buildReportLibraryColumnName: 'Library',
+    buildReportLibraryColumnVersion: 'Version',
+    buildReportLibraryColumnSource: 'Source',
+    buildReportSummaryWarnings: 'Warnings',
+    buildReportSummaryErrors: 'Errors',
   },
   ja: {
     missingCli: 'Arduino CLI が見つかりませんでした: {exe}',
@@ -235,6 +257,28 @@ const MSG = {
     inspectorMapParseFailed: 'マップファイルの分析に失敗しました: {msg}',
     inspectorMapNoSymbols: 'マップファイルからシンボルを解析できませんでした。',
     inspectorOpenInEditor: 'エディターで開く',
+    buildReportTitle: 'ビルドチェックレポート',
+    buildReportSummaryHeading: 'サマリー',
+    buildReportTotalsHeading: '集計',
+    buildReportGeneratedAt: '作成時刻',
+    buildReportResultsHeading: 'スケッチ/プロファイル別',
+    buildReportTableSketch: 'スケッチ',
+    buildReportTableProfile: 'プロファイル',
+    buildReportTableResult: '結果',
+    buildReportTableWarnings: '警告',
+    buildReportTableErrors: 'エラー',
+    buildReportTablePlatform: 'プラットフォーム',
+    buildReportTableLibraries: 'ライブラリ',
+    buildReportNoData: '結果がありません。',
+    buildReportResultSuccess: '成功',
+    buildReportResultFailure: '失敗',
+    buildReportPlatformsHeading: 'プラットフォーム',
+    buildReportLibrariesHeading: 'ライブラリ',
+    buildReportLibraryColumnName: 'ライブラリ',
+    buildReportLibraryColumnVersion: 'バージョン',
+    buildReportLibraryColumnSource: '取得元',
+    buildReportSummaryWarnings: '警告',
+    buildReportSummaryErrors: 'エラー',
     defaultProfileSet: '[sketch.yaml] default_profile を設定: {name}',
     setFqbnPickTitle: 'FQBN を選択してください',
     setFqbnManual: 'FQBN を手入力…',
@@ -2247,6 +2291,7 @@ async function commandBuildCheck() {
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const totals = { total: 0, success: 0, failed: 0, warnings: 0, errors: 0 };
+  const report = { totals, results: [], generatedAt: '' };
 
   for (const entry of sketches) {
     const { sketchDir, uri, folder } = entry;
@@ -2277,41 +2322,73 @@ async function commandBuildCheck() {
     for (const profile of profiles) {
       totals.total += 1;
       channel.appendLine(t('buildCheckCompileStart', { sketch: sketchLabel, profile }));
+
+      const detail = {
+        sketchLabel,
+        sketchDir,
+        profile,
+        success: false,
+        warnings: 0,
+        errors: 0,
+        buildPath: '',
+        platform: formatBuildReportPlatform(null),
+        platformLabel: '',
+        libraries: [],
+        message: '',
+        diagnostics: [],
+        exitCode: null,
+        compilerOut: '',
+        compilerErr: ''
+      };
+      let detailPushed = false;
       let runResult;
       try {
         runResult = await runBuildCheckCompile(exe, sketchDir, profile);
       } catch (err) {
         totals.failed += 1;
         const codeText = err && typeof err.code !== 'undefined' ? String(err.code) : err && err.message ? err.message : 'spawn error';
-        channel.appendLine(t('buildCheckCliError', { sketch: sketchLabel, profile, code: codeText }));
+        const errorMsg = t('buildCheckCliError', { sketch: sketchLabel, profile, code: codeText });
+        channel.appendLine(errorMsg);
+        detail.message = errorMsg;
+        detail.exitCode = typeof err?.code === 'number' ? err.code : null;
+        report.results.push(detail);
+        detailPushed = true;
         continue;
       }
 
       const { code, stdout, stderr } = runResult;
+      detail.exitCode = typeof code === 'number' ? code : null;
+      const stderrNormalized = typeof stderr === 'string' ? stderr.replace(/\r\n/g, '\n').trim() : '';
       const parsed = parseBuildCheckJson(stdout);
       if (!parsed.data) {
         totals.failed += 1;
-        channel.appendLine(t('buildCheckParseError', { sketch: sketchLabel, profile, msg: parsed.error || 'unknown' }));
+        const parseMsg = t('buildCheckParseError', { sketch: sketchLabel, profile, msg: parsed.error || 'unknown' });
+        channel.appendLine(parseMsg);
+        detail.message = parseMsg;
         if (typeof code === 'number' && code !== 0) {
-          channel.appendLine(t('buildCheckCliError', { sketch: sketchLabel, profile, code: String(code) }));
+          const cliErrMsg = t('buildCheckCliError', { sketch: sketchLabel, profile, code: String(code) });
+          channel.appendLine(cliErrMsg);
+          detail.message = detail.message ? `${detail.message}\n${cliErrMsg}` : cliErrMsg;
         }
-        if (stderr && stderr.trim()) {
-          const stderrNormalized = stderr.replace(/\r\n/g, '\n').trim();
-          if (stderrNormalized) {
-            channel.append(stderrNormalized.endsWith('\n') ? stderrNormalized : stderrNormalized + '\n');
-          }
+        if (stderrNormalized) {
+          channel.append(stderrNormalized.endsWith('\n') ? stderrNormalized : `${stderrNormalized}\n`);
+          detail.message = detail.message ? `${detail.message}\n${stderrNormalized}` : stderrNormalized;
         }
+        report.results.push(detail);
+        detailPushed = true;
         continue;
       }
 
       const data = parsed.data;
       const success = !!data.success;
+      detail.success = success;
       if (success) totals.success += 1;
       else totals.failed += 1;
 
       const diagnostics = Array.isArray(data?.builder_result?.diagnostics)
         ? data.builder_result.diagnostics
         : [];
+      const diagRecords = diagnostics.map(formatInspectorDiagnostic);
       let warnCount = 0;
       let errCount = 0;
       for (const diag of diagnostics) {
@@ -2319,6 +2396,9 @@ async function commandBuildCheck() {
         if (severity === 'WARNING') warnCount += 1;
         else if (severity === 'ERROR') errCount += 1;
       }
+      detail.warnings = warnCount;
+      detail.errors = errCount;
+      detail.diagnostics = diagRecords;
       totals.warnings += warnCount;
       totals.errors += errCount;
 
@@ -2331,13 +2411,18 @@ async function commandBuildCheck() {
         errors: errCount,
       }));
 
+      const builder = data?.builder_result || {};
+      detail.buildPath = typeof builder.build_path === 'string' ? builder.build_path.trim() : '';
+      detail.platform = formatBuildReportPlatform(builder);
+      detail.platformLabel = formatBuildReportPlatformLabel(detail.platform);
+      detail.libraries = formatBuildReportLibraries(builder);
+      detail.compilerOut = typeof data.compiler_out === 'string' ? data.compiler_out : '';
+      detail.compilerErr = typeof data.compiler_err === 'string' ? data.compiler_err : '';
+
       if (success) {
         try {
           await ensureCompileCommandsSetting(sketchDir);
-          let buildPath = '';
-          if (data?.builder_result && typeof data.builder_result.build_path === 'string') {
-            buildPath = data.builder_result.build_path.trim();
-          }
+          let buildPath = detail.buildPath;
           if (!buildPath) {
             const detectArgs = ['compile', '--profile', profile, '--warnings=all', sketchDir];
             buildPath = await detectBuildPathForCompile(exe, [], detectArgs, sketchDir);
@@ -2345,6 +2430,7 @@ async function commandBuildCheck() {
           if (!buildPath) {
             channel.appendLine(t('compileCommandsBuildPathMissing'));
           } else {
+            detail.buildPath = buildPath;
             const count = await updateCompileCommandsFromBuild(sketchDir, buildPath);
             if (count > 0) {
               channel.appendLine(t('compileCommandsUpdated', { count }));
@@ -2359,15 +2445,24 @@ async function commandBuildCheck() {
         channel.appendLine(t('buildCheckCliError', { sketch: sketchLabel, profile, code: String(code) }));
       }
 
-      const compilerErr = typeof data.compiler_err === 'string' ? data.compiler_err.trim() : '';
+      const compilerErr = detail.compilerErr ? detail.compilerErr.trim() : '';
       if ((warnCount > 0 || errCount > 0 || !success) && compilerErr) {
         const normalized = compilerErr.replace(/\r\n/g, '\n');
-        channel.append(normalized.endsWith('\n') ? normalized : normalized + '\n');
-      } else if (!success && stderr && stderr.trim()) {
-        const stderrNormalized = stderr.replace(/\r\n/g, '\n').trim();
-        if (stderrNormalized) {
-          channel.append(stderrNormalized.endsWith('\n') ? stderrNormalized : stderrNormalized + '\n');
+        channel.append(normalized.endsWith('\n') ? normalized : `${normalized}\n`);
+        if (!success) {
+          detail.message = detail.message ? `${detail.message}\n${normalized}` : normalized;
         }
+      } else if (!success && stderrNormalized) {
+        channel.append(stderrNormalized.endsWith('\n') ? stderrNormalized : `${stderrNormalized}\n`);
+        detail.message = detail.message ? `${detail.message}\n${stderrNormalized}` : stderrNormalized;
+      }
+      if (!success && !detail.message) {
+        detail.message = statusLabel;
+      }
+
+      if (!detailPushed) {
+        report.results.push(detail);
+        detailPushed = true;
       }
     }
   }
@@ -2379,6 +2474,11 @@ async function commandBuildCheck() {
     warnings: totals.warnings,
     errors: totals.errors,
   }));
+
+  report.generatedAt = new Date().toISOString();
+  if (report.results.length > 0) {
+    openBuildCheckReport(report);
+  }
 }
 
 function parseBuildCheckJson(raw) {
@@ -3529,6 +3629,111 @@ function buildInspectorStrings() {
   return result;
 }
 
+function buildBuildReportStrings() {
+  const keys = [
+    'buildReportTitle',
+    'buildReportSummaryHeading',
+    'buildReportTotalsHeading',
+    'buildReportGeneratedAt',
+    'buildReportResultsHeading',
+    'buildReportTableSketch',
+    'buildReportTableProfile',
+    'buildReportTableResult',
+    'buildReportTableWarnings',
+    'buildReportTableErrors',
+    'buildReportTablePlatform',
+    'buildReportTableLibraries',
+    'buildReportNoData',
+    'buildReportResultSuccess',
+    'buildReportResultFailure',
+    'buildReportPlatformsHeading',
+    'buildReportLibrariesHeading',
+    'buildReportLibraryColumnName',
+    'buildReportLibraryColumnVersion',
+    'buildReportLibraryColumnSource',
+    'buildReportSummaryWarnings',
+    'buildReportSummaryErrors',
+    'buildCheckStatusSuccess',
+    'buildCheckStatusFailed',
+  ];
+  const result = {};
+  for (const key of keys) {
+    result[key] = t(key);
+  }
+  return result;
+}
+
+async function openBuildCheckReport(report) {
+  try {
+    const panel = vscode.window.createWebviewPanel(
+      'arduinoBuildReport',
+      t('buildReportTitle'),
+      vscode.ViewColumn.Active,
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
+    const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'build-check.html');
+    const html = await readTextFile(htmlUri);
+    panel.webview.html = html;
+
+    const payload = {
+      locale: _isJa ? 'ja' : 'en',
+      strings: buildBuildReportStrings(),
+      report,
+    };
+
+    panel.webview.onDidReceiveMessage((msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'ready') {
+        panel.webview.postMessage({ type: 'report', payload });
+      }
+    });
+  } catch (err) {
+    showError(err);
+  }
+}
+
+function formatBuildReportPlatform(builder) {
+  const normalize = (plat) => ({
+    id: plat && typeof plat.id === 'string' ? plat.id : '',
+    version: plat && typeof plat.version === 'string' ? plat.version : '',
+    packageUrl: plat && typeof plat.package_url === 'string' ? plat.package_url : '',
+  });
+  if (!builder || typeof builder !== 'object') {
+    return { build: normalize(null), board: normalize(null) };
+  }
+  return {
+    build: normalize(builder.build_platform),
+    board: normalize(builder.board_platform),
+  };
+}
+
+function formatBuildReportPlatformLabel(info) {
+  if (!info || typeof info !== 'object') return '';
+  const build = info.build || {};
+  if (build.id) {
+    return build.version ? `${build.id} @ ${build.version}` : build.id;
+  }
+  const board = info.board || {};
+  if (board.id) {
+    return board.version ? `${board.id} @ ${board.version}` : board.id;
+  }
+  return '';
+}
+
+function formatBuildReportLibraries(builder) {
+  if (!builder || typeof builder !== 'object' || !Array.isArray(builder.used_libraries)) return [];
+  return builder.used_libraries.map((lib) => {
+    const name = lib && typeof lib.name === 'string' ? lib.name : '';
+    const version = lib && typeof lib.version === 'string' ? lib.version : '';
+    const location = lib && typeof lib.location === 'string' && lib.location
+      ? lib.location
+      : (lib && typeof lib.install_dir === 'string' ? lib.install_dir : '');
+    const label = name ? (version ? `${name} @ ${version}` : name) : '';
+    return { name, version, location, label };
+  });
+}
+
+
 async function collectInspectorSketches(preferSketchDir = '') {
   const sketches = await findSketches();
   const preferNormalized = preferSketchDir ? path.normalize(preferSketchDir) : '';
@@ -4379,3 +4584,4 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
   } catch { }
   return '';
 }
+
