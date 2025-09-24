@@ -15,7 +15,7 @@ const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
 const VALID_WARNING_LEVELS = new Set(['none', 'default', 'more', 'all']);
 let output;
 let extContext;
-let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings, statusList, statusListAll;
+let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings;
 let monitorTerminal;
 // Log terminal (ANSI capable, no command execution)
 let logTerminal;
@@ -2108,7 +2108,7 @@ function activate(context) {
 
   // Status bar items
   statusBuild = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBuild.text = '$(tools) Build';
+  statusBuild.text = '$(tools) Compile';
   statusBuild.tooltip = 'Arduino: Compile Sketch';
   statusBuild.command = 'arduino-cli.compile';
 
@@ -2128,23 +2128,13 @@ function activate(context) {
   statusPort = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 96);
   statusPort.command = 'arduino-cli.setPort';
 
-  statusBaud = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 94);
+  statusBaud = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 95);
   statusBaud.command = 'arduino-cli.setBaud';
 
-  statusWarnings = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 95);
+  statusWarnings = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 94);
   statusWarnings.command = 'arduino-cli.configureWarnings';
 
-  statusList = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 93);
-  statusList.text = '$(list-unordered) Boards';
-  statusList.tooltip = 'Arduino: List Connected Boards';
-  statusList.command = 'arduino-cli.listBoards';
-
-  statusListAll = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 92);
-  statusListAll.text = '$(search) ListAll';
-  statusListAll.tooltip = 'Arduino: List All Boards (listall)';
-  statusListAll.command = 'arduino-cli.listAllBoards';
-
-  context.subscriptions.push(statusList, statusListAll, statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings);
+  context.subscriptions.push(statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings);
   updateStatusBar();
 
   vscode.window.onDidChangeActiveTextEditor(updateStatusBar, null, context.subscriptions);
@@ -2897,8 +2887,6 @@ async function updateStatusBar() {
   const wf = vscode.workspace.workspaceFolders;
   const hasWs = wf && wf.length > 0;
   if (!hasWs) {
-    statusList.hide();
-    statusListAll.hide();
     statusBuild.hide();
     statusUpload.hide();
     statusMonitor.hide();
@@ -2910,8 +2898,6 @@ async function updateStatusBar() {
   }
   const sketchDir = await detectSketchDirForStatus();
   if (!sketchDir) {
-    statusList.hide();
-    statusListAll.hide();
     statusBuild.hide();
     statusUpload.hide();
     statusMonitor.hide();
@@ -2959,8 +2945,6 @@ async function updateStatusBar() {
   statusWarnings.text = `$(megaphone) ${formatWarningsBadge(warningsLevel, verboseEnabled)}`;
   statusWarnings.tooltip = t('warningsStatusTooltip', { level: getWarningsLevelLabel(warningsLevel), verbose: getVerboseLabel(verboseEnabled) });
   statusWarnings.command = 'arduino-cli.configureWarnings';
-  statusList.show();
-  statusListAll.show();
   statusBuild.show();
   statusUpload.show();
   statusMonitor.show();

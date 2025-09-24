@@ -37,16 +37,15 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 
 ## ステータスバー
 
-- `$(tools) Build`: 現在のフォルダー内の `.ino` をコンパイル
+- `$(tools) Compile`: 現在のフォルダー内の `.ino` をコンパイル
 - `$(cloud-upload) Upload`: 現在のフォルダー内の `.ino` を書き込み
 - `$(pulse) Monitor`: シリアルモニタを開く
-- `$(list-unordered) Boards`: 接続中のボード一覧（`arduino-cli board list`）
-- `$(search) ListAll`: すべてのボード一覧（`arduino-cli board listall`、実行時にフィルター入力）
 - `$(circuit-board) <FQBN/Profile>`:
   - `sketch.yaml` がある場合は既定または先頭のプロファイル名を表示し、「Arduino CLI: Set Profile」で切替可能。
   - ない場合は FQBN を表示し、「Arduino CLI: Set FQBN」で変更可能。
 - `$(plug) <Port>`: 現在のシリアルポート（クリックで変更）
 - `$(watch) <Baud>`: 現在のボーレート（クリックで変更）
+- `$(megaphone) <Warnings>`: 警告レベル/verbose のバッジ（クリックで組み合わせを選択）
 
 `.ino` がないワークスペースではステータスバー項目は非表示です。FQBN/Port/Baud はワークスペースごとに保存され、再起動後も保持されます。
 
@@ -59,7 +58,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
   - Linux / macOS: https://arduino.github.io/arduino-cli/latest/installation/
 
 2) スケッチフォルダーを開く
-- `.ino` を含むフォルダーを開くと、Build/Upload/Monitor と FQBN/Port/Baud がステータスバーに表示されます。
+- `.ino` を含むフォルダーを開くと、Compile/Upload/Monitor と FQBN/Port/Baud/Warn がステータスバーに表示されます。
 
 3) ビルド / 書き込み / モニタ
 - ビルド: 「Arduino CLI: Compile Sketch」または Build をクリック。
@@ -95,8 +94,8 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 
 - `arduino-cli-wrapper.path`: `arduino-cli` 実行ファイルのパス
 - `arduino-cli-wrapper.additionalArgs`: すべての呼び出しに付与する追加引数（配列）
-- `arduino-cli-wrapper.verbose`: コンパイル/書き込み時に `--verbose` を付与
-- `arduino-cli-wrapper.compileWarnings`: `arduino-cli compile` に渡す警告レベル (`--warnings`) を指定
+- `arduino-cli-wrapper.verbose`: コンパイル/書き込み時に `--verbose` を付与（ステータスバーのトグルと同期）
+- `arduino-cli-wrapper.compileWarnings`: `arduino-cli compile` に渡す警告レベル (`--warnings`) を指定（ステータスバーのトグルと同期）
 - `arduino-cli-wrapper.lint.m5gfxIncludes`: Include 順チェックで M5GFX 系として扱うヘッダー一覧
 - `arduino-cli-wrapper.lint.fsIncludes`: Include 順チェックで FS 系として扱うヘッダー一覧
 

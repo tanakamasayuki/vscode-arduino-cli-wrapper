@@ -37,16 +37,15 @@ All command logs are unified in a dedicated pseudo terminal with ANSI colors.
 
 ## Status Bar
 
-- `$(tools) Build`: compiles the `.ino` in the current workspace folder
+- `$(tools) Compile`: compiles the `.ino` in the current workspace folder
 - `$(cloud-upload) Upload`: uploads the `.ino` in the current workspace folder
 - `$(pulse) Monitor`: opens the serial monitor
-- `$(list-unordered) Boards`: shows connected boards (`arduino-cli board list`)
-- `$(search) ListAll`: shows all boards (`arduino-cli board listall`, asks a filter on run)
 - `$(circuit-board) <FQBN/Profile>`:
   - If `sketch.yaml` exists, shows the default or first profile and lets you switch via "Arduino CLI: Set Profile".
   - Otherwise shows FQBN and lets you change via "Arduino CLI: Set FQBN".
 - `$(plug) <Port>`: shows current serial port (click to change)
 - `$(watch) <Baud>`: shows current baudrate (click to change)
+- `$(megaphone) <Warnings>`: shows compile warnings/verbose badge (click to pick combinations)
 
 Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Baud are stored per workspace and persist across restarts.
 
@@ -59,7 +58,7 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
   - Linux / macOS: follow https://arduino.github.io/arduino-cli/latest/installation/
 
 2) Open a sketch folder
-- When a folder contains `.ino`, the status bar shows Build/Upload/Monitor and FQBN/Port/Baud.
+- When a folder contains `.ino`, the status bar shows Compile/Upload/Monitor plus FQBN/Port/Baud/Warn.
 
 3) Build / Upload / Monitor
 - Build: run "Arduino CLI: Compile Sketch" or click Build.
@@ -95,8 +94,8 @@ Tips:
 
 - `arduino-cli-wrapper.path`: Path to the `arduino-cli` executable
 - `arduino-cli-wrapper.additionalArgs`: Extra arguments appended to every invocation (array)
-- `arduino-cli-wrapper.verbose`: Adds `--verbose` to compile/upload
-- `arduino-cli-wrapper.compileWarnings`: Warning level passed to `arduino-cli compile` (`--warnings`)
+- `arduino-cli-wrapper.verbose`: Adds `--verbose` to compile/upload (mirrors the status bar toggle)
+- `arduino-cli-wrapper.compileWarnings`: Warning level passed to `arduino-cli compile` (`--warnings`, mirrors the status bar toggle)
 - `arduino-cli-wrapper.lint.m5gfxIncludes`: Header list treated as M5GFX family for include-order linting
 - `arduino-cli-wrapper.lint.fsIncludes`: Header list treated as filesystem-related for include-order linting
 
