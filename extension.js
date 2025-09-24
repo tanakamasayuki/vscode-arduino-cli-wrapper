@@ -1,10 +1,11 @@
-// JavaScript-only VS Code extension that wraps Arduino CLI
+﻿// JavaScript-only VS Code extension that wraps Arduino CLI
 // No external dependencies; uses Node's child_process and VS Code API.
 
 const vscode = require('vscode');
 const cp = require('child_process');
 const os = require('os');
 const path = require('path');
+const https = require('https');
 
 const OUTPUT_NAME = 'Arduino CLI';
 const STATE_FQBN = 'arduino-cli.selectedFqbn';
@@ -93,6 +94,49 @@ const MSG = {
     buildCheckParseError: '[build-check] Failed to parse JSON output for {sketch} ({profile}): {msg}',
     buildCheckCliError: '[build-check] Compile failed to run for {sketch} ({profile}): exit {code}',
     buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
+    versionCheckStart: '[version-check] Scanning sketch.yaml files…',
+    versionCheckNoWorkspace: '[version-check] No workspace folder is open.',
+    versionCheckNoSketchYaml: '[version-check] No sketch.yaml files found.',
+    versionCheckFetchBoardsFail: '[version-check] Failed to fetch board metadata: {msg}',
+    versionCheckFetchLibrariesFail: '[version-check] Failed to fetch library metadata: {msg}',
+    versionCheckOpenReport: '[version-check] Opening dependency report.',
+    versionCheckUpdateApplied: '[version-check] Updated {count} entry(ies) in sketch.yaml.',
+    versionCheckUpdateNoChanges: '[version-check] No version changes were needed.',
+    versionCheckUpdateFailed: '[version-check] Failed to update sketch.yaml: {msg}',
+    versionCheckTitle: 'Dependency Versions',
+    versionCheckSummaryHeading: 'Summary',
+    versionCheckSummarySketches: 'Sketches',
+    versionCheckSummaryProfiles: 'Profiles',
+    versionCheckSummaryPlatforms: 'Platforms',
+    versionCheckSummaryLibraries: 'Libraries',
+    versionCheckSummaryOutdated: 'Outdated',
+    versionCheckSummaryMissing: 'Missing',
+    versionCheckSummaryUnknown: 'Unknown',
+    versionCheckPlatformsHeading: 'Platforms',
+    versionCheckLibrariesHeading: 'Libraries',
+    versionCheckColSketch: 'Sketch',
+    versionCheckColProfile: 'Profile',
+    versionCheckColPlatform: 'Platform',
+    versionCheckColLibrary: 'Library',
+    versionCheckColCurrent: 'Current',
+    versionCheckColLatest: 'Latest',
+    versionCheckColStatus: 'Status',
+    versionCheckColAction: 'Action',
+    versionCheckStatusOk: 'Up to date',
+    versionCheckStatusOutdated: 'Update available',
+    versionCheckStatusMissing: 'Not specified',
+    versionCheckStatusUnknown: 'Unknown',
+    versionCheckStatusAhead: 'Newer than index',
+    versionCheckBtnUpdate: 'Update',
+    versionCheckBtnUpdateAllPlatforms: 'Update all platforms',
+    versionCheckBtnUpdateAllLibraries: 'Update all libraries',
+    versionCheckBtnRefresh: 'Refresh',
+    versionCheckNoData: 'No data available.',
+    versionCheckGeneratedAt: 'Generated at',
+    versionCheckErrorsHeading: 'Errors',
+    versionCheckWarningsHeading: 'Warnings',
+    versionCheckPending: 'Gathering data…',
+    versionCheckReportReady: 'Dependency report generated.',
     yamlApplied: 'Applied profile to sketch.yaml: {name}',
     yamlApplyError: 'Failed to apply to sketch.yaml: {msg}',
     yamlNoSketchDir: 'Could not determine a sketch folder in this workspace.',
@@ -314,6 +358,49 @@ const MSG = {
     buildCheckParseError: '[build-check] {sketch} ({profile}) の JSON 出力解析に失敗しました: {msg}',
     buildCheckCliError: '[build-check] {sketch} ({profile}) のコンパイル実行に失敗しました (終了コード {code})。',
     buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
+    versionCheckStart: '[version-check] sketch.yaml を走査してバージョン情報を収集しています…',
+    versionCheckNoWorkspace: '[version-check] ワークスペースフォルダーが開かれていません。',
+    versionCheckNoSketchYaml: '[version-check] sketch.yaml が見つかりませんでした。',
+    versionCheckFetchBoardsFail: '[version-check] ボードの最新情報取得に失敗しました: {msg}',
+    versionCheckFetchLibrariesFail: '[version-check] ライブラリーの最新情報取得に失敗しました: {msg}',
+    versionCheckOpenReport: '[version-check] バージョン比較レポートを表示します。',
+    versionCheckUpdateApplied: '[version-check] sketch.yaml の {count} 箇所を更新しました。',
+    versionCheckUpdateNoChanges: '[version-check] 更新すべきバージョンはありませんでした。',
+    versionCheckUpdateFailed: '[version-check] sketch.yaml の更新に失敗しました: {msg}',
+    versionCheckTitle: '依存関係バージョン',
+    versionCheckSummaryHeading: '概要',
+    versionCheckSummarySketches: 'スケッチ',
+    versionCheckSummaryProfiles: 'プロファイル',
+    versionCheckSummaryPlatforms: 'プラットフォーム',
+    versionCheckSummaryLibraries: 'ライブラリー',
+    versionCheckSummaryOutdated: '更新対象',
+    versionCheckSummaryMissing: '未指定',
+    versionCheckSummaryUnknown: '不明',
+    versionCheckPlatformsHeading: 'プラットフォーム',
+    versionCheckLibrariesHeading: 'ライブラリー',
+    versionCheckColSketch: 'スケッチ',
+    versionCheckColProfile: 'プロファイル',
+    versionCheckColPlatform: 'プラットフォーム',
+    versionCheckColLibrary: 'ライブラリー',
+    versionCheckColCurrent: '現在',
+    versionCheckColLatest: '最新',
+    versionCheckColStatus: '状態',
+    versionCheckColAction: '操作',
+    versionCheckStatusOk: '最新です',
+    versionCheckStatusOutdated: '更新できます',
+    versionCheckStatusMissing: '未指定',
+    versionCheckStatusUnknown: '不明',
+    versionCheckStatusAhead: 'インデックスより新しい',
+    versionCheckBtnUpdate: '更新',
+    versionCheckBtnUpdateAllPlatforms: 'すべてのプラットフォームを更新',
+    versionCheckBtnUpdateAllLibraries: 'すべてのライブラリーを更新',
+    versionCheckBtnRefresh: '再取得',
+    versionCheckNoData: '表示するデータがありません。',
+    versionCheckGeneratedAt: '生成日時',
+    versionCheckErrorsHeading: 'エラー',
+    versionCheckWarningsHeading: '警告',
+    versionCheckPending: 'データを収集中…',
+    versionCheckReportReady: 'バージョン比較レポートを生成しました。',
     yamlApplied: 'sketch.yaml にプロファイルを反映しました: {name}',
     yamlApplyError: 'sketch.yaml への反映に失敗しました: {msg}',
     yamlNoSketchDir: 'ワークスペース内のスケッチフォルダを特定できませんでした。',
@@ -1949,6 +2036,7 @@ function activate(context) {
         if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
         if (action === 'examples') return commandOpenExamplesBrowser({ sketchDir, profile });
         if (action === 'inspect') return commandOpenInspector({ sketchDir, profile });
+        if (action === 'versionCheck') return vscode.commands.executeCommand('arduino-cli.versionCheck');
         if (action === 'refreshView') return vscode.commands.executeCommand('arduino-cli.refreshView');
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
         if (action === 'setBaud') return vscode.commands.executeCommand('arduino-cli.setBaud');
@@ -1966,6 +2054,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.boardDetails', commandBoardDetails),
     vscode.commands.registerCommand('arduino-cli.runArbitrary', commandRunArbitrary),
     vscode.commands.registerCommand('arduino-cli.compile', commandCompile),
+    vscode.commands.registerCommand('arduino-cli.versionCheck', commandVersionCheck),
     vscode.commands.registerCommand('arduino-cli.buildCheck', commandBuildCheck),
     vscode.commands.registerCommand('arduino-cli.cleanCompile', commandCleanCompile),
     vscode.commands.registerCommand('arduino-cli.upload', commandUpload),
@@ -2114,6 +2203,7 @@ function defaultCommandItems(dir, profile, parent) {
     new CommandItem('Open Helper', 'helper', dir, profile, parent),
     new CommandItem('Open Examples', 'examples', dir, profile, parent),
     new CommandItem('Inspect', 'inspect', dir, profile, parent),
+    new CommandItem('Version Check', 'versionCheck', dir, profile, parent),
   ];
 }
 
@@ -2125,6 +2215,7 @@ function globalCommandItems() {
     new CommandItem('List All Boards', 'listAllBoards', '', ''),
     new CommandItem('Open Helper', 'helper', '', ''),
     new CommandItem('Open Inspector', 'inspect', '', ''),
+    new CommandItem('Version Check', 'versionCheck', '', ''),
     new CommandItem('Refresh View', 'refreshView', '', ''),
     new CommandItem('New Sketch', 'sketchNew', '', ''),
     new CommandItem('Run Command', 'runArbitrary', '', ''),
@@ -2164,6 +2255,30 @@ async function findSketches() {
     });
   } catch (_) { }
   return results;
+}
+
+async function findSketchYamlEntries() {
+  const outputs = [];
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) return outputs;
+  const seen = new Set();
+  for (const folder of folders) {
+    if (!folder || !folder.uri) continue;
+    const pattern = new vscode.RelativePattern(folder, '**/sketch.yaml');
+    let matches = [];
+    try {
+      matches = await vscode.workspace.findFiles(pattern);
+    } catch (_) {
+      matches = [];
+    }
+    for (const uri of matches) {
+      const sketchDir = path.dirname(uri.fsPath);
+      if (!sketchDir || seen.has(sketchDir)) continue;
+      seen.add(sketchDir);
+      outputs.push({ sketchDir, uri, folder });
+    }
+  }
+  return outputs;
 }
 
 // Run helpers for explicit profile
@@ -2479,6 +2594,56 @@ async function commandBuildCheck() {
   if (report.results.length > 0) {
     openBuildCheckReport(report);
   }
+}
+
+/**
+ * Collect platform/library versions from sketch.yaml files and compare against
+ * online metadata without invoking the compiler.
+ */
+async function commandVersionCheck() {
+  const channel = getOutput();
+  channel.show(true);
+
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    const msg = t('versionCheckNoWorkspace');
+    channel.appendLine(msg);
+    vscode.window.showWarningMessage(msg);
+    return;
+  }
+
+  channel.appendLine(t('versionCheckStart'));
+
+  let sketches = await findSketchYamlEntries();
+  if (!Array.isArray(sketches) || sketches.length === 0) {
+    channel.appendLine(t('versionCheckNoSketchYaml'));
+    return;
+  }
+
+  let metadata;
+  try {
+    metadata = await fetchVersionCheckMetadata(channel);
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    channel.appendLine(`[warn] ${msg}`);
+    metadata = { platforms: new Map(), libraries: new Map(), warnings: [`metadata: ${msg}`], boardsUrl: '', librariesUrl: '' };
+  }
+
+  let report;
+  try {
+    report = await buildVersionCheckReport(sketches, metadata);
+  } catch (err) {
+    showError(err);
+    return;
+  }
+
+  channel.appendLine(t('versionCheckOpenReport'));
+  openVersionCheckReport({
+    initialReport: report,
+    initialMetadata: metadata,
+    channel,
+    initialSketches: sketches,
+  });
 }
 
 function parseBuildCheckJson(raw) {
@@ -3663,6 +3828,51 @@ function buildBuildReportStrings() {
   return result;
 }
 
+function buildVersionCheckStrings() {
+  const keys = [
+    'versionCheckTitle',
+    'versionCheckSummaryHeading',
+    'versionCheckSummarySketches',
+    'versionCheckSummaryProfiles',
+    'versionCheckSummaryPlatforms',
+    'versionCheckSummaryLibraries',
+    'versionCheckSummaryOutdated',
+    'versionCheckSummaryMissing',
+    'versionCheckSummaryUnknown',
+    'versionCheckPlatformsHeading',
+    'versionCheckLibrariesHeading',
+    'versionCheckColSketch',
+    'versionCheckColProfile',
+    'versionCheckColPlatform',
+    'versionCheckColLibrary',
+    'versionCheckColCurrent',
+    'versionCheckColLatest',
+    'versionCheckColStatus',
+    'versionCheckColAction',
+    'versionCheckStatusOk',
+    'versionCheckStatusOutdated',
+    'versionCheckStatusMissing',
+    'versionCheckStatusUnknown',
+    'versionCheckStatusAhead',
+    'versionCheckBtnUpdate',
+    'versionCheckBtnUpdateAllPlatforms',
+    'versionCheckBtnUpdateAllLibraries',
+    'versionCheckBtnRefresh',
+    'versionCheckNoData',
+    'versionCheckGeneratedAt',
+    'versionCheckErrorsHeading',
+    'versionCheckWarningsHeading',
+    'versionCheckPending',
+    'versionCheckReportReady',
+    'versionCheckUpdateNoChanges'
+  ];
+  const result = {};
+  for (const key of keys) {
+    result[key] = t(key);
+  }
+  return result;
+}
+
 async function openBuildCheckReport(report) {
   try {
     const panel = vscode.window.createWebviewPanel(
@@ -3690,6 +3900,782 @@ async function openBuildCheckReport(report) {
   } catch (err) {
     showError(err);
   }
+}
+
+async function openVersionCheckReport({ initialReport, initialMetadata, initialSketches, channel }) {
+  try {
+    const panel = vscode.window.createWebviewPanel(
+      'arduinoVersionCheck',
+      t('versionCheckTitle'),
+      vscode.ViewColumn.Active,
+      { enableScripts: true, retainContextWhenHidden: true }
+    );
+
+    const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'version-check.html');
+    const html = await readTextFile(htmlUri);
+    panel.webview.html = html;
+
+    const strings = buildVersionCheckStrings();
+    const locale = _isJa ? 'ja' : 'en';
+    let disposed = false;
+    let currentReport = initialReport;
+    let currentMetadata = initialMetadata || { platforms: new Map(), libraries: new Map(), warnings: [] };
+    let currentSketches = Array.isArray(initialSketches) ? initialSketches : [];
+
+    const postReport = (report) => {
+      if (disposed) return;
+      panel.webview.postMessage({
+        type: 'report',
+        payload: { locale, strings, report }
+      });
+    };
+
+    panel.onDidDispose(() => {
+      disposed = true;
+    });
+
+    panel.webview.onDidReceiveMessage(async (msg) => {
+      if (disposed || !msg || typeof msg !== 'object') return;
+      const type = msg.type;
+      try {
+        if (type === 'ready') {
+          postReport(currentReport);
+          return;
+        }
+
+        if (type === 'refresh') {
+          try {
+            currentMetadata = await fetchVersionCheckMetadata(channel);
+          } catch (err) {
+            const text = err && err.message ? err.message : String(err);
+            channel.appendLine(`[warn] ${text}`);
+            currentMetadata = { platforms: new Map(), libraries: new Map(), warnings: [`metadata: ${text}`], boardsUrl: '', librariesUrl: '' };
+          }
+          currentSketches = await findSketchYamlEntries();
+          currentReport = await buildVersionCheckReport(currentSketches, currentMetadata);
+          postReport(currentReport);
+          return;
+        }
+
+        if (type === 'updatePlatforms') {
+          const entries = Array.isArray(msg.entries) ? msg.entries : [];
+          if (entries.length === 0) {
+            vscode.window.setStatusBarMessage(t('versionCheckUpdateNoChanges'), 2000);
+            return;
+          }
+          const result = await applyPlatformVersionUpdates(entries);
+          if (result.errors && result.errors.length) {
+            for (const errText of result.errors) {
+              channel.appendLine(`[warn] ${errText}`);
+            }
+          }
+          const count = result.applied || 0;
+          if (count > 0) {
+            vscode.window.setStatusBarMessage(t('versionCheckUpdateApplied', { count }), 2000);
+          } else {
+            vscode.window.setStatusBarMessage(t('versionCheckUpdateNoChanges'), 2000);
+          }
+          currentSketches = await findSketchYamlEntries();
+          currentReport = await buildVersionCheckReport(currentSketches, currentMetadata);
+          postReport(currentReport);
+          return;
+        }
+
+        if (type === 'updateLibraries') {
+          const entries = Array.isArray(msg.entries) ? msg.entries : [];
+          if (entries.length === 0) {
+            vscode.window.setStatusBarMessage(t('versionCheckUpdateNoChanges'), 2000);
+            return;
+          }
+          const result = await applyLibraryVersionUpdates(entries);
+          if (result.errors && result.errors.length) {
+            for (const errText of result.errors) {
+              channel.appendLine(`[warn] ${errText}`);
+            }
+          }
+          const count = result.applied || 0;
+          if (count > 0) {
+            vscode.window.setStatusBarMessage(t('versionCheckUpdateApplied', { count }), 2000);
+          } else {
+            vscode.window.setStatusBarMessage(t('versionCheckUpdateNoChanges'), 2000);
+          }
+          currentSketches = await findSketchYamlEntries();
+          currentReport = await buildVersionCheckReport(currentSketches, currentMetadata);
+          postReport(currentReport);
+        }
+      } catch (err) {
+        const text = err && err.message ? err.message : String(err);
+        channel.appendLine(`[warn] ${text}`);
+        if (!disposed) {
+          panel.webview.postMessage({ type: 'notice', level: 'error', message: text });
+        }
+      }
+    });
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function fetchVersionCheckMetadata(channel) {
+  const boardsUrl = 'https://tanakamasayuki.github.io/arduino-cli-helper/board_details.json';
+  const librariesUrl = 'https://tanakamasayuki.github.io/arduino-cli-helper/libraries.json';
+  const metadata = {
+    boardsUrl,
+    librariesUrl,
+    platforms: new Map(),
+    libraries: new Map(),
+    warnings: []
+  };
+
+  try {
+    const boardJson = await fetchJsonWithRedirect(boardsUrl);
+    metadata.platforms = buildPlatformLatestMap(boardJson);
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    metadata.warnings.push(`boards: ${msg}`);
+    channel.appendLine(t('versionCheckFetchBoardsFail', { msg }));
+  }
+
+  try {
+    const libraryJson = await fetchJsonWithRedirect(librariesUrl);
+    metadata.libraries = buildLibraryLatestMap(libraryJson);
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    metadata.warnings.push(`libraries: ${msg}`);
+    channel.appendLine(t('versionCheckFetchLibrariesFail', { msg }));
+  }
+
+  return metadata;
+}
+
+async function buildVersionCheckReport(sketches, metadata) {
+  const platformRows = [];
+  const libraryRows = [];
+  const warnings = Array.isArray(metadata?.warnings) ? [...metadata.warnings] : [];
+
+  const platformMap = metadata?.platforms instanceof Map ? metadata.platforms : new Map();
+  const libraryMap = metadata?.libraries instanceof Map ? metadata.libraries : new Map();
+
+  let sketchCount = 0;
+  let profileCount = 0;
+
+  for (const entry of Array.isArray(sketches) ? sketches : []) {
+    if (!entry || typeof entry.sketchDir !== 'string') continue;
+    const sketchDir = entry.sketchDir;
+    const uri = entry.uri;
+    const folder = entry.folder;
+    let sketchLabel = sketchDir;
+    try {
+      const wsFolder = uri ? (vscode.workspace.getWorkspaceFolder(uri) || folder) : folder;
+      if (wsFolder && wsFolder.uri && wsFolder.uri.fsPath) {
+        let relPath = path.relative(wsFolder.uri.fsPath, sketchDir);
+        if (!relPath) relPath = '.';
+        relPath = relPath.split(path.sep).join('/');
+        sketchLabel = `${wsFolder.name}/${relPath}`;
+      }
+    } catch (_) { }
+
+    let yamlText = '';
+    try {
+      yamlText = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      warnings.push(`${sketchLabel}: ${msg}`);
+      continue;
+    }
+
+    sketchCount += 1;
+
+    let yamlInfo = null;
+    try {
+      yamlInfo = await readSketchYamlInfo(sketchDir);
+    } catch (_) { yamlInfo = null; }
+
+    let profileNames = yamlInfo && Array.isArray(yamlInfo.profiles)
+      ? Array.from(new Set(yamlInfo.profiles.filter(p => typeof p === 'string' && p.trim().length > 0)))
+      : [];
+
+    if (yamlInfo && yamlInfo.defaultProfile && profileNames.includes(yamlInfo.defaultProfile)) {
+      profileNames = profileNames.filter(p => p !== yamlInfo.defaultProfile);
+      profileNames.push(yamlInfo.defaultProfile);
+    }
+
+    if (!profileNames.length) {
+      warnings.push(t('buildCheckSkipNoProfiles', { sketch: sketchLabel }));
+      continue;
+    }
+
+    profileCount += profileNames.length;
+
+    for (const profile of profileNames) {
+      const fqbn = extractProfileFqbnFromYaml(yamlText, profile);
+      const platformEntries = extractProfilePlatformsFromYaml(yamlText, profile);
+      if (!platformEntries.length) {
+        warnings.push(`${sketchLabel} (${profile}): no platform entry found`);
+      }
+      for (const plat of platformEntries) {
+        const currentRaw = typeof plat.version === 'string' ? plat.version.trim() : '';
+        const latestEntry = platformMap.get(plat.id) || null;
+        const latestRaw = latestEntry && typeof latestEntry.version === 'string' ? latestEntry.version : '';
+        const status = evaluateVersionStatus(currentRaw, latestRaw);
+        platformRows.push({
+          sketchDir,
+          sketchLabel,
+          profile,
+          fqbn,
+          platformId: plat.id,
+          currentVersion: currentRaw,
+          latestVersion: latestRaw,
+          status,
+          packageUrl: latestEntry && typeof latestEntry.packageUrl === 'string' ? latestEntry.packageUrl : '',
+          platformName: latestEntry && typeof latestEntry.name === 'string' ? latestEntry.name : ''
+        });
+      }
+
+      const libs = extractProfileLibrariesFromYaml(yamlText, profile);
+      for (const lib of libs) {
+        const name = lib && typeof lib.name === 'string' ? lib.name : '';
+        if (!name) continue;
+        const currentRaw = lib && typeof lib.version === 'string' ? lib.version : '';
+        const lookup = libraryMap.get(name.toLowerCase()) || null;
+        const latestRaw = lookup && typeof lookup.version === 'string' ? lookup.version : '';
+        const status = evaluateVersionStatus(currentRaw, latestRaw);
+        libraryRows.push({
+          sketchDir,
+          sketchLabel,
+          profile,
+          fqbn,
+          libraryName: name,
+          currentVersion: currentRaw,
+          latestVersion: latestRaw,
+          status
+        });
+      }
+    }
+  }
+
+  const cmp = (a, b) => {
+    const sa = (a || '').toString();
+    const sb = (b || '').toString();
+    return sa.localeCompare(sb, undefined, { sensitivity: 'base' });
+  };
+
+  platformRows.sort((a, b) => {
+    let d = cmp(a.sketchLabel || a.sketchDir || '', b.sketchLabel || b.sketchDir || '');
+    if (d !== 0) return d;
+    d = cmp(a.profile || '', b.profile || '');
+    if (d !== 0) return d;
+    d = cmp(a.platformId || '', b.platformId || '');
+    if (d !== 0) return d;
+    return cmp(a.currentVersion || '', b.currentVersion || '');
+  });
+
+  libraryRows.sort((a, b) => {
+    let d = cmp(a.sketchLabel || a.sketchDir || '', b.sketchLabel || b.sketchDir || '');
+    if (d !== 0) return d;
+    d = cmp(a.profile || '', b.profile || '');
+    if (d !== 0) return d;
+    d = cmp(a.libraryName || '', b.libraryName || '');
+    if (d !== 0) return d;
+    return cmp(a.currentVersion || '', b.currentVersion || '');
+  });
+
+  const totalPlatforms = platformRows.length;
+  const totalLibraries = libraryRows.length;
+  const totals = {
+    sketches: sketchCount,
+    profiles: profileCount,
+    platformTotal: totalPlatforms,
+    platformOutdated: platformRows.filter(r => r.status === 'outdated').length,
+    platformMissing: platformRows.filter(r => r.status === 'missing').length,
+    platformUnknown: platformRows.filter(r => r.status === 'unknown').length,
+    platformAhead: platformRows.filter(r => r.status === 'ahead').length,
+    libraryTotal: totalLibraries,
+    libraryOutdated: libraryRows.filter(r => r.status === 'outdated').length,
+    libraryMissing: libraryRows.filter(r => r.status === 'missing').length,
+    libraryUnknown: libraryRows.filter(r => r.status === 'unknown').length,
+    libraryAhead: libraryRows.filter(r => r.status === 'ahead').length
+  };
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totals,
+    platforms: platformRows,
+    libraries: libraryRows,
+    warnings,
+    metadataSources: {
+      boards: metadata?.boardsUrl || '',
+      libraries: metadata?.librariesUrl || ''
+    }
+  };
+}
+
+function evaluateVersionStatus(currentRaw, latestRaw) {
+  const current = normalizeVersion(currentRaw || '');
+  const latest = normalizeVersion(latestRaw || '');
+  if (!current && !latest) return 'unknown';
+  if (!current) return latest ? 'missing' : 'unknown';
+  if (!latest) return 'unknown';
+  const cmp = compareVersions(current, latest);
+  if (cmp < 0) return 'outdated';
+  if (cmp > 0) return 'ahead';
+  return 'ok';
+}
+
+async function applyPlatformVersionUpdates(entries) {
+  const result = { applied: 0, errors: [] };
+  if (!Array.isArray(entries) || entries.length === 0) return result;
+
+  const dedup = new Map();
+  for (const entry of entries) {
+    if (!entry) continue;
+    const sketchDir = typeof entry.sketchDir === 'string' ? entry.sketchDir : '';
+    const profile = typeof entry.profile === 'string' ? entry.profile : '';
+    const platformId = typeof entry.platformId === 'string' ? entry.platformId : '';
+    const newVersion = typeof entry.latestVersion === 'string' ? entry.latestVersion : '';
+    if (!sketchDir || !profile || !platformId || !newVersion) continue;
+    const key = `${path.normalize(sketchDir)}|${profile}|${platformId}`;
+    dedup.set(key, { sketchDir, profile, platformId, newVersion });
+  }
+
+  const grouped = new Map();
+  for (const entry of dedup.values()) {
+    const bucketKey = path.normalize(entry.sketchDir);
+    if (!grouped.has(bucketKey)) {
+      grouped.set(bucketKey, { sketchDir: entry.sketchDir, updates: [] });
+    }
+    grouped.get(bucketKey).updates.push(entry);
+  }
+
+  for (const info of grouped.values()) {
+    const yamlUri = vscode.Uri.file(path.join(info.sketchDir, 'sketch.yaml'));
+    let text;
+    try {
+      text = await readTextFile(yamlUri);
+    } catch (err) {
+      result.errors.push(`${info.sketchDir}: ${err && err.message ? err.message : String(err)}`);
+      continue;
+    }
+    let mutated = text;
+    let changed = 0;
+    for (const upd of info.updates) {
+      const next = patchPlatformVersionInYamlText(mutated, upd.profile, upd.platformId, upd.newVersion);
+      if (next !== mutated) {
+        mutated = next;
+        changed += 1;
+      }
+    }
+    if (changed > 0) {
+      try {
+        await writeTextFile(yamlUri, mutated);
+        result.applied += changed;
+      } catch (err) {
+        result.errors.push(`${info.sketchDir}: ${err && err.message ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  return result;
+}
+
+async function applyLibraryVersionUpdates(entries) {
+  const result = { applied: 0, errors: [] };
+  if (!Array.isArray(entries) || entries.length === 0) return result;
+
+  const dedup = new Map();
+  for (const entry of entries) {
+    if (!entry) continue;
+    const sketchDir = typeof entry.sketchDir === 'string' ? entry.sketchDir : '';
+    const profile = typeof entry.profile === 'string' ? entry.profile : '';
+    const libraryName = typeof entry.libraryName === 'string' ? entry.libraryName : '';
+    const newVersion = typeof entry.latestVersion === 'string' ? entry.latestVersion : '';
+    if (!sketchDir || !profile || !libraryName || !newVersion) continue;
+    const key = `${path.normalize(sketchDir)}|${profile}|${libraryName}`;
+    dedup.set(key, { sketchDir, profile, libraryName, newVersion });
+  }
+
+  const grouped = new Map();
+  for (const entry of dedup.values()) {
+    const bucketKey = path.normalize(entry.sketchDir);
+    if (!grouped.has(bucketKey)) {
+      grouped.set(bucketKey, { sketchDir: entry.sketchDir, updates: [] });
+    }
+    grouped.get(bucketKey).updates.push(entry);
+  }
+
+  for (const info of grouped.values()) {
+    const yamlUri = vscode.Uri.file(path.join(info.sketchDir, 'sketch.yaml'));
+    let text;
+    try {
+      text = await readTextFile(yamlUri);
+    } catch (err) {
+      result.errors.push(`${info.sketchDir}: ${err && err.message ? err.message : String(err)}`);
+      continue;
+    }
+    let mutated = text;
+    let changed = 0;
+    for (const upd of info.updates) {
+      const libs = extractProfileLibrariesFromYaml(mutated, upd.profile);
+      const idx = libs.findIndex(l => l.name === upd.libraryName);
+      if (idx === -1) continue;
+      if (libs[idx].version === upd.newVersion) continue;
+      libs[idx] = { name: libs[idx].name, version: upd.newVersion };
+      const next = patchLibrariesInYamlText(mutated, upd.profile, libs);
+      if (next !== mutated) {
+        mutated = next;
+        changed += 1;
+      }
+    }
+    if (changed > 0) {
+      try {
+        await writeTextFile(yamlUri, mutated);
+        result.applied += changed;
+      } catch (err) {
+        result.errors.push(`${info.sketchDir}: ${err && err.message ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  return result;
+}
+
+function patchPlatformVersionInYamlText(yamlText, profileName, platformId, newVersion) {
+  try {
+    const id = String(platformId || '').trim();
+    const ver = String(newVersion || '').trim();
+    if (!id) return yamlText;
+    const lines = String(yamlText || '').split(/\r?\n/);
+    const bounds = findProfileBounds(lines, profileName);
+    if (!bounds) return yamlText;
+    const { targetStart, targetEnd } = bounds;
+    const desired = `      - platform: ${id}${ver ? ` (${ver})` : ''}`;
+    let platformsHeader = -1;
+    for (let i = targetStart + 1; i < targetEnd; i++) {
+      if (/^\s{4}platforms\s*:\s*$/.test(lines[i])) {
+        platformsHeader = i;
+        break;
+      }
+    }
+    if (platformsHeader >= 0) {
+      for (let i = platformsHeader + 1; i < targetEnd; i++) {
+        const line = lines[i];
+        if (/^\s{6}-\s*platform\s*:\s*/.test(line)) {
+          const m = line.match(/^\s{6}-\s*platform\s*:\s*([^\s]+)\s*(?:\([^)]*\))?\s*$/);
+          if (m && m[1] === id) {
+            lines[i] = desired;
+            return lines.join('\n');
+          }
+          continue;
+        }
+        if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) {
+          break;
+        }
+      }
+      const before = lines.slice(0, platformsHeader + 1).join('\n');
+      const after = lines.slice(platformsHeader + 1).join('\n');
+      return before + '\n' + desired + (after.startsWith('\n') ? '' : '\n') + after;
+    }
+    const before = lines.slice(0, targetStart + 1).join('\n');
+    const after = lines.slice(targetStart + 1).join('\n');
+    const block = ['    platforms:', desired].join('\n');
+    return [before, block, after].join('\n');
+  } catch (_) {
+    return yamlText;
+  }
+}
+
+function patchLibrariesInYamlText(yamlText, profileName, libs) {
+  try {
+    const lines = String(yamlText || '').split(/\r?\n/);
+    const bounds = findProfileBounds(lines, profileName);
+    if (!bounds) return yamlText;
+    const { targetStart, targetEnd } = bounds;
+    let header = -1;
+    let headerEnd = -1;
+    for (let i = targetStart + 1; i < targetEnd; i++) {
+      if (/^\s{4}libraries\s*:\s*$/.test(lines[i])) {
+        header = i;
+        headerEnd = i + 1;
+        for (let j = i + 1; j < targetEnd; j++) {
+          if (/^\s{6}-\s*/.test(lines[j])) {
+            headerEnd = j + 1;
+            continue;
+          }
+          if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\S/.test(lines[j]) || /^\s*default_profile\s*:\s*/.test(lines[j])) {
+            break;
+          }
+        }
+        break;
+      }
+    }
+    const formatted = [];
+    if (Array.isArray(libs)) {
+      for (const entry of libs) {
+        const name = entry && typeof entry.name === 'string' ? entry.name.trim() : '';
+        if (!name) continue;
+        const ver = entry && typeof entry.version === 'string' ? entry.version.trim() : '';
+        formatted.push(`      - ${ver ? `${name} (${ver})` : name}`);
+      }
+    }
+    const hasLibs = formatted.length > 0;
+    if (header >= 0) {
+      const before = lines.slice(0, header);
+      const after = lines.slice(headerEnd >= 0 ? headerEnd : header + 1);
+      if (!hasLibs) {
+        return before.concat(after).join('\n').replace(/\n{3,}/g, '\n\n');
+      }
+      return before.concat(['    libraries:', ...formatted], after).join('\n');
+    }
+    if (!hasLibs) return yamlText;
+    const before = lines.slice(0, targetEnd);
+    const after = lines.slice(targetEnd);
+    const block = ['    libraries:', ...formatted];
+    return before.concat(block, after).join('\n').replace(/\n{3,}/g, '\n\n');
+  } catch (_) {
+    return yamlText;
+  }
+}
+
+function findProfileBounds(lines, profileName) {
+  if (!Array.isArray(lines)) return null;
+  let profilesStart = -1;
+  let profilesEnd = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*profiles\s*:\s*$/.test(lines[i])) {
+      profilesStart = i;
+      for (let j = i + 1; j < lines.length; j++) {
+        if (/^\S/.test(lines[j])) {
+          profilesEnd = j;
+          break;
+        }
+      }
+      break;
+    }
+  }
+  if (profilesStart < 0) return null;
+  let targetStart = -1;
+  let targetEnd = profilesEnd;
+  const wanted = typeof profileName === 'string' ? profileName.trim() : '';
+  for (let i = profilesStart + 1; i < profilesEnd; i++) {
+    const m = lines[i].match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
+    if (m) {
+      const name = m[1].trim();
+      if (!wanted || name === wanted) {
+        if (targetStart < 0) {
+          targetStart = i;
+          continue;
+        }
+      }
+      if (targetStart >= 0) {
+        targetEnd = i;
+        break;
+      }
+    }
+  }
+  if (targetStart < 0) return null;
+  if (targetEnd <= targetStart) targetEnd = profilesEnd;
+  return { profilesStart, profilesEnd, targetStart, targetEnd };
+}
+
+function extractProfileFqbnFromYaml(yamlText, profileName) {
+  try {
+    const lines = String(yamlText || '').split(/\r?\n/);
+    const bounds = findProfileBounds(lines, profileName);
+    if (!bounds) return '';
+    const { targetStart, targetEnd } = bounds;
+    for (let i = targetStart + 1; i < targetEnd; i++) {
+      const line = lines[i];
+      const m = line.match(/^\s{4}fqbn\s*:\s*(.+)\s*$/);
+      if (m) {
+        return m[1].trim().replace(/^"|"$/g, '');
+      }
+      if (/^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line)) break;
+    }
+    return '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function extractProfilePlatformsFromYaml(yamlText, profileName) {
+  const result = [];
+  try {
+    const lines = String(yamlText || '').split(/\r?\n/);
+    const bounds = findProfileBounds(lines, profileName);
+    if (!bounds) return result;
+    const { targetStart, targetEnd } = bounds;
+    for (let i = targetStart + 1; i < targetEnd; i++) {
+      if (/^\s{4}platforms\s*:\s*$/.test(lines[i])) {
+        for (let j = i + 1; j < targetEnd; j++) {
+          const line = lines[j];
+          const m = line.match(/^\s{6}-\s*platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
+          if (m) {
+            result.push({ id: m[1], version: m[2] ? m[2].trim() : '' });
+            continue;
+          }
+          if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) {
+            break;
+          }
+        }
+        if (result.length > 0) return result;
+      }
+    }
+    for (let i = targetStart + 1; i < targetEnd; i++) {
+      const m = lines[i].match(/^\s{4}platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
+      if (m) {
+        result.push({ id: m[1], version: m[2] ? m[2].trim() : '' });
+      }
+    }
+    return result;
+  } catch (_) {
+    return result;
+  }
+}
+
+function extractProfileLibrariesFromYaml(yamlText, profileName) {
+  const result = [];
+  try {
+    const lines = String(yamlText || '').split(/\r?\n/);
+    const bounds = findProfileBounds(lines, profileName);
+    if (!bounds) return result;
+    const { targetStart, targetEnd } = bounds;
+    let header = -1;
+    for (let i = targetStart + 1; i < targetEnd; i++) {
+      if (/^\s{4}libraries\s*:\s*$/.test(lines[i])) {
+        header = i;
+        for (let j = i + 1; j < targetEnd; j++) {
+          const line = lines[j];
+          const m = line.match(/^\s{6}-\s*(.+?)\s*$/);
+          if (m) {
+            const raw = m[1].trim().replace(/^"|"$/g, '');
+            const mv = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+            if (mv) result.push({ name: mv[1].trim(), version: mv[2].trim() });
+            else if (raw) result.push({ name: raw, version: '' });
+            continue;
+          }
+          if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) {
+            break;
+          }
+        }
+        break;
+      }
+    }
+    return result;
+  } catch (_) {
+    return result;
+  }
+}
+
+function buildPlatformLatestMap(boardDetails) {
+  const map = new Map();
+  if (!boardDetails || typeof boardDetails !== 'object' || Array.isArray(boardDetails)) return map;
+  for (const [fqbn, detail] of Object.entries(boardDetails)) {
+    if (!detail || typeof detail !== 'object') continue;
+    const parts = String(fqbn).split(':');
+    if (parts.length < 2) continue;
+    const id = `${parts[0]}:${parts[1]}`;
+    const versionRaw = detail.version || detail.Version || '';
+    const version = normalizeVersion(versionRaw);
+    const existing = map.get(id);
+    if (!existing || compareVersions(version, existing.version) > 0) {
+      map.set(id, {
+        version,
+        packageUrl: typeof detail.package_url === 'string' ? detail.package_url : '',
+        name: typeof detail.name === 'string' ? detail.name : ''
+      });
+    }
+  }
+  return map;
+}
+
+function buildLibraryLatestMap(libraryEntries) {
+  const map = new Map();
+  if (!Array.isArray(libraryEntries)) return map;
+  for (const entry of libraryEntries) {
+    if (!entry || typeof entry !== 'object') continue;
+    const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const version = normalizeVersion(entry.version || '');
+    const existing = map.get(key);
+    if (!existing || compareVersions(version, existing.version) > 0) {
+      map.set(key, { name, version });
+    }
+  }
+  return map;
+}
+
+function fetchJsonWithRedirect(url, timeoutMs = 10000) {
+  const visited = new Set();
+  const headers = { 'User-Agent': 'vscode-arduino-cli-wrapper' };
+  const attempt = (target) => new Promise((resolve, reject) => {
+    if (visited.size > 5) {
+      reject(new Error('too many redirects'));
+      return;
+    }
+    visited.add(target);
+    const req = https.get(target, { headers }, (res) => {
+      const status = res.statusCode || 0;
+      if (status >= 300 && status < 400 && res.headers.location) {
+        const next = (() => {
+          try { return new URL(res.headers.location, target).toString(); }
+          catch (_) { return res.headers.location; }
+        })();
+        res.resume();
+        resolve(attempt(next));
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        res.resume();
+        reject(new Error(`HTTP ${status} for ${target}`));
+        return;
+      }
+      const chunks = [];
+      res.on('data', (c) => { chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)); });
+      res.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        try {
+          resolve(JSON.parse(body || 'null'));
+        } catch (err) {
+          reject(err);
+        }
+      });
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => {
+      try { req.destroy(new Error('timeout')); } catch (_) { }
+    });
+  });
+  return attempt(url);
+}
+
+function compareVersions(a, b) {
+  const va = normalizeVersion(a || '');
+  const vb = normalizeVersion(b || '');
+  if (!va && !vb) return 0;
+  if (!va) return -1;
+  if (!vb) return 1;
+  const [mainA, preA = ''] = va.split('-', 2);
+  const [mainB, preB = ''] = vb.split('-', 2);
+  const partsA = mainA.split('.');
+  const partsB = mainB.split('.');
+  const len = Math.max(partsA.length, partsB.length);
+  for (let i = 0; i < len; i++) {
+    const na = parseInt(partsA[i] || '0', 10);
+    const nb = parseInt(partsB[i] || '0', 10);
+    if (Number.isNaN(na) && Number.isNaN(nb)) continue;
+    if (Number.isNaN(na)) return -1;
+    if (Number.isNaN(nb)) return 1;
+    if (na !== nb) return na < nb ? -1 : 1;
+  }
+  if (preA && !preB) return -1;
+  if (!preA && preB) return 1;
+  if (preA && preB) {
+    if (preA === preB) return 0;
+    return preA < preB ? -1 : 1;
+  }
+  return 0;
 }
 
 function formatBuildReportPlatform(builder) {

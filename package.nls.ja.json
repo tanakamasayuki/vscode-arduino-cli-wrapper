@@ -1,4 +1,4 @@
-{
+﻿{
   "ext.displayName": "Arduino CLI ラッパー",
   "ext.description": "VS Code から Arduino CLI を実行",
   "cmd.runArbitrary": "Arduino CLI: コマンドを実行",
@@ -11,6 +11,7 @@
   "cmd.cleanCompile": "Arduino CLI: クリーンビルド",
   "cmd.upload": "Arduino CLI: スケッチをアップロード",
   "cmd.monitor": "Arduino CLI: シリアルモニター",
+  "cmd.versionCheck": "Arduino CLI: バージョンチェック",
   "cmd.refreshView": "Arduino CLI: ビューを更新",
   "cmd.examples": "Arduino CLI: サンプル ブラウザー",
   "cmd.expandAll": "Arduino CLI: すべて展開",

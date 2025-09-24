@@ -12,6 +12,7 @@ VS Code extension to run Arduino CLI from the command palette, status bar, and a
 - Compile Sketch: pick a sketch to compile (uses profile or FQBN)
 - Clean Compile: compiles with `--clean`; resets includePath first, then adds only paths discovered during the build
 - Build Check: compiles every profile from each sketch.yaml with `--warnings=all` and aggregates warnings/errors
+- Version Check: scans each sketch.yaml profile to compare platform/library versions with the published indexes and offers inline updates
 - Upload Sketch: builds then uploads with selected port and profile/FQBN; closes and reopens monitor if needed
 - Monitor Serial: open a serial monitor (select port and baudrate)
 - Open Helper: open a sketch.yaml helper webview to inspect/apply profiles/libraries

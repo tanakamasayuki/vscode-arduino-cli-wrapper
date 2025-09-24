@@ -91,6 +91,10 @@
         "title": "%cmd.buildCheck%"
       },
       {
+        "command": "arduino-cli.versionCheck",
+        "title": "%cmd.versionCheck%"
+      },
+      {
         "command": "arduino-cli.cleanCompile",
         "title": "%cmd.cleanCompile%"
       },

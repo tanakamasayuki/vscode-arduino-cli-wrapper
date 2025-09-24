@@ -11,6 +11,7 @@
   "cmd.cleanCompile": "Arduino CLI: Clean Compile",
   "cmd.upload": "Arduino CLI: Upload Sketch",
   "cmd.monitor": "Arduino CLI: Monitor Serial",
+  "cmd.versionCheck": "Arduino CLI: Version Check",
   "cmd.refreshView": "Arduino CLI: Refresh View",
   "cmd.examples": "Arduino CLI: Examples Browser",
   "cmd.expandAll": "Arduino CLI: Expand All",

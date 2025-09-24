@@ -1,0 +1,407 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dependency Versions</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; margin: 16px; line-height: 1.5; }
+    h1 { margin: 0 0 16px; font-size: 1.4rem; }
+    h2 { margin: 24px 0 12px; font-size: 1.1rem; }
+    .status { margin-bottom: 12px; font-size: 0.95rem; min-height: 1.2em; }
+    .status.info { color: rgb(70, 130, 180); }
+    .status.error { color: rgb(192, 57, 43); }
+    .summary { display: flex; flex-wrap: wrap; gap: 16px; padding: 12px; border: 1px solid rgba(128,128,128,0.3); border-radius: 8px; margin-bottom: 16px; }
+    .metric { min-width: 120px; }
+    .metric .label { display: block; font-size: 0.8rem; opacity: 0.75; }
+    .metric .value { font-weight: 600; font-size: 1.2rem; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    button { padding: 6px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4); background: rgba(128,128,128,0.35); color: #fff; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { border: 1px solid rgba(128,128,128,0.25); padding: 6px 8px; text-align: left; }
+    th { background: rgba(128,128,128,0.15); font-weight: 600; }
+    tr.outdated { background: rgba(241, 196, 15, 0.15); }
+    tr.missing { background: rgba(155, 89, 182, 0.15); }
+    tr.unknown { background: rgba(52, 73, 94, 0.1); }
+    tr.ahead { background: rgba(46, 204, 113, 0.1); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
+    .small { font-size: 0.8rem; opacity: 0.75; }
+    ul { margin: 0; padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Dependency Versions</h1>
+  <div id="status" class="status"></div>
+  <div class="summary" id="summary">
+    <div class="metric"><span class="label" id="summarySketchesLabel">Sketches</span><span class="value" id="summarySketches">0</span></div>
+    <div class="metric"><span class="label" id="summaryProfilesLabel">Profiles</span><span class="value" id="summaryProfiles">0</span></div>
+    <div class="metric"><span class="label" id="summaryPlatformsLabel">Platforms</span><span class="value" id="summaryPlatforms">0</span></div>
+    <div class="metric"><span class="label" id="summaryPlatformsOutdatedLabel">Outdated</span><span class="value" id="summaryPlatformsOutdated">0</span></div>
+    <div class="metric"><span class="label" id="summaryLibrariesLabel">Libraries</span><span class="value" id="summaryLibraries">0</span></div>
+    <div class="metric"><span class="label" id="summaryLibrariesOutdatedLabel">Outdated</span><span class="value" id="summaryLibrariesOutdated">0</span></div>
+    <div class="metric"><span class="label" id="generatedAtLabel">Generated at</span><span class="value small" id="generatedAt">—</span></div>
+  </div>
+
+  <div class="actions">
+    <button id="btnRefresh" type="button">Refresh</button>
+    <button id="btnUpdatePlatforms" type="button">Update all platforms</button>
+    <button id="btnUpdateLibraries" type="button">Update all libraries</button>
+  </div>
+
+  <section>
+    <h2 id="platformsHeading">Platforms</h2>
+    <table>
+      <thead>
+        <tr>
+          <th id="platformColSketch">Sketch</th>
+          <th id="platformColProfile">Profile</th>
+          <th id="platformColId">Platform</th>
+          <th id="platformColCurrent">Current</th>
+          <th id="platformColLatest">Latest</th>
+          <th id="platformColStatus">Status</th>
+          <th id="platformColAction">Action</th>
+        </tr>
+      </thead>
+      <tbody id="platformsBody"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 id="librariesHeading">Libraries</h2>
+    <table>
+      <thead>
+        <tr>
+          <th id="libraryColSketch">Sketch</th>
+          <th id="libraryColProfile">Profile</th>
+          <th id="libraryColName">Library</th>
+          <th id="libraryColCurrent">Current</th>
+          <th id="libraryColLatest">Latest</th>
+          <th id="libraryColStatus">Status</th>
+          <th id="libraryColAction">Action</th>
+        </tr>
+      </thead>
+      <tbody id="librariesBody"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 id="warningsHeading">Warnings</h2>
+    <ul id="warningsList"></ul>
+  </section>
+
+  <script>
+    (function() {
+      const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+      const state = {
+        locale: 'en',
+        strings: {},
+        report: null
+      };
+
+      const statusEl = document.getElementById('status');
+      const titleEl = document.getElementById('title');
+      const summarySketches = document.getElementById('summarySketches');
+      const summaryProfiles = document.getElementById('summaryProfiles');
+      const summaryPlatforms = document.getElementById('summaryPlatforms');
+      const summaryPlatformsOut = document.getElementById('summaryPlatformsOutdated');
+      const summaryLibraries = document.getElementById('summaryLibraries');
+      const summaryLibrariesOut = document.getElementById('summaryLibrariesOutdated');
+      const generatedAtEl = document.getElementById('generatedAt');
+      const platformsBody = document.getElementById('platformsBody');
+      const librariesBody = document.getElementById('librariesBody');
+      const warningsList = document.getElementById('warningsList');
+      const btnRefresh = document.getElementById('btnRefresh');
+      const btnUpdatePlatforms = document.getElementById('btnUpdatePlatforms');
+      const btnUpdateLibraries = document.getElementById('btnUpdateLibraries');
+
+      const statusLabels = () => ({
+        ok: state.strings.versionCheckStatusOk || 'Up to date',
+        outdated: state.strings.versionCheckStatusOutdated || 'Update available',
+        missing: state.strings.versionCheckStatusMissing || 'Not specified',
+        unknown: state.strings.versionCheckStatusUnknown || 'Unknown',
+        ahead: state.strings.versionCheckStatusAhead || 'Newer than index'
+      });
+
+      function setStatus(message, level = 'info') {
+        statusEl.textContent = message || '';
+        statusEl.className = `status ${level}`.trim();
+      }
+
+      function sendMessage(type, payload) {
+        if (!vscode) return;
+        vscode.postMessage(Object.assign({ type }, payload || {}));
+      }
+
+      btnRefresh.addEventListener('click', () => {
+        setStatus(state.strings.versionCheckPending || 'Gathering data…', 'info');
+        sendMessage('refresh');
+      });
+
+      btnUpdatePlatforms.addEventListener('click', () => {
+        if (!state.report) return;
+        const rows = (state.report.platforms || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing'));
+        if (rows.length === 0) {
+          setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
+          return;
+        }
+        sendMessage('updatePlatforms', { entries: rows.map(r => ({
+          sketchDir: r.sketchDir,
+          profile: r.profile,
+          platformId: r.platformId,
+          latestVersion: r.latestVersion
+        })) });
+      });
+
+      btnUpdateLibraries.addEventListener('click', () => {
+        if (!state.report) return;
+        const rows = (state.report.libraries || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing'));
+        if (rows.length === 0) {
+          setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
+          return;
+        }
+        sendMessage('updateLibraries', { entries: rows.map(r => ({
+          sketchDir: r.sketchDir,
+          profile: r.profile,
+          libraryName: r.libraryName,
+          latestVersion: r.latestVersion
+        })) });
+      });
+
+      function renderSummary(report) {
+        summarySketches.textContent = String(report.totals?.sketches ?? 0);
+        summaryProfiles.textContent = String(report.totals?.profiles ?? 0);
+        summaryPlatforms.textContent = String(report.totals?.platformTotal ?? 0);
+        summaryPlatformsOut.textContent = String(report.totals?.platformOutdated ?? 0);
+        summaryLibraries.textContent = String(report.totals?.libraryTotal ?? 0);
+        summaryLibrariesOut.textContent = String(report.totals?.libraryOutdated ?? 0);
+        generatedAtEl.textContent = report.generatedAt ? report.generatedAt : '—';
+      }
+
+      function renderPlatforms(report) {
+        const labels = statusLabels();
+        platformsBody.innerHTML = '';
+        const rows = Array.isArray(report.platforms) ? report.platforms : [];
+        if (rows.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 7;
+          td.className = 'small';
+          td.textContent = state.strings.versionCheckNoData || 'No data available.';
+          tr.appendChild(td);
+          platformsBody.appendChild(tr);
+          return;
+        }
+        for (const row of rows) {
+          const tr = document.createElement('tr');
+          tr.className = row.status || '';
+          const updatable = row.status === 'outdated' || row.status === 'missing';
+
+          const sketch = document.createElement('td');
+          sketch.textContent = row.sketchLabel || row.sketchDir || '';
+          tr.appendChild(sketch);
+
+          const profile = document.createElement('td');
+          profile.textContent = row.profile || '';
+          tr.appendChild(profile);
+
+          const platform = document.createElement('td');
+          platform.className = 'mono';
+          platform.textContent = row.platformId || '';
+          if (row.packageUrl) {
+            const link = document.createElement('a');
+            link.href = row.packageUrl;
+            link.textContent = ' ⤴';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            platform.appendChild(link);
+          }
+          tr.appendChild(platform);
+
+          const current = document.createElement('td');
+          current.textContent = row.currentVersion ? String(row.currentVersion) : '';
+          tr.appendChild(current);
+
+          const latest = document.createElement('td');
+          latest.textContent = row.latestVersion ? String(row.latestVersion) : '';
+          tr.appendChild(latest);
+
+          const statusTd = document.createElement('td');
+          const labelKey = row.status || 'unknown';
+          statusTd.textContent = labels[labelKey] || labels.unknown;
+          tr.appendChild(statusTd);
+
+          const action = document.createElement('td');
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = state.strings.versionCheckBtnUpdate || 'Update';
+          btn.disabled = !updatable;
+          btn.addEventListener('click', () => {
+            if (!updatable) return;
+            sendMessage('updatePlatforms', { entries: [{
+              sketchDir: row.sketchDir,
+              profile: row.profile,
+              platformId: row.platformId,
+              latestVersion: row.latestVersion
+            }] });
+          });
+          action.appendChild(btn);
+          tr.appendChild(action);
+
+          platformsBody.appendChild(tr);
+        }
+      }
+
+      function renderLibraries(report) {
+        const labels = statusLabels();
+        librariesBody.innerHTML = '';
+        const rows = Array.isArray(report.libraries) ? report.libraries : [];
+        if (rows.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 7;
+          td.className = 'small';
+          td.textContent = state.strings.versionCheckNoData || 'No data available.';
+          tr.appendChild(td);
+          librariesBody.appendChild(tr);
+          return;
+        }
+        for (const row of rows) {
+          const tr = document.createElement('tr');
+          tr.className = row.status || '';
+          const updatable = row.status === 'outdated' || row.status === 'missing';
+
+          const sketch = document.createElement('td');
+          sketch.textContent = row.sketchLabel || row.sketchDir || '';
+          tr.appendChild(sketch);
+
+          const profile = document.createElement('td');
+          profile.textContent = row.profile || '';
+          tr.appendChild(profile);
+
+          const name = document.createElement('td');
+          name.textContent = row.libraryName || '';
+          tr.appendChild(name);
+
+          const current = document.createElement('td');
+          current.textContent = row.currentVersion ? String(row.currentVersion) : '';
+          tr.appendChild(current);
+
+          const latest = document.createElement('td');
+          latest.textContent = row.latestVersion ? String(row.latestVersion) : '';
+          tr.appendChild(latest);
+
+          const statusTd = document.createElement('td');
+          const labelKey = row.status || 'unknown';
+          statusTd.textContent = labels[labelKey] || labels.unknown;
+          tr.appendChild(statusTd);
+
+          const action = document.createElement('td');
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = state.strings.versionCheckBtnUpdate || 'Update';
+          btn.disabled = !updatable;
+          btn.addEventListener('click', () => {
+            if (!updatable) return;
+            sendMessage('updateLibraries', { entries: [{
+              sketchDir: row.sketchDir,
+              profile: row.profile,
+              libraryName: row.libraryName,
+              latestVersion: row.latestVersion
+            }] });
+          });
+          action.appendChild(btn);
+          tr.appendChild(action);
+
+          librariesBody.appendChild(tr);
+        }
+      }
+
+      function renderWarnings(report) {
+        warningsList.innerHTML = '';
+        const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+        if (!warnings.length) {
+          const li = document.createElement('li');
+          li.className = 'small';
+          li.textContent = state.strings.versionCheckNoData || 'No data available.';
+          warningsList.appendChild(li);
+          return;
+        }
+        for (const warning of warnings) {
+          const li = document.createElement('li');
+          li.textContent = warning;
+          warningsList.appendChild(li);
+        }
+      }
+
+      function renderReport(report) {
+        state.report = report;
+        if (!report) {
+          setStatus('', 'info');
+          platformsBody.innerHTML = '';
+          librariesBody.innerHTML = '';
+          warningsList.innerHTML = '';
+          return;
+        }
+        setStatus(state.strings.versionCheckReportReady || 'Dependency report generated.', 'info');
+        renderSummary(report);
+        renderPlatforms(report);
+        renderLibraries(report);
+        renderWarnings(report);
+        const hasPlatformUpdates = (report.platforms || []).some(r => r && (r.status === 'outdated' || r.status === 'missing'));
+        const hasLibraryUpdates = (report.libraries || []).some(r => r && (r.status === 'outdated' || r.status === 'missing'));
+        btnUpdatePlatforms.disabled = !hasPlatformUpdates;
+        btnUpdateLibraries.disabled = !hasLibraryUpdates;
+      }
+
+      window.addEventListener('message', (event) => {
+        const msg = event.data || {};
+        if (msg.type === 'report') {
+          if (msg.payload) {
+            if (msg.payload.strings) {
+              state.strings = Object.assign({}, msg.payload.strings);
+              titleEl.textContent = state.strings.versionCheckTitle || titleEl.textContent;
+              document.getElementById('summarySketchesLabel').textContent = state.strings.versionCheckSummarySketches || 'Sketches';
+              document.getElementById('summaryProfilesLabel').textContent = state.strings.versionCheckSummaryProfiles || 'Profiles';
+              document.getElementById('summaryPlatformsLabel').textContent = state.strings.versionCheckSummaryPlatforms || 'Platforms';
+              document.getElementById('summaryPlatformsOutdatedLabel').textContent = state.strings.versionCheckSummaryOutdated || 'Outdated';
+              document.getElementById('summaryLibrariesLabel').textContent = state.strings.versionCheckSummaryLibraries || 'Libraries';
+              document.getElementById('summaryLibrariesOutdatedLabel').textContent = state.strings.versionCheckSummaryOutdated || 'Outdated';
+              document.getElementById('generatedAtLabel').textContent = state.strings.versionCheckGeneratedAt || 'Generated at';
+              document.getElementById('platformsHeading').textContent = state.strings.versionCheckPlatformsHeading || 'Platforms';
+              document.getElementById('platformColSketch').textContent = state.strings.versionCheckColSketch || 'Sketch';
+              document.getElementById('platformColProfile').textContent = state.strings.versionCheckColProfile || 'Profile';
+              document.getElementById('platformColId').textContent = state.strings.versionCheckColPlatform || 'Platform';
+              document.getElementById('platformColCurrent').textContent = state.strings.versionCheckColCurrent || 'Current';
+              document.getElementById('platformColLatest').textContent = state.strings.versionCheckColLatest || 'Latest';
+              document.getElementById('platformColStatus').textContent = state.strings.versionCheckColStatus || 'Status';
+              document.getElementById('platformColAction').textContent = state.strings.versionCheckColAction || 'Action';
+              document.getElementById('librariesHeading').textContent = state.strings.versionCheckLibrariesHeading || 'Libraries';
+              document.getElementById('libraryColSketch').textContent = state.strings.versionCheckColSketch || 'Sketch';
+              document.getElementById('libraryColProfile').textContent = state.strings.versionCheckColProfile || 'Profile';
+              document.getElementById('libraryColName').textContent = state.strings.versionCheckColLibrary || 'Library';
+              document.getElementById('libraryColCurrent').textContent = state.strings.versionCheckColCurrent || 'Current';
+              document.getElementById('libraryColLatest').textContent = state.strings.versionCheckColLatest || 'Latest';
+              document.getElementById('libraryColStatus').textContent = state.strings.versionCheckColStatus || 'Status';
+              document.getElementById('libraryColAction').textContent = state.strings.versionCheckColAction || 'Action';
+              document.getElementById('warningsHeading').textContent = state.strings.versionCheckWarningsHeading || 'Warnings';
+              btnRefresh.textContent = state.strings.versionCheckBtnRefresh || 'Refresh';
+              btnUpdatePlatforms.textContent = state.strings.versionCheckBtnUpdateAllPlatforms || 'Update all platforms';
+              btnUpdateLibraries.textContent = state.strings.versionCheckBtnUpdateAllLibraries || 'Update all libraries';
+            }
+            if (msg.payload.locale) state.locale = msg.payload.locale;
+            renderReport(msg.payload.report || null);
+          }
+        } else if (msg.type === 'notice') {
+          setStatus(msg.message || '', msg.level || 'info');
+        }
+      });
+
+      if (vscode) {
+        vscode.postMessage({ type: 'ready' });
+      }
+    })();
+  </script>
+</body>
+</html>
