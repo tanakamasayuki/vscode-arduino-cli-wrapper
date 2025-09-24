@@ -79,6 +79,10 @@
         "title": "%cmd.listAllBoards%"
       },
       {
+        "command": "arduino-cli.configureWarnings",
+        "title": "%cmd.configureWarnings%"
+      },
+      {
         "command": "arduino-cli.boardDetails",
         "title": "%cmd.boardDetails%"
       },
@@ -157,11 +161,6 @@
           },
           "description": "%config.additionalArgs.description%"
         },
-        "arduino-cli-wrapper.verbose": {
-          "type": "boolean",
-          "default": true,
-          "description": "%config.verbose.description%"
-        },
         "arduino-cli-wrapper.compileWarnings": {
           "type": "string",
           "enum": [
@@ -171,13 +170,18 @@
             "all"
           ],
           "default": "default",
-          "description": "%config.compileWarnings.description%",
+          "markdownDescription": "%config.compileWarnings.description%",
           "enumDescriptions": [
             "%config.compileWarnings.enum.none%",
             "%config.compileWarnings.enum.default%",
             "%config.compileWarnings.enum.more%",
             "%config.compileWarnings.enum.all%"
           ]
+        },
+        "arduino-cli-wrapper.verbose": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.verbose.description%"
         },
         "arduino-cli-wrapper.lint.m5gfxIncludes": {
           "type": "array",

@@ -15,7 +15,7 @@ const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
 const VALID_WARNING_LEVELS = new Set(['none', 'default', 'more', 'all']);
 let output;
 let extContext;
-let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusList, statusListAll;
+let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings, statusList, statusListAll;
 let monitorTerminal;
 // Log terminal (ANSI capable, no command execution)
 let logTerminal;
@@ -72,6 +72,19 @@ const MSG = {
     setBaudCustom: 'Custom…',
     setBaudPrompt: 'Enter baudrate (e.g., 115200)',
     statusSetBaud: 'Baudrate set: {baud}',
+    warningsStatusTooltip: 'Warnings: {level} / Verbose: {verbose}',
+    warningsLevelNone: 'none',
+    warningsLevelDefault: 'default',
+    warningsLevelMore: 'more',
+    warningsLevelAll: 'all',
+    warningsVerboseOn: 'on',
+    warningsVerboseOff: 'off',
+    warningsQuickPickTitle: 'Select warnings and verbose mode',
+    warningsQuickPickPlaceHolder: 'Choose compile warnings level and verbose output',
+    warningsQuickPickWithVerbose: '{level} (with verbose)',
+    warningsQuickPickWithoutVerbose: '{level} (no verbose)',
+    warningsUpdateApplied: 'Warnings set to {level}, verbose {verbose}',
+    warningsUpdateFailed: 'Failed to update warnings settings: {msg}',
     assistNoYaml: 'No sketch.yaml found. Create one?',
     assistUpdatePick: 'Select which setting to update',
     assistUpdateFqbn: 'Update default_fqbn to current selection',
@@ -336,6 +349,19 @@ const MSG = {
     setBaudCustom: 'カスタム入力…',
     setBaudPrompt: 'ボーレートを入力（例: 115200）',
     statusSetBaud: 'ボーレートを設定: {baud}',
+    warningsStatusTooltip: '警告: {level} / 詳細ログ: {verbose}',
+    warningsLevelNone: 'なし(none)',
+    warningsLevelDefault: 'デフォルト(default)',
+    warningsLevelMore: '詳細(more)',
+    warningsLevelAll: '全て(all)',
+    warningsVerboseOn: '有効',
+    warningsVerboseOff: '無効',
+    warningsQuickPickTitle: '警告レベルと詳細ログを選択',
+    warningsQuickPickPlaceHolder: 'コンパイル警告と verbose の組み合わせを選択してください',
+    warningsQuickPickWithVerbose: '{level} (詳細ログあり)',
+    warningsQuickPickWithoutVerbose: '{level} (詳細ログなし)',
+    warningsUpdateApplied: '警告を {level}、詳細ログを {verbose} に更新しました。',
+    warningsUpdateFailed: '警告設定の更新に失敗しました: {msg}',
     assistNoYaml: 'sketch.yaml がありません。作成しますか？',
     assistUpdatePick: '更新する設定を選択してください',
     assistUpdateFqbn: 'default_fqbn を現在の選択に更新',
@@ -478,7 +504,7 @@ function setupIncludeOrderLint(context) {
     vscode.workspace.onDidChangeConfiguration((event) => {
       try {
         if (event.affectsConfiguration('arduino-cli-wrapper.lint.m5gfxIncludes') ||
-            event.affectsConfiguration('arduino-cli-wrapper.lint.fsIncludes')) {
+          event.affectsConfiguration('arduino-cli-wrapper.lint.fsIncludes')) {
           includeOrderConfig = loadIncludeOrderConfig();
           lintAllOpenIncludeOrderTargets();
         }
@@ -594,12 +620,24 @@ function headerBasename(header) {
  */
 function getConfig() {
   const cfg = vscode.workspace.getConfiguration();
+  const inspectedWarnings = cfg.inspect('arduino-cli-wrapper.compileWarnings');
+  const inspectedVerbose = cfg.inspect('arduino-cli-wrapper.verbose');
+  const warnings = typeof inspectedWarnings?.workspaceValue !== 'undefined'
+    ? inspectedWarnings.workspaceValue
+    : typeof inspectedWarnings?.globalValue !== 'undefined'
+      ? inspectedWarnings.globalValue
+      : inspectedWarnings?.defaultValue ?? 'default';
+  const verbose = typeof inspectedVerbose?.workspaceValue !== 'undefined'
+    ? inspectedVerbose.workspaceValue
+    : typeof inspectedVerbose?.globalValue !== 'undefined'
+      ? inspectedVerbose.globalValue
+      : inspectedVerbose?.defaultValue ?? false;
   return {
     exe: cfg.get('arduino-cli-wrapper.path', 'arduino-cli'),
     useTerminal: cfg.get('arduino-cli-wrapper.useTerminal', false),
     extra: cfg.get('arduino-cli-wrapper.additionalArgs', []),
-    verbose: cfg.get('arduino-cli-wrapper.verbose', false),
-    warnings: cfg.get('arduino-cli-wrapper.compileWarnings', 'default'),
+    verbose: !!verbose,
+    warnings: typeof warnings === 'string' ? warnings : 'default',
   };
 }
 
@@ -2054,6 +2092,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.boardDetails', commandBoardDetails),
     vscode.commands.registerCommand('arduino-cli.runArbitrary', commandRunArbitrary),
     vscode.commands.registerCommand('arduino-cli.compile', commandCompile),
+    vscode.commands.registerCommand('arduino-cli.configureWarnings', commandConfigureWarnings),
     vscode.commands.registerCommand('arduino-cli.versionCheck', commandVersionCheck),
     vscode.commands.registerCommand('arduino-cli.buildCheck', commandBuildCheck),
     vscode.commands.registerCommand('arduino-cli.cleanCompile', commandCleanCompile),
@@ -2089,24 +2128,32 @@ function activate(context) {
   statusPort = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 96);
   statusPort.command = 'arduino-cli.setPort';
 
-  statusBaud = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 95);
+  statusBaud = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 94);
   statusBaud.command = 'arduino-cli.setBaud';
 
-  statusList = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 94);
+  statusWarnings = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 95);
+  statusWarnings.command = 'arduino-cli.configureWarnings';
+
+  statusList = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 93);
   statusList.text = '$(list-unordered) Boards';
   statusList.tooltip = 'Arduino: List Connected Boards';
   statusList.command = 'arduino-cli.listBoards';
 
-  statusListAll = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 93);
+  statusListAll = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 92);
   statusListAll.text = '$(search) ListAll';
   statusListAll.tooltip = 'Arduino: List All Boards (listall)';
   statusListAll.command = 'arduino-cli.listAllBoards';
 
-  context.subscriptions.push(statusList, statusListAll, statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud);
+  context.subscriptions.push(statusList, statusListAll, statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings);
   updateStatusBar();
 
   vscode.window.onDidChangeActiveTextEditor(updateStatusBar, null, context.subscriptions);
   vscode.workspace.onDidChangeWorkspaceFolders(updateStatusBar, null, context.subscriptions);
+  vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration('arduino-cli-wrapper.compileWarnings') || event.affectsConfiguration('arduino-cli-wrapper.verbose')) {
+      updateStatusBar();
+    }
+  }, null, context.subscriptions);
   vscode.window.onDidCloseTerminal((term) => {
     if (monitorTerminal && term === monitorTerminal) {
       monitorTerminal = undefined;
@@ -2815,6 +2862,33 @@ async function detectSketchDirForStatus() {
   return undefined;
 }
 
+function getWarningsShortCode(level) {
+  switch ((level || '').toLowerCase()) {
+    case 'none': return 'none';
+    case 'default': return 'def';
+    case 'more': return 'more';
+    case 'all': return 'all';
+    default: return 'def';
+  }
+}
+
+function getWarningsLevelLabel(level) {
+  const key = (level || '').toLowerCase();
+  if (key === 'none') return t('warningsLevelNone');
+  if (key === 'more') return t('warningsLevelMore');
+  if (key === 'all') return t('warningsLevelAll');
+  return t('warningsLevelDefault');
+}
+
+function getVerboseLabel(verbose) {
+  return verbose ? t('warningsVerboseOn') : t('warningsVerboseOff');
+}
+
+function formatWarningsBadge(level, verbose) {
+  const base = getWarningsShortCode(level);
+  return verbose ? `${base}+V` : base;
+}
+
 /**
  * Refresh status bar items (FQBN/profile, port, baud, action buttons)
  * based on current workspace and state.
@@ -2831,6 +2905,7 @@ async function updateStatusBar() {
     statusFqbn.hide();
     statusPort.hide();
     statusBaud.hide();
+    statusWarnings.hide();
     return;
   }
   const sketchDir = await detectSketchDirForStatus();
@@ -2843,8 +2918,12 @@ async function updateStatusBar() {
     statusFqbn.hide();
     statusPort.hide();
     statusBaud.hide();
+    statusWarnings.hide();
     return;
   }
+  const cfg = getConfig();
+  const warningsLevel = cfg && typeof cfg.warnings === 'string' ? cfg.warnings : 'default';
+  const verboseEnabled = !!(cfg && cfg.verbose);
   let yamlInfo = await readSketchYamlInfo(sketchDir);
   const fqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
   const port = extContext?.workspaceState.get(STATE_PORT, '') || '';
@@ -2877,6 +2956,9 @@ async function updateStatusBar() {
   statusPort.tooltip = _isJa ? '現在のポート（クリックで変更）' : 'Current serial port (click to change)';
   statusBaud.text = `$(watch) ${baud}`;
   statusBaud.tooltip = _isJa ? '現在のボーレート（クリックで変更）' : 'Current baudrate (click to change)';
+  statusWarnings.text = `$(megaphone) ${formatWarningsBadge(warningsLevel, verboseEnabled)}`;
+  statusWarnings.tooltip = t('warningsStatusTooltip', { level: getWarningsLevelLabel(warningsLevel), verbose: getVerboseLabel(verboseEnabled) });
+  statusWarnings.command = 'arduino-cli.configureWarnings';
   statusList.show();
   statusListAll.show();
   statusBuild.show();
@@ -2885,6 +2967,7 @@ async function updateStatusBar() {
   statusFqbn.show();
   statusPort.show();
   statusBaud.show();
+  statusWarnings.show();
 }
 
 /**
@@ -2989,6 +3072,69 @@ async function commandSetBaud(required) {
   updateStatusBar();
   vscode.window.setStatusBarMessage(t('statusSetBaud', { baud }), 2000);
   return true;
+}
+
+async function commandConfigureWarnings() {
+  const cfg = getConfig();
+  const currentWarnings = typeof cfg.warnings === 'string' ? cfg.warnings : 'default';
+  const currentVerbose = !!cfg.verbose;
+  const levels = ['none', 'default', 'more', 'all'];
+  /** @type {vscode.QuickPickItem[]} */
+  const items = [];
+  for (const level of levels) {
+    for (const verbose of [false, true]) {
+      const levelLabel = getWarningsLevelLabel(level);
+      const verboseLabel = getVerboseLabel(verbose);
+      const label = verbose
+        ? t('warningsQuickPickWithVerbose', { level: levelLabel })
+        : t('warningsQuickPickWithoutVerbose', { level: levelLabel });
+      items.push({
+        label,
+        description: formatWarningsBadge(level, verbose),
+        detail: t('warningsStatusTooltip', { level: levelLabel, verbose: verboseLabel }),
+        picked: level === currentWarnings && verbose === currentVerbose,
+        value: { warnings: level, verbose }
+      });
+    }
+  }
+
+  const quickPickItems = items.map(item => ({
+    label: item.label,
+    description: item.description,
+    detail: item.detail,
+    picked: item.picked,
+    value: item.value
+  }));
+
+  const selection = await vscode.window.showQuickPick(quickPickItems, {
+    placeHolder: t('warningsQuickPickPlaceHolder'),
+    title: t('warningsQuickPickTitle')
+  });
+  if (!selection || !selection.value) return;
+
+  const { warnings, verbose } = selection.value;
+  const config = vscode.workspace.getConfiguration();
+  const hasWorkspace = !!(vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0);
+  try {
+    if (hasWorkspace) {
+      await config.update('arduino-cli-wrapper.compileWarnings', warnings, vscode.ConfigurationTarget.Workspace);
+      await config.update('arduino-cli-wrapper.verbose', verbose, vscode.ConfigurationTarget.Workspace);
+      await config.update('arduino-cli-wrapper.compileWarnings', undefined, vscode.ConfigurationTarget.Global);
+      await config.update('arduino-cli-wrapper.verbose', undefined, vscode.ConfigurationTarget.Global);
+    } else {
+      await config.update('arduino-cli-wrapper.compileWarnings', warnings, vscode.ConfigurationTarget.Global);
+      await config.update('arduino-cli-wrapper.verbose', verbose, vscode.ConfigurationTarget.Global);
+      await config.update('arduino-cli-wrapper.compileWarnings', undefined, vscode.ConfigurationTarget.Workspace);
+      await config.update('arduino-cli-wrapper.verbose', undefined, vscode.ConfigurationTarget.Workspace);
+    }
+    vscode.window.setStatusBarMessage(
+      t('warningsUpdateApplied', { level: getWarningsLevelLabel(warnings), verbose: getVerboseLabel(verbose) }),
+      2000
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(t('warningsUpdateFailed', { msg: err && err.message ? err.message : String(err) }));
+  }
+  updateStatusBar();
 }
 
 /**

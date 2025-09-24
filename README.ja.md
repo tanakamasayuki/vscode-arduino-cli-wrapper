@@ -13,6 +13,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - Clean Compile: `--clean` でクリーンビルド。最初に includePath を空にし、ビルドで検出したパスのみを追加
 - Build Check: すべての sketch.yaml プロファイルを `--warnings=all` 付きでコンパイルし、警告/エラー件数を集計
 - Version Check: 各 sketch.yaml プロファイルを走査し、プラットフォーム/ライブラリーのバージョンを公開インデックスと比較して更新を提案
+- Status Controls: ステータスバーから警告レベルと verbose を切り替え (`all+V` などの短い表示)
 - Upload Sketch: ビルドしてから書き込み。選択したポートとプロファイル/FQBNを使用。必要に応じてモニタを一時停止・再開
 - Monitor Serial: シリアルモニタを起動（ポートとボーレートを選択）
 - Open Helper: sketch.yaml ヘルパーの Web ビューを開き、プロファイル/ライブラリを確認・反映
