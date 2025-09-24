@@ -18,6 +18,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - Board Details: プロファイル使用時は `-b` でその FQBN を渡して詳細表示
 - Run Command: 任意の Arduino CLI 引数を実行
 - Configure IntelliSense: ビルドせずに includePath を計算して `.vscode/c_cpp_properties.json` を作成
+- Include Order Lint: `.ino` 内で M5GFX 系ヘッダーより後ろに FS 系ヘッダーを置いた場合に診断を表示
 - Upload Data (ESP32): `data/` から LittleFS/SPIFFS イメージを作成し、esptool で書き込み
 - New Sketch: 新しいスケッチフォルダーを作成
 
@@ -94,6 +95,15 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - `arduino-cli-wrapper.additionalArgs`: すべての呼び出しに付与する追加引数（配列）
 - `arduino-cli-wrapper.verbose`: コンパイル/書き込み時に `--verbose` を付与
 - `arduino-cli-wrapper.compileWarnings`: `arduino-cli compile` に渡す警告レベル (`--warnings`) を指定
+- `arduino-cli-wrapper.lint.m5gfxIncludes`: Include 順チェックで M5GFX 系として扱うヘッダー一覧
+- `arduino-cli-wrapper.lint.fsIncludes`: Include 順チェックで FS 系として扱うヘッダー一覧
+
+## Include 順リント
+
+- 対象はワークスペース内の `.ino` ファイルです。
+- `arduino-cli-wrapper.lint.m5gfxIncludes` で指定したヘッダーの後に、`arduino-cli-wrapper.lint.fsIncludes` に含めたヘッダーを記述するとエラー診断を表示します。
+- 既定値で主要な M5GFX / FS ヘッダーをカバーしています。プロジェクトに応じて設定から追加・削除できます。
+- ドキュメントの変更や設定の更新を検知して診断を再評価します。
 
 ## 要件
 

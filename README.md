@@ -18,6 +18,7 @@ VS Code extension to run Arduino CLI from the command palette, status bar, and a
 - Board Details: when using profiles, passes the profile's FQBN with `-b`
 - Run Command: run arbitrary Arduino CLI arguments
 - Configure IntelliSense: compute include paths and write `.vscode/c_cpp_properties.json` without building
+- Include Order Lint: highlight when filesystem headers are included after M5GFX headers in `.ino` files
 - Upload Data (ESP32): build LittleFS/SPIFFS image from `data/` and flash via esptool
 - New Sketch: create a new Arduino sketch folder
 
@@ -94,6 +95,15 @@ Tips:
 - `arduino-cli-wrapper.additionalArgs`: Extra arguments appended to every invocation (array)
 - `arduino-cli-wrapper.verbose`: Adds `--verbose` to compile/upload
 - `arduino-cli-wrapper.compileWarnings`: Warning level passed to `arduino-cli compile` (`--warnings`)
+- `arduino-cli-wrapper.lint.m5gfxIncludes`: Header list treated as M5GFX family for include-order linting
+- `arduino-cli-wrapper.lint.fsIncludes`: Header list treated as filesystem-related for include-order linting
+
+## Include Order Lint
+
+- Applies to `.ino` files in the workspace.
+- When an M5GFX header (from `arduino-cli-wrapper.lint.m5gfxIncludes`) appears before a filesystem header (from `arduino-cli-wrapper.lint.fsIncludes`) in the same translation unit, the extension emits an error diagnostic.
+- The default header lists cover the common M5GFX and filesystem headers; customize them per project via the settings above.
+- Diagnostics refresh automatically as documents change or when the settings are updated.
 
 ## Requirements
 
