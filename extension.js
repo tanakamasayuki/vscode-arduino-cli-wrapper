@@ -626,7 +626,7 @@ function getConfig() {
     ? inspectedWarnings.workspaceValue
     : typeof inspectedWarnings?.globalValue !== 'undefined'
       ? inspectedWarnings.globalValue
-      : inspectedWarnings?.defaultValue ?? 'default';
+      : inspectedWarnings?.defaultValue ?? 'none';
   const verbose = typeof inspectedVerbose?.workspaceValue !== 'undefined'
     ? inspectedVerbose.workspaceValue
     : typeof inspectedVerbose?.globalValue !== 'undefined'
@@ -637,7 +637,7 @@ function getConfig() {
     useTerminal: cfg.get('arduino-cli-wrapper.useTerminal', false),
     extra: cfg.get('arduino-cli-wrapper.additionalArgs', []),
     verbose: !!verbose,
-    warnings: typeof warnings === 'string' ? warnings : 'default',
+    warnings: typeof warnings === 'string' ? warnings : 'none',
   };
 }
 
@@ -2854,10 +2854,10 @@ async function detectSketchDirForStatus() {
 function getWarningsShortCode(level) {
   switch ((level || '').toLowerCase()) {
     case 'none': return 'none';
-    case 'default': return 'def';
+    case 'default': return 'default';
     case 'more': return 'more';
     case 'all': return 'all';
-    default: return 'def';
+    default: return 'none';
   }
 }
 
@@ -2907,7 +2907,7 @@ async function updateStatusBar() {
     return;
   }
   const cfg = getConfig();
-  const warningsLevel = cfg && typeof cfg.warnings === 'string' ? cfg.warnings : 'default';
+  const warningsLevel = cfg && typeof cfg.warnings === 'string' ? cfg.warnings : 'none';
   const verboseEnabled = !!(cfg && cfg.verbose);
   let yamlInfo = await readSketchYamlInfo(sketchDir);
   const fqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
@@ -3059,7 +3059,7 @@ async function commandSetBaud(required) {
 
 async function commandConfigureWarnings() {
   const cfg = getConfig();
-  const currentWarnings = typeof cfg.warnings === 'string' ? cfg.warnings : 'default';
+  const currentWarnings = typeof cfg.warnings === 'string' ? cfg.warnings : 'none';
   const currentVerbose = !!cfg.verbose;
   const levels = ['none', 'default', 'more', 'all'];
   /** @type {vscode.QuickPickItem[]} */

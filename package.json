@@ -169,7 +169,7 @@
             "more",
             "all"
           ],
-          "default": "default",
+          "default": "none",
           "markdownDescription": "%config.compileWarnings.description%",
           "enumDescriptions": [
             "%config.compileWarnings.enum.none%",
@@ -180,7 +180,7 @@
         },
         "arduino-cli-wrapper.verbose": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "markdownDescription": "%config.verbose.description%"
         },
         "arduino-cli-wrapper.lint.m5gfxIncludes": {
