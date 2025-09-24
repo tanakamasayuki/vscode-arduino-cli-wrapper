@@ -2240,7 +2240,6 @@ function defaultCommandItems(dir, profile, parent) {
     new CommandItem('Open Helper', 'helper', dir, profile, parent),
     new CommandItem('Open Examples', 'examples', dir, profile, parent),
     new CommandItem('Inspect', 'inspect', dir, profile, parent),
-    new CommandItem('Version Check', 'versionCheck', dir, profile, parent),
   ];
 }
 
