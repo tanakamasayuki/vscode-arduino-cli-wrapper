@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
-## 開発中
+## Unreleased
+- 次回リリースに向けて準備中の変更をここに書く
+
+## 1.3.6
+
 - (EN) Added Build Check to the root of the Arduino CLI view for quick access.
 - (JA) Arduino CLI ビューのルートにビルドチェックを追加し、すばやく実行できるようにしました。
 - (EN) Localized Arduino CLI tree tooltips so hover text follows the locale while the visible labels stay in English.
