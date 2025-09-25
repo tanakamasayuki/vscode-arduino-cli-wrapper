@@ -691,15 +691,32 @@ function containsWarningsFlag(list) {
 
 function getOutput() {
   if (!output) {
-    // Provide a terminal-backed logging channel with OutputChannel-like API
-    const termRef = getAnsiLogTerminal();
-    const proxy = {
-      append: (s) => { try { termRef.write(String(s)); } catch { /* ignore */ } },
-      appendLine: (s) => { try { termRef.write(String(s) + "\r\n"); } catch { /* ignore */ } },
-      show: () => { try { termRef.terminal.show(true); } catch { /* ignore */ } },
-      dispose: () => { try { termRef.terminal.dispose(); } catch { /* ignore */ } },
+    output = {
+      append: (s) => {
+        try {
+          getAnsiLogTerminal().write(String(s));
+        } catch (_) { /* ignore */ }
+      },
+      appendLine: (s) => {
+        try {
+          getAnsiLogTerminal().write(String(s) + '\r\n');
+        } catch (_) { /* ignore */ }
+      },
+      show: (preserveFocus = false) => {
+        try {
+          getAnsiLogTerminal().terminal.show(!!preserveFocus);
+        } catch (_) { /* ignore */ }
+      },
+      dispose: () => {
+        try {
+          if (logTerminal && !logTerminal.exitStatus) {
+            logTerminal.dispose();
+          }
+          logTerminal = undefined;
+        } catch (_) { /* ignore */ }
+        output = null;
+      }
     };
-    output = proxy;
   }
   return output;
 }
@@ -712,7 +729,7 @@ function showError(err) {
   const channel = getOutput();
   const msg = (err && err.message) ? err.message : String(err);
   channel.appendLine(`[error] ${msg}`);
-  channel.show(true);
+  channel.show();
   vscode.window.showErrorMessage(msg);
 }
 
@@ -931,7 +948,7 @@ function runCli(args, opts = {}) {
   const finalArgs = [...baseArgs, ...args];
   const channel = getOutput();
   const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
-  channel.show(true);
+  channel.show();
   channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
   if (opts.cwd) channel.appendLine(`${ANSI.dim}(cwd: ${opts.cwd})${ANSI.reset}`);
 
@@ -1511,7 +1528,7 @@ async function commandUploadData() {
   propsArgs.push('--show-properties');
   propsArgs.push(sketchDir);
 
-  channel.show(true);
+  channel.show();
   channel.appendLine(`${ANSI.cyan}[upload-data] Detecting tool paths via --show-properties${ANSI.reset}`);
 
   // Run and capture stdout only
@@ -2462,7 +2479,7 @@ async function commandBuildCheck() {
     return;
   }
   const channel = getOutput();
-  channel.show(true);
+  channel.show();
   channel.appendLine(t('buildCheckStart'));
 
   const sketches = [];
@@ -2679,7 +2696,7 @@ async function commandBuildCheck() {
  */
 async function commandVersionCheck() {
   const channel = getOutput();
-  channel.show(true);
+  channel.show();
 
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
@@ -2827,7 +2844,7 @@ async function commandListAllBoards() {
     }
   }
 
-  channel.show(true);
+  channel.show();
   channel.appendLine(`$ ${quoteArg(exe)} ${args.map(quoteArg).join(' ')}`);
   if (filter && filter.trim()) channel.appendLine(`[filter passed to CLI]`);
 
@@ -5096,8 +5113,8 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   const finalArgs = [...baseArgs, ...args];
   const channel = getOutput();
   const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : quoteArg(exe);
-  channel.appendLine(`[inspector] $ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}`);
-  channel.appendLine(`[inspector] (cwd: ${sketchDir})`);
+  channel.appendLine(`${ANSI.cyan}[inspector] $ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
+  channel.appendLine(`${ANSI.dim}[inspector] (cwd: ${sketchDir})${ANSI.reset}`);
   let stdout = '';
   let stderr = '';
   const code = await new Promise((resolve, reject) => {
