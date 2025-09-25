@@ -1,6 +1,12 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Inspector analysis now runs `arduino-cli compile --clean` so each report uses a pristine build.
+- (JA) インスペクター分析で `arduino-cli compile --clean` を実行し、毎回クリーンな状態からビルドするようにしました。
+- (EN) Inspector warnings now omit files outside the workspace from both counts and the Diagnostics tab.
+- (JA) インスペクターの警告について、ワークスペース外のファイルは集計にも診断タブにも表示しないようにしました。
+- (EN) Inspector diagnostics now let you open the reported location directly from the table.
+- (JA) インスペクター診断の位置をクリックすると対象ファイルの該当行を開くようにしました。
 - (EN) Auto-ran the Inspector analysis when the view opens with both sketch and profile preselected.
 - (JA) スケッチとプロファイルを指定してインスペクターを開いた場合に、自動で分析を開始するようにしました。
 - (EN) Made Inspector tab buttons adopt white text in dark mode to improve legibility.

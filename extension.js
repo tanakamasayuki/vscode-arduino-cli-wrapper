@@ -3976,10 +3976,24 @@ async function commandOpenInspector(ctx) {
           } else if (typeof msg.path === 'string') {
             target = msg.path;
           }
+          const lineValue = typeof msg.line === 'number' ? msg.line : (typeof msg.line === 'string' ? Number(msg.line) : NaN);
+          const columnValue = typeof msg.column === 'number' ? msg.column : (typeof msg.column === 'string' ? Number(msg.column) : NaN);
           if (!target) return;
           try {
             const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(target));
-            await vscode.window.showTextDocument(doc, { preview: false });
+            const hasLine = Number.isFinite(lineValue) && lineValue > 0;
+            const hasColumn = Number.isFinite(columnValue) && columnValue > 0;
+            let selection;
+            if (hasLine) {
+              const lineIndex = Math.max(0, Math.floor(lineValue - 1));
+              const columnIndex = hasColumn ? Math.max(0, Math.floor(columnValue - 1)) : 0;
+              const position = new vscode.Position(lineIndex, columnIndex);
+              selection = new vscode.Range(position, position);
+            }
+            const editor = await vscode.window.showTextDocument(doc, selection ? { preview: false, selection } : { preview: false });
+            if (selection) {
+              editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+            }
           } catch (err) {
             showError(err);
           }
@@ -5038,6 +5052,26 @@ function workspaceRelativePath(fsPath) {
   return fsPath;
 }
 
+function isWorkspaceFile(fsPath) {
+  if (!fsPath) return true;
+  try {
+    const normalized = path.normalize(fsPath);
+    if (!path.isAbsolute(normalized)) {
+      return true;
+    }
+    const folders = vscode.workspace.workspaceFolders || [];
+    for (const folder of folders) {
+      if (!folder || !folder.uri) continue;
+      const rel = path.relative(folder.uri.fsPath, normalized);
+      if (!rel || (!rel.startsWith('..') && !path.isAbsolute(rel))) {
+        return true;
+      }
+    }
+  } catch (_) { }
+  return false;
+}
+
+
 async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   if (!(await ensureCliReady())) {
     throw new Error(t('cliCheckFail', {}));
@@ -5045,7 +5079,7 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-  const args = ['compile', '--warnings=all', '--json'];
+  const args = ['compile', '--warnings=all', '--json', '--clean'];
   let usedProfile = '';
   let usedFqbn = '';
   if (profile) {
@@ -5087,8 +5121,9 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   const buildPath = typeof builder.build_path === 'string' ? builder.build_path : '';
   const diagnostics = Array.isArray(builder.diagnostics) ? builder.diagnostics : [];
   const diagRecords = diagnostics.map(formatInspectorDiagnostic);
-  const warnings = diagRecords.filter(d => d.severity === 'WARNING').length;
-  const errors = diagRecords.filter(d => d.severity === 'ERROR').length;
+  const visibleDiagnostics = diagRecords.filter((d) => d.severity !== 'WARNING' || isWorkspaceFile(d.file));
+  const warnings = visibleDiagnostics.filter((d) => d.severity === 'WARNING').length;
+  const errors = visibleDiagnostics.filter(d => d.severity === 'ERROR').length;
   const sections = Array.isArray(builder.executable_sections_size)
     ? builder.executable_sections_size.map(cleanSectionSize)
     : [];
@@ -5115,7 +5150,7 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
       exitCode: code,
       relativeSketch: workspaceRelativePath(sketchDir)
     },
-    diagnostics: diagRecords,
+    diagnostics: visibleDiagnostics,
     sections,
     map: mapInfo.payload,
     libraries,
@@ -5132,9 +5167,15 @@ function formatInspectorDiagnostic(diag) {
   const severity = String(diag?.severity || '').toUpperCase();
   const message = String(diag?.message || '').trim();
   const location = diag?.location || {};
-  const file = typeof location.file === 'string' ? location.file : '';
-  const line = typeof location.line === 'number' ? location.line : undefined;
-  const column = typeof location.column === 'number' ? location.column : undefined;
+  const file = typeof location.file === 'string'
+    ? location.file
+    : (typeof diag?.file === 'string' ? diag.file : '');
+  const line = typeof location.line === 'number'
+    ? location.line
+    : (typeof diag?.line === 'number' ? diag.line : undefined);
+  const column = typeof location.column === 'number'
+    ? location.column
+    : (typeof diag?.column === 'number' ? diag.column : undefined);
   return {
     severity,
     message,

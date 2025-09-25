@@ -172,6 +172,22 @@
       padding: 8px;
     }
 
+    .diag-link {
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      color: inherit;
+      text-decoration: underline;
+      font: inherit;
+    }
+
+    .diag-link:focus {
+      outline: 1px dashed currentColor;
+      outline-offset: 2px;
+    }
+
     .hidden {
       display: none;
     }
@@ -414,8 +430,16 @@
 
       function renderDiagnostics(diagnostics) {
         const rows = diagnostics && diagnostics.length ? diagnostics.map((d) => {
-          const loc = d.file ? `${d.relative || d.file}${d.line ? `:${d.line}` : ''}` : '';
-          return `<tr><td>${d.severity}</td><td>${escapeHtml(d.message)}</td><td class="mono">${escapeHtml(loc)}</td></tr>`;
+          const loc = d.file ? ((d.relative || d.file) + (d.line ? ':' + d.line : '')) : '';
+          const hasFile = !!d.file;
+          const hasLine = typeof d.line === 'number' && Number.isFinite(d.line);
+          const hasColumn = typeof d.column === 'number' && Number.isFinite(d.column);
+          const lineAttr = hasLine ? ` data-line="${d.line}"` : '';
+          const columnAttr = hasColumn ? ` data-column="${d.column}"` : '';
+          const locationCell = hasFile
+            ? `<button type="button" class="diag-link" data-action="openLocation" data-path="${escapeAttr(d.file)}"${lineAttr}${columnAttr}>${escapeHtml(loc)}</button>`
+            : escapeHtml(loc);
+          return `<tr><td>${escapeHtml(d.severity)}</td><td>${escapeHtml(d.message)}</td><td class="mono">${locationCell}</td></tr>`;
         }).join('') : `<tr><td colspan="3">${state.strings.inspectorTableNoData || 'No data'}</td></tr>`;
         diagnosticsContent.innerHTML = `
           <table>
@@ -503,6 +527,19 @@
         return String(text || '').replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] || ch));
       }
 
+
+      function escapeAttr(text) {
+        return String(text || '').replace(/[&"'<>\n\r]/g, (ch) => ({
+          '&': '&amp;',
+          '"': '&quot;',
+          "'": '&#39;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '\n': '&#10;',
+          '\r': '&#13;'
+        }[ch] || ch));
+      }
+
       sketchSelect.addEventListener('change', () => updateProfileSelect(''));
       analyzeBtn.addEventListener('click', () => requestAnalysis());
       tabButtons.forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
@@ -517,6 +554,23 @@
         } else if (action === 'open') {
           vscode.postMessage({ type: 'openFile', key });
         }
+      });
+
+      diagnosticsContent.addEventListener('click', (event) => {
+        const targetEl = event.target instanceof HTMLElement ? event.target.closest('button[data-action="openLocation"]') : null;
+        if (!targetEl) return;
+        const filePath = targetEl.getAttribute('data-path');
+        if (!filePath) return;
+        const lineAttr = targetEl.getAttribute('data-line');
+        const columnAttr = targetEl.getAttribute('data-column');
+        const lineValue = lineAttr ? Number(lineAttr) : undefined;
+        const columnValue = columnAttr ? Number(columnAttr) : undefined;
+        vscode.postMessage({
+          type: 'openFile',
+          path: filePath,
+          line: Number.isFinite(lineValue) ? lineValue : undefined,
+          column: Number.isFinite(columnValue) ? columnValue : undefined
+        });
       });
 
       window.addEventListener('message', (event) => {
