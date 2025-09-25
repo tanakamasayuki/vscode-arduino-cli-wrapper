@@ -1,7 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
-- 次回リリースに向けて準備中の変更をここに書く
+- (EN) Closing the Sketch.yaml Helper window automatically after applying changes to align with expected workflow.
+- (JA) Sketch.yaml Helper で変更を反映したあと、自動的にウインドウを閉じるようにし、想定フローに合わせました。
 
 ## 1.3.6
 

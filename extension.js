@@ -3641,6 +3641,7 @@ async function commandOpenSketchYamlHelper(ctx) {
       try { await vscode.window.showTextDocument(yamlUri); } catch { }
       updateStatusBar();
       try { await vscode.commands.executeCommand('arduino-cli.refreshView'); } catch { }
+      panel.dispose();
     } catch (e) {
       vscode.window.showErrorMessage(t('yamlApplyError', { msg: e.message }));
     }
