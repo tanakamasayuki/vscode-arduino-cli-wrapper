@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Made Inspector tab buttons adopt white text in dark mode to improve legibility.
+- (JA) インスペクターのタブボタンをダークモードでは白字にし、視認性を向上させました。
 
 ## 1.3.7
 - (EN) Updated Sketch.yaml Helper so changing boards refreshes the platform version from the newly selected board.

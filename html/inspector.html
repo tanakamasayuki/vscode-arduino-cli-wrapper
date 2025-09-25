@@ -68,10 +68,22 @@
       background: transparent;
       border-radius: 4px;
       padding: 6px 12px;
+      color: inherit;
     }
 
     .tab-bar button.active {
       background: rgba(128, 128, 128, 0.15);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .tab-bar button {
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.35);
+      }
+
+      .tab-bar button.active {
+        background: rgba(255, 255, 255, 0.12);
+      }
     }
 
     .tab {
