@@ -13,4 +13,3 @@ images/*.svg
 .gitignore
 temp
 AGENTS.md
-CHANGELOG.md
