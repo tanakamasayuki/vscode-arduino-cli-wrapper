@@ -1,4 +1,4 @@
-﻿// JavaScript-only VS Code extension that wraps Arduino CLI
+// JavaScript-only VS Code extension that wraps Arduino CLI
 // No external dependencies; uses Node's child_process and VS Code API.
 
 const vscode = require('vscode');
