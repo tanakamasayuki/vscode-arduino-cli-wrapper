@@ -217,6 +217,10 @@
 
         // Package URL (show above FQBN summary, no link)
         const pkgUrl = (detail && typeof detail.package_url === 'string') ? detail.package_url : '';
+        const platformIdForBoard = (function () {
+          const parts = String(fqbn || '').split(':');
+          return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : String(fqbn || '');
+        })();
         if (pkgUrl) {
           const p = document.createElement('div');
           p.style.margin = '4px 0 8px';
@@ -323,15 +327,18 @@
         }
 
         const groups = [];
-        // Track selected platform version; prefer version from sketch.yaml init if provided
+        // Track selected platform version; prefer version from sketch.yaml init if provided and matching this board
         let selectedPlatformVersion = (function () {
+          const defaultVer = (detail && typeof detail.version === 'string' && detail.version) ? detail.version : '';
           try {
             const init = window.__INIT_STATE__ || {};
+            const initId = init.platformId || '';
             const initVer = init.platformVersion || '';
-            if (initVer) return initVer;
+            if (initId && initVer && initId === platformIdForBoard) return initVer;
           } catch (_) { }
-          return (detail && typeof detail.version === 'string' && detail.version) ? detail.version : '';
+          return defaultVer;
         })();
+        try { window.__INIT_STATE__ = { platformId: platformIdForBoard, platformVersion: selectedPlatformVersion || '' }; } catch (_) { }
         opts.forEach((opt, idx) => {
           const groupName = `opt_${idx}`;
           const fs = document.createElement('fieldset');
@@ -639,6 +646,9 @@
               const baseChanged = baseNow !== basePrev;
               if (baseChanged) {
                 try { window.__CURRENT_BASEFQBN__ = baseNow; } catch (_) { }
+                const defaultVer = (detail && typeof detail.version === 'string') ? detail.version : '';
+                selectedPlatformVersion = defaultVer;
+                try { window.__INIT_STATE__ = { platformId: platformIdForBoard, platformVersion: selectedPlatformVersion || '' }; } catch (_) { }
               }
               if (userChanged && baseChanged) {
                 // Unlock and clear initial preserved state
@@ -668,6 +678,7 @@
               const libsArr = libsArrayFromSelected();
               const prof = (window.__PROFILE_NAME__ || '');
               let txt = patchFqbnInYaml(yamlBox.value, prof, ext);
+              txt = patchPlatformVersionInYaml(txt, prof, platformIdForBoard, selectedPlatformVersion);
               if (window.__ALLOW_LIB_PATCH__) {
                 txt = patchLibrariesInYaml(txt, prof, libsArr);
               }
