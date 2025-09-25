@@ -3028,6 +3028,7 @@ async function commandSetProfile(required) {
     if (baudFromText) await extContext.workspaceState.update(STATE_BAUD, String(baudFromText));
     await extContext.workspaceState.update(STATE_LAST_PROFILE, profName);
   } catch (_) { }
+  text = formatSketchYamlLayout(text);
   await writeTextFile(yamlUri, text);
   vscode.window.setStatusBarMessage(_isJa ? `Profile を設定: ${pick.value}` : `Set profile: ${pick.value}`, 2000);
   updateStatusBar();
@@ -3635,6 +3636,7 @@ async function commandOpenSketchYamlHelper(ctx) {
       let existing = '';
       try { existing = await readTextFile(yamlUri); } catch { existing = ''; }
       let merged = mergeProfileIntoSketchYaml(existing, profileName, blockText);
+      merged = formatSketchYamlLayout(merged);
       await writeTextFile(yamlUri, merged);
       vscode.window.setStatusBarMessage(t('yamlApplied', { name: profileName }), 2000);
       // Optionally reveal the file
@@ -3689,6 +3691,85 @@ function extractProfileFromTemplateYaml(text) {
   return { profileName: name, blockText: block.replace(/\s+$/, '') + '\n' };
 }
 
+/**
+ * Normalize spacing inside sketch.yaml profiles to keep helper output consistent.
+ */
+function formatSketchYamlLayout(text) {
+  try {
+    const ensureFinalNewline = (str) => str.endsWith('\n') ? str : `${str}\n`;
+    const normalized = String(text || '').replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n');
+    const profIdx = lines.findIndex(line => /^\s*profiles\s*:\s*$/.test(line));
+    if (profIdx < 0) {
+      const collapsed = normalized.replace(/\n{3,}/g, '\n\n');
+      const collapsedLines = collapsed.split('\n');
+      while (collapsedLines.length > 0 && collapsedLines[collapsedLines.length - 1].trim() === '') {
+        collapsedLines.pop();
+      }
+      return ensureFinalNewline(collapsedLines.join('\n'));
+    }
+    let profEnd = lines.length;
+    for (let i = profIdx + 1; i < lines.length; i++) {
+      if (/^\S/.test(lines[i])) { profEnd = i; break; }
+    }
+    const before = lines.slice(0, profIdx + 1);
+    const section = lines.slice(profIdx + 1, profEnd);
+    const after = lines.slice(profEnd);
+
+    const blocks = [];
+    let idx = 0;
+    while (idx < section.length) {
+      while (idx < section.length && section[idx].trim() === '') idx++;
+      if (idx >= section.length) break;
+      const start = idx;
+      idx++;
+      while (idx < section.length) {
+        const line = section[idx];
+        if (/^\s{2}[^ \t:#][^:]*\s*:\s*$/.test(line)) break;
+        if (/^\S/.test(line)) break;
+        idx++;
+      }
+      const block = section.slice(start, idx);
+      const cleaned = block.filter((line, lineIdx) => lineIdx === 0 || line.trim().length > 0);
+      blocks.push(cleaned);
+    }
+
+    const formattedSection = [];
+    for (let b = 0; b < blocks.length; b++) {
+      const block = blocks[b];
+      for (const line of block) formattedSection.push(line);
+      if (b < blocks.length - 1) formattedSection.push('');
+    }
+    while (formattedSection.length > 0 && formattedSection[formattedSection.length - 1].trim() === '') {
+      formattedSection.pop();
+    }
+
+    const afterTrimmed = after.slice();
+    while (afterTrimmed.length > 0 && afterTrimmed[0].trim() === '') {
+      afterTrimmed.shift();
+    }
+
+    const resultLines = before.concat(formattedSection);
+    if (afterTrimmed.length > 0) {
+      if (resultLines.length === 0 || resultLines[resultLines.length - 1].trim() !== '') {
+        resultLines.push('');
+      } else {
+        resultLines[resultLines.length - 1] = '';
+      }
+      resultLines.push(...afterTrimmed);
+    }
+
+    while (resultLines.length > 0 && resultLines[resultLines.length - 1].trim() === '') {
+      resultLines.pop();
+    }
+
+    const result = resultLines.join('\n').replace(/\n{3,}/g, '\n\n');
+    return ensureFinalNewline(result);
+  } catch (_) {
+    const fallback = String(text || '').replace(/\r\n/g, '\n');
+    return fallback.endsWith('\n') ? fallback : `${fallback}\n`;
+  }
+}
 /**
  * Merge a single profile block into existing sketch.yaml text.
  * - Overwrite when the profile exists; otherwise append under profiles.
@@ -4442,6 +4523,7 @@ async function applyPlatformVersionUpdates(entries) {
     }
     if (changed > 0) {
       try {
+        mutated = formatSketchYamlLayout(mutated);
         await writeTextFile(yamlUri, mutated);
         result.applied += changed;
       } catch (err) {
@@ -4503,6 +4585,7 @@ async function applyLibraryVersionUpdates(entries) {
     }
     if (changed > 0) {
       try {
+        mutated = formatSketchYamlLayout(mutated);
         await writeTextFile(yamlUri, mutated);
         result.applied += changed;
       } catch (err) {
@@ -5745,3 +5828,4 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
   } catch { }
   return '';
 }
+
