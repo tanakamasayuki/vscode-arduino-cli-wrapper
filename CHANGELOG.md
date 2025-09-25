@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.3.7
 - (EN) Updated Sketch.yaml Helper so changing boards refreshes the platform version from the newly selected board.
 - (JA) Sketch.yaml Helper でボード変更時に新しいボードのプラットフォーム版数へ自動更新されるようにしました。
 - (EN) Ensured Build Check runs `arduino-cli compile --clean` so every profile is built from a clean state.
