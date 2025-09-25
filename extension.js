@@ -2237,7 +2237,7 @@ function defaultCommandItems(dir, profile, parent) {
     new CommandItem('Upload', 'upload', dir, profile, parent),
     new CommandItem('Upload Data', 'uploadData', dir, profile, parent),
     new CommandItem('Monitor', 'monitor', dir, profile, parent),
-    new CommandItem('Open Helper', 'helper', dir, profile, parent),
+    new CommandItem('Sketch.yaml Helper', 'helper', dir, profile, parent),
     new CommandItem('Open Examples', 'examples', dir, profile, parent),
     new CommandItem('Inspect', 'inspect', dir, profile, parent),
   ];
@@ -2246,12 +2246,12 @@ function defaultCommandItems(dir, profile, parent) {
 // Commands at the root level (not tied to a specific sketch/profile)
 function globalCommandItems() {
   return [
-    new CommandItem('Version', 'version', '', ''),
+    new CommandItem('CLI Version', 'version', '', ''),
     new CommandItem('List Boards', 'listBoards', '', ''),
     new CommandItem('List All Boards', 'listAllBoards', '', ''),
-    new CommandItem('Open Helper', 'helper', '', ''),
+    new CommandItem('Sketch.yaml Helper', 'helper', '', ''),
     new CommandItem('Open Inspector', 'inspect', '', ''),
-    new CommandItem('Version Check', 'versionCheck', '', ''),
+    new CommandItem('Sketch.yaml Versions', 'versionCheck', '', ''),
     new CommandItem('Refresh View', 'refreshView', '', ''),
     new CommandItem('New Sketch', 'sketchNew', '', ''),
     new CommandItem('Run Command', 'runArbitrary', '', ''),

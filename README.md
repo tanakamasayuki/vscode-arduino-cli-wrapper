@@ -6,17 +6,17 @@ VS Code extension to run Arduino CLI from the command palette, status bar, and a
 
 ## Features
 
-- Show Version: runs `arduino-cli version`
+- Check CLI Version: runs `arduino-cli version`
 - List Connected Boards: shows connected boards
 - List All Boards (listall): lists all boards; accepts an optional filter passed to `arduino-cli board listall <filter>`
 - Compile Sketch: pick a sketch to compile (uses profile or FQBN)
 - Clean Compile: compiles with `--clean`; resets includePath first, then adds only paths discovered during the build
 - Build Check: compiles every profile from each sketch.yaml with `--warnings=all` and aggregates warnings/errors
-- Version Check: scans each sketch.yaml profile to compare platform/library versions with the published indexes and offers inline updates
+- Check Sketch.yaml Versions: scans each sketch.yaml profile to compare platform/library versions with the published indexes and offers inline updates
 - Status Controls: change compile warning level and verbose output straight from the status bar (e.g. `all+V`)
 - Upload Sketch: builds then uploads with selected port and profile/FQBN; closes and reopens monitor if needed
 - Monitor Serial: open a serial monitor (select port and baudrate)
-- Open Helper: open a sketch.yaml helper webview to inspect/apply profiles/libraries
+- Sketch.yaml Helper: open a sketch.yaml helper webview to inspect/apply profiles/libraries
 - Board Details: when using profiles, passes the profile's FQBN with `-b`
 - Run Command: run arbitrary Arduino CLI arguments
 - Configure IntelliSense: compute include paths and write `.vscode/c_cpp_properties.json` without building
@@ -31,8 +31,8 @@ All command logs are unified in a dedicated pseudo terminal with ANSI colors.
 
 - Adds an "Arduino CLI" view under Explorer.
 - Lists detected sketch folders; shows profiles from `sketch.yaml` when available.
-- Per project/profile actions: Compile, Upload, Upload Data, Monitor, Open Helper, Open Examples.
-- Global actions at the top: Version, List Boards, List All Boards, Open Helper, Refresh View, New Sketch, Run Command.
+- Per project/profile actions: Compile, Upload, Upload Data, Monitor, Sketch.yaml Helper, Open Examples.
+- Global actions at the top: CLI Version, List Boards, List All Boards, Sketch.yaml Helper, Refresh View, New Sketch, Run Command.
 - Sketch items display workspace-relative paths, and nodes are expanded by default.
 
 ## Status Bar
@@ -53,15 +53,15 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 
 1) Install Arduino CLI
 - Put it in `PATH` or set a full path in the setting `arduino-cli-wrapper.path`.
-- Confirm with "Arduino CLI: Show Version" (a guide appears if not configured).
+- Confirm with "Arduino CLI: Check CLI Version" (a guide appears if not configured).
   - Windows: installer https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi or `winget install ArduinoSA.CLI`
   - Linux / macOS: follow https://arduino.github.io/arduino-cli/latest/installation/
 
 2) Open a sketch folder
 - When a folder contains `.ino`, the status bar shows Compile/Upload/Monitor plus FQBN/Port/Baud/Warn.
 
-3) Build / Upload / Monitor
-- Build: run "Arduino CLI: Compile Sketch" or click Build.
+3) Compile / Upload / Monitor
+- Build: run "Arduino CLI: Compile Sketch" or click Compile.
 - Upload: run "Arduino CLI: Upload Sketch" or click Upload. Select the serial port first; the extension passes `-p` explicitly even when using profiles.
 - Monitor: run "Arduino CLI: Monitor Serial" or click Monitor. Baudrate defaults to 115200 and can be changed from the status bar.
 
@@ -81,7 +81,7 @@ Tips:
 - When `sketch.yaml` exists, compile/upload use profiles; otherwise FQBN is used.
  - To bootstrap a `sketch.yaml`, use the Helper view to generate a template for your board and libraries, then copy it into a new `sketch.yaml` in your sketch folder.
 - The status bar FQBN indicator switches to a profile name if profiles exist. Use "Arduino CLI: Set Profile" to change it.
-- "Open Helper" shows a helper UI to inspect/apply FQBN, libraries, and platform info for a selected profile.
+- "Sketch.yaml Helper" shows a helper UI to inspect/apply FQBN, libraries, and platform info for a selected profile.
 
 ## IntelliSense
 
@@ -124,3 +124,4 @@ Tips:
 ## License
 
 CC0 1.0 Universal (Public Domain Dedication). See `LICENSE`.
+
