@@ -22,7 +22,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - Configure IntelliSense: ビルドせずに includePath を計算して `.vscode/c_cpp_properties.json` を作成
 - Include Order Lint: `.ino` 内で M5GFX 系ヘッダーより後ろに FS 系ヘッダーを置いた場合に診断を表示
 - Upload Data (ESP32): `data/` から LittleFS/SPIFFS イメージを作成し、esptool で書き込み
-- New Sketch: 新しいスケッチフォルダーを作成
+- New Sketch: 新しいスケッチフォルダーを作成し、生成された `.ino` を開いて Sketch.yaml Helper を起動
 
 
 すべてのコマンドのログは疑似ターミナルに ANSI カラーで表示されます。
@@ -124,5 +124,6 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 ## ライセンス
 
 CC0 1.0 Universal (Public Domain Dedication)。詳細は `LICENSE` を参照してください。
+
 
 

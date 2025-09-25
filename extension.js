@@ -1232,6 +1232,14 @@ async function commandSketchNew() {
   try {
     await runCli(['sketch', 'new', sketchPath], { cwd: wf.uri.fsPath, forceSpawn: true });
     vscode.window.showInformationMessage(t('sketchCreateDone', { path: sketchPath }));
+    const inoPath = path.join(sketchPath, `${path.basename(sketchPath)}.ino`);
+    try {
+      const doc = await vscode.workspace.openTextDocument(inoPath);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (_) { /* ignore inability to open ino */ }
+    try {
+      await commandOpenSketchYamlHelper({ sketchDir: sketchPath });
+    } catch (_) { /* ignore helper launch failure */ }
   } catch (e) {
     showError(e);
   }

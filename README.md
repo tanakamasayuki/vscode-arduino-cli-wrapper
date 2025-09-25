@@ -22,7 +22,7 @@ VS Code extension to run Arduino CLI from the command palette, status bar, and a
 - Configure IntelliSense: compute include paths and write `.vscode/c_cpp_properties.json` without building
 - Include Order Lint: highlight when filesystem headers are included after M5GFX headers in `.ino` files
 - Upload Data (ESP32): build LittleFS/SPIFFS image from `data/` and flash via esptool
-- New Sketch: create a new Arduino sketch folder
+- New Sketch: create a new Arduino sketch folder, open the generated `.ino`, and launch the Sketch.yaml Helper
 
 
 All command logs are unified in a dedicated pseudo terminal with ANSI colors.
@@ -124,4 +124,5 @@ Tips:
 ## License
 
 CC0 1.0 Universal (Public Domain Dedication). See `LICENSE`.
+
 
