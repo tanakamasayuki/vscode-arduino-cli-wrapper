@@ -1,5 +1,9 @@
 # Changelog / 変更履歴
 
+## 開発中
+- (EN) Added Build Check to the root of the Arduino CLI view for quick access.
+- (JA) Arduino CLI ビューのルートにビルドチェックを追加し、すばやく実行できるようにしました。
+
 ## 1.3.5
 - (EN) Renamed commands for clarity: Check CLI Version, Check Sketch.yaml Versions, Sketch.yaml Profile Helper.
 - (JA) コマンド名称を整理：Check CLI Version、Check Sketch.yaml Versions、Sketch.yaml Profile Helper。

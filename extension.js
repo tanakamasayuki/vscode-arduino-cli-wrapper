@@ -107,6 +107,7 @@ const MSG = {
     buildCheckParseError: '[build-check] Failed to parse JSON output for {sketch} ({profile}): {msg}',
     buildCheckCliError: '[build-check] Compile failed to run for {sketch} ({profile}): exit {code}',
     buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
+    treeBuildCheck: 'Build Check',
     versionCheckStart: '[version-check] Scanning sketch.yaml files…',
     versionCheckNoWorkspace: '[version-check] No workspace folder is open.',
     versionCheckNoSketchYaml: '[version-check] No sketch.yaml files found.',
@@ -384,6 +385,7 @@ const MSG = {
     buildCheckParseError: '[build-check] {sketch} ({profile}) の JSON 出力解析に失敗しました: {msg}',
     buildCheckCliError: '[build-check] {sketch} ({profile}) のコンパイル実行に失敗しました (終了コード {code})。',
     buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
+    treeBuildCheck: 'ビルドチェック',
     versionCheckStart: '[version-check] sketch.yaml を走査してバージョン情報を収集しています…',
     versionCheckNoWorkspace: '[version-check] ワークスペースフォルダーが開かれていません。',
     versionCheckNoSketchYaml: '[version-check] sketch.yaml が見つかりませんでした。',
@@ -2083,6 +2085,7 @@ function activate(context) {
         if (action === 'examples') return commandOpenExamplesBrowser({ sketchDir, profile });
         if (action === 'inspect') return commandOpenInspector({ sketchDir, profile });
         if (action === 'versionCheck') return vscode.commands.executeCommand('arduino-cli.versionCheck');
+        if (action === 'buildCheck') return vscode.commands.executeCommand('arduino-cli.buildCheck');
         if (action === 'refreshView') return vscode.commands.executeCommand('arduino-cli.refreshView');
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
         if (action === 'setBaud') return vscode.commands.executeCommand('arduino-cli.setBaud');
@@ -2260,6 +2263,7 @@ function globalCommandItems() {
     new CommandItem('Sketch.yaml Helper', 'helper', '', ''),
     new CommandItem('Open Inspector', 'inspect', '', ''),
     new CommandItem('Sketch.yaml Versions', 'versionCheck', '', ''),
+    new CommandItem(t('treeBuildCheck'), 'buildCheck', '', ''),
     new CommandItem('Refresh View', 'refreshView', '', ''),
     new CommandItem('New Sketch', 'sketchNew', '', ''),
     new CommandItem('Run Command', 'runArbitrary', '', ''),
