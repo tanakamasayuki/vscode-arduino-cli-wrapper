@@ -1,47 +1,160 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dependency Versions</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; margin: 16px; line-height: 1.5; }
-    h1 { margin: 0 0 16px; font-size: 1.4rem; }
-    h2 { margin: 24px 0 12px; font-size: 1.1rem; }
-    .status { margin-bottom: 12px; font-size: 0.95rem; min-height: 1.2em; }
-    .status.info { color: rgb(70, 130, 180); }
-    .status.error { color: rgb(192, 57, 43); }
-    .summary { display: flex; flex-wrap: wrap; gap: 16px; padding: 12px; border: 1px solid rgba(128,128,128,0.3); border-radius: 8px; margin-bottom: 16px; }
-    .metric { min-width: 120px; }
-    .metric .label { display: block; font-size: 0.8rem; opacity: 0.75; }
-    .metric .value { font-weight: 600; font-size: 1.2rem; }
-    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
-    button { padding: 6px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4); background: rgba(128,128,128,0.35); color: #fff; cursor: pointer; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { border: 1px solid rgba(128,128,128,0.25); padding: 6px 8px; text-align: left; }
-    th { background: rgba(128,128,128,0.15); font-weight: 600; }
-    tr.outdated { background: rgba(241, 196, 15, 0.15); }
-    tr.missing { background: rgba(155, 89, 182, 0.15); }
-    tr.unknown { background: rgba(52, 73, 94, 0.1); }
-    tr.ahead { background: rgba(46, 204, 113, 0.1); }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
-    .small { font-size: 0.8rem; opacity: 0.75; }
-    ul { margin: 0; padding-left: 20px; }
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      margin: 16px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 1.4rem;
+    }
+
+    h2 {
+      margin: 24px 0 12px;
+      font-size: 1.1rem;
+    }
+
+    .status {
+      margin-bottom: 12px;
+      font-size: 0.95rem;
+      min-height: 1.2em;
+    }
+
+    .status.info {
+      color: rgb(70, 130, 180);
+    }
+
+    .status.error {
+      color: rgb(192, 57, 43);
+    }
+
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 12px;
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .metric {
+      min-width: 120px;
+    }
+
+    .metric .label {
+      display: block;
+      font-size: 0.8rem;
+      opacity: 0.75;
+    }
+
+    .metric .value {
+      font-weight: 600;
+      font-size: 1.2rem;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 6px 12px;
+      font-size: 0.9rem;
+      border-radius: 6px;
+      border: 1px solid rgba(128, 128, 128, 0.4);
+      background: rgba(128, 128, 128, 0.35);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    th {
+      background: rgba(128, 128, 128, 0.15);
+      font-weight: 600;
+    }
+
+    tr.outdated {
+      background: rgba(241, 196, 15, 0.15);
+    }
+
+    tr.missing {
+      background: rgba(155, 89, 182, 0.15);
+    }
+
+    tr.unknown {
+      background: rgba(52, 73, 94, 0.1);
+    }
+
+    tr.ahead {
+      background: rgba(46, 204, 113, 0.1);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    }
+
+    .small {
+      font-size: 0.8rem;
+      opacity: 0.75;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 20px;
+    }
   </style>
 </head>
+
 <body>
   <h1 id="title">Dependency Versions</h1>
   <div id="status" class="status"></div>
   <div class="summary" id="summary">
-    <div class="metric"><span class="label" id="summarySketchesLabel">Sketches</span><span class="value" id="summarySketches">0</span></div>
-    <div class="metric"><span class="label" id="summaryProfilesLabel">Profiles</span><span class="value" id="summaryProfiles">0</span></div>
-    <div class="metric"><span class="label" id="summaryPlatformsLabel">Platforms</span><span class="value" id="summaryPlatforms">0</span></div>
-    <div class="metric"><span class="label" id="summaryPlatformsOutdatedLabel">Outdated</span><span class="value" id="summaryPlatformsOutdated">0</span></div>
-    <div class="metric"><span class="label" id="summaryLibrariesLabel">Libraries</span><span class="value" id="summaryLibraries">0</span></div>
-    <div class="metric"><span class="label" id="summaryLibrariesOutdatedLabel">Outdated</span><span class="value" id="summaryLibrariesOutdated">0</span></div>
-    <div class="metric"><span class="label" id="generatedAtLabel">Generated at</span><span class="value small" id="generatedAt">—</span></div>
+    <div class="metric"><span class="label" id="summarySketchesLabel">Sketches</span><span class="value"
+        id="summarySketches">0</span></div>
+    <div class="metric"><span class="label" id="summaryProfilesLabel">Profiles</span><span class="value"
+        id="summaryProfiles">0</span></div>
+    <div class="metric"><span class="label" id="summaryPlatformsLabel">Platforms</span><span class="value"
+        id="summaryPlatforms">0</span></div>
+    <div class="metric"><span class="label" id="summaryPlatformsOutdatedLabel">Outdated</span><span class="value"
+        id="summaryPlatformsOutdated">0</span></div>
+    <div class="metric"><span class="label" id="summaryLibrariesLabel">Libraries</span><span class="value"
+        id="summaryLibraries">0</span></div>
+    <div class="metric"><span class="label" id="summaryLibrariesOutdatedLabel">Outdated</span><span class="value"
+        id="summaryLibrariesOutdated">0</span></div>
+    <div class="metric"><span class="label" id="generatedAtLabel">Generated at</span><span class="value small"
+        id="generatedAt">—</span></div>
   </div>
 
   <div class="actions">
@@ -92,7 +205,7 @@
   </section>
 
   <script>
-    (function() {
+    (function () {
       const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
       const state = {
         locale: 'en',
@@ -146,12 +259,14 @@
           setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
           return;
         }
-        sendMessage('updatePlatforms', { entries: rows.map(r => ({
-          sketchDir: r.sketchDir,
-          profile: r.profile,
-          platformId: r.platformId,
-          latestVersion: r.latestVersion
-        })) });
+        sendMessage('updatePlatforms', {
+          entries: rows.map(r => ({
+            sketchDir: r.sketchDir,
+            profile: r.profile,
+            platformId: r.platformId,
+            latestVersion: r.latestVersion
+          }))
+        });
       });
 
       btnUpdateLibraries.addEventListener('click', () => {
@@ -161,12 +276,14 @@
           setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
           return;
         }
-        sendMessage('updateLibraries', { entries: rows.map(r => ({
-          sketchDir: r.sketchDir,
-          profile: r.profile,
-          libraryName: r.libraryName,
-          latestVersion: r.latestVersion
-        })) });
+        sendMessage('updateLibraries', {
+          entries: rows.map(r => ({
+            sketchDir: r.sketchDir,
+            profile: r.profile,
+            libraryName: r.libraryName,
+            latestVersion: r.latestVersion
+          }))
+        });
       });
 
       function renderSummary(report) {
@@ -239,12 +356,14 @@
           btn.disabled = !updatable;
           btn.addEventListener('click', () => {
             if (!updatable) return;
-            sendMessage('updatePlatforms', { entries: [{
-              sketchDir: row.sketchDir,
-              profile: row.profile,
-              platformId: row.platformId,
-              latestVersion: row.latestVersion
-            }] });
+            sendMessage('updatePlatforms', {
+              entries: [{
+                sketchDir: row.sketchDir,
+                profile: row.profile,
+                platformId: row.platformId,
+                latestVersion: row.latestVersion
+              }]
+            });
           });
           action.appendChild(btn);
           tr.appendChild(action);
@@ -304,12 +423,14 @@
           btn.disabled = !updatable;
           btn.addEventListener('click', () => {
             if (!updatable) return;
-            sendMessage('updateLibraries', { entries: [{
-              sketchDir: row.sketchDir,
-              profile: row.profile,
-              libraryName: row.libraryName,
-              latestVersion: row.latestVersion
-            }] });
+            sendMessage('updateLibraries', {
+              entries: [{
+                sketchDir: row.sketchDir,
+                profile: row.profile,
+                libraryName: row.libraryName,
+                latestVersion: row.latestVersion
+              }]
+            });
           });
           action.appendChild(btn);
           tr.appendChild(action);
@@ -404,4 +525,5 @@
     })();
   </script>
 </body>
+
 </html>

@@ -1,40 +1,171 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Inspector</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; margin: 16px; line-height: 1.5; }
-    h1 { margin: 0 0 12px; font-size: 1.4rem; }
-    .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
-    label { display: flex; flex-direction: column; font-size: 0.85rem; min-width: 180px; }
-    select { padding: 6px 8px; font-size: 0.95rem; }
-    button { padding: 6px 14px; font-size: 0.95rem; cursor: pointer; }
-    .status { min-width: 160px; font-size: 0.9rem; opacity: 0.8; }
-    .tabs { border-top: 1px solid rgba(128,128,128,0.4); }
-    .tab-bar { display: flex; gap: 6px; padding: 10px 0; }
-    .tab-bar button { border: 1px solid rgba(128,128,128,0.4); background: transparent; border-radius: 4px; padding: 6px 12px; }
-    .tab-bar button.active { background: rgba(128,128,128,0.15); }
-    .tab { display: none; }
-    .tab.active { display: block; }
-    table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 0.9rem; }
-    th, td { border: 1px solid rgba(128,128,128,0.3); padding: 6px 8px; text-align: left; }
-    th { background: rgba(128,128,128,0.15); }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
-    pre { background: rgba(128,128,128,0.12); padding: 10px; overflow-x: auto; }
-    .pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 6px; }
-    .pill.warn { background: rgba(255,193,7,0.2); color: #b07a00; }
-    .pill.err { background: rgba(220,53,69,0.2); color: #a11a2b; }
-    .flex-row { display: flex; gap: 24px; flex-wrap: wrap; }
-    .box { flex: 1 1 240px; border: 1px solid rgba(128,128,128,0.3); border-radius: 6px; padding: 12px; }
-    .box h2 { margin: 0 0 8px; font-size: 1rem; }
-    .file-actions { display: flex; gap: 8px; margin: 6px 0; align-items: center; }
-    .file-content { max-height: 360px; overflow: auto; border: 1px solid rgba(128,128,128,0.3); padding: 8px; }
-    .hidden { display: none; }
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      margin: 16px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 1.4rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.85rem;
+      min-width: 180px;
+    }
+
+    select {
+      padding: 6px 8px;
+      font-size: 0.95rem;
+    }
+
+    button {
+      padding: 6px 14px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    .status {
+      min-width: 160px;
+      font-size: 0.9rem;
+      opacity: 0.8;
+    }
+
+    .tabs {
+      border-top: 1px solid rgba(128, 128, 128, 0.4);
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 6px;
+      padding: 10px 0;
+    }
+
+    .tab-bar button {
+      border: 1px solid rgba(128, 128, 128, 0.4);
+      background: transparent;
+      border-radius: 4px;
+      padding: 6px 12px;
+    }
+
+    .tab-bar button.active {
+      background: rgba(128, 128, 128, 0.15);
+    }
+
+    .tab {
+      display: none;
+    }
+
+    .tab.active {
+      display: block;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 16px;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    th {
+      background: rgba(128, 128, 128, 0.15);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    }
+
+    pre {
+      background: rgba(128, 128, 128, 0.12);
+      padding: 10px;
+      overflow-x: auto;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      margin-left: 6px;
+    }
+
+    .pill.warn {
+      background: rgba(255, 193, 7, 0.2);
+      color: #b07a00;
+    }
+
+    .pill.err {
+      background: rgba(220, 53, 69, 0.2);
+      color: #a11a2b;
+    }
+
+    .flex-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .box {
+      flex: 1 1 240px;
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .box h2 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+
+    .file-actions {
+      display: flex;
+      gap: 8px;
+      margin: 6px 0;
+      align-items: center;
+    }
+
+    .file-content {
+      max-height: 360px;
+      overflow: auto;
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      padding: 8px;
+    }
+
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
+
 <body>
   <h1 id="title">Sketch Inspector</h1>
   <div class="controls">
@@ -84,7 +215,7 @@
   </div>
 
   <script>
-    (function() {
+    (function () {
       const vscode = acquireVsCodeApi();
       const state = {
         strings: {},
@@ -400,14 +531,5 @@
     })();
   </script>
 </body>
+
 </html>
-
-
-
-
-
-
-
-
-
-

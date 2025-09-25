@@ -1,32 +1,120 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Build Check Report</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; margin: 16px; line-height: 1.5; }
-    h1 { margin: 0 0 16px; font-size: 1.4rem; }
-    h2 { margin: 24px 0 12px; font-size: 1.1rem; }
-    .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px; border: 1px solid rgba(128,128,128,0.3); border-radius: 8px; }
-    .totals { display: flex; gap: 16px; flex-wrap: wrap; }
-    .metric { min-width: 110px; }
-    .metric .label { display: block; font-size: 0.8rem; opacity: 0.7; }
-    .metric .value { font-size: 1.2rem; font-weight: 600; }
-    .meta { font-size: 0.85rem; opacity: 0.8; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { border: 1px solid rgba(128,128,128,0.3); padding: 6px 8px; text-align: left; }
-    th { background: rgba(128,128,128,0.15); font-weight: 600; }
-    tr.success { background: rgba(46, 204, 113, 0.12); }
-    tr.failure { background: rgba(231, 76, 60, 0.12); }
-    tr.message-row td { font-style: italic; font-size: 0.85rem; opacity: 0.85; }
-    ul { margin: 0; padding-left: 20px; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; }
-    .small { font-size: 0.85rem; opacity: 0.85; }
-    .no-data { font-style: italic; opacity: 0.7; }
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      margin: 16px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 1.4rem;
+    }
+
+    h2 {
+      margin: 24px 0 12px;
+      font-size: 1.1rem;
+    }
+
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      padding: 12px;
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      border-radius: 8px;
+    }
+
+    .totals {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .metric {
+      min-width: 110px;
+    }
+
+    .metric .label {
+      display: block;
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }
+
+    .metric .value {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .meta {
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    th {
+      background: rgba(128, 128, 128, 0.15);
+      font-weight: 600;
+    }
+
+    tr.success {
+      background: rgba(46, 204, 113, 0.12);
+    }
+
+    tr.failure {
+      background: rgba(231, 76, 60, 0.12);
+    }
+
+    tr.message-row td {
+      font-style: italic;
+      font-size: 0.85rem;
+      opacity: 0.85;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    }
+
+    .small {
+      font-size: 0.85rem;
+      opacity: 0.85;
+    }
+
+    .no-data {
+      font-style: italic;
+      opacity: 0.7;
+    }
   </style>
 </head>
+
 <body>
   <h1 id="title">Build Check Report</h1>
   <div class="summary">
@@ -93,7 +181,7 @@
   </section>
 
   <script>
-    (function() {
+    (function () {
       const vscode = acquireVsCodeApi();
       const state = {
         strings: {},
@@ -309,8 +397,5 @@
     })();
   </script>
 </body>
+
 </html>
-
-
-
-
