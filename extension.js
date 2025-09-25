@@ -2620,7 +2620,7 @@ async function commandBuildCheck() {
           await ensureCompileCommandsSetting(sketchDir);
           let buildPath = detail.buildPath;
           if (!buildPath) {
-            const detectArgs = ['compile', '--profile', profile, '--warnings=all', sketchDir];
+            const detectArgs = ['compile', '--profile', profile, '--warnings=all', '--clean', sketchDir];
             buildPath = await detectBuildPathForCompile(exe, [], detectArgs, sketchDir);
           }
           if (!buildPath) {
@@ -2746,7 +2746,7 @@ function parseBuildCheckJson(raw) {
 }
 
 async function runBuildCheckCompile(exe, sketchDir, profile) {
-  const args = ['compile', '--profile', profile, '--warnings=all', '--json', sketchDir];
+  const args = ['compile', '--profile', profile, '--warnings=all', '--clean', '--json', sketchDir];
   const channel = getOutput();
   const displayExe = needsPwshCallOperator() ? '& ' + quoteArg(exe) : quoteArg(exe);
   channel.appendLine(ANSI.cyan + '$ ' + displayExe + ' ' + args.map(quoteArg).join(' ') + ANSI.reset);
