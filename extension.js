@@ -97,8 +97,8 @@ const MSG = {
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] Failed to run arduino-cli. Please configure arduino-cli-wrapper.path or install arduino-cli.',
     buildCheckStart: '[build-check] Scanning sketch.yaml files…',
-    buildCheckNoWorkspace: '[build-check] No workspace folder is open.',
-    buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found.',
+    buildCheckNoWorkspace: '[build-check] No workspace folder is open. Open a folder in VS Code and re-run Build Check from the Arduino CLI view.',
+    buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found. Use the Sketch.yaml Helper to create profiles, then run Build Check again.',
     buildCheckSkipNoProfiles: '[build-check] {sketch} skipped (no profiles defined in sketch.yaml).',
     buildCheckCompileStart: '[build-check] {sketch} ({profile}) compiling…',
     buildCheckStatusSuccess: 'SUCCESS',
@@ -108,6 +108,22 @@ const MSG = {
     buildCheckCliError: '[build-check] Compile failed to run for {sketch} ({profile}): exit {code}',
     buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
     treeBuildCheck: 'Build Check',
+    treeCompile: 'Compile',
+    treeUpload: 'Upload',
+    treeUploadData: 'Upload Data',
+    treeMonitor: 'Monitor',
+    treeHelper: 'Sketch.yaml Helper',
+    treeExamples: 'Open Examples',
+    treeInspect: 'Inspect',
+    treeInspectorOpen: 'Open Inspector',
+    treeCliVersion: 'Check CLI Version',
+    treeListBoards: 'List Boards',
+    treeListAllBoards: 'List All Boards',
+    treeVersionCheck: 'Check Sketch.yaml Versions',
+    treeRefresh: 'Refresh View',
+    treeNewSketch: 'New Sketch',
+    treeRunCommand: 'Run Command',
+    treeProfile: 'Profile: {profile}',
     versionCheckStart: '[version-check] Scanning sketch.yaml files…',
     versionCheckNoWorkspace: '[version-check] No workspace folder is open.',
     versionCheckNoSketchYaml: '[version-check] No sketch.yaml files found.',
@@ -375,8 +391,8 @@ const MSG = {
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] arduino-cli の実行に失敗しました。arduino-cli のインストールまたは設定 (arduino-cli-wrapper.path) を行ってください。',
     buildCheckStart: '[build-check] sketch.yaml を走査しています…',
-    buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。',
-    buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。',
+    buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。VS Code でフォルダーを開き、Arduino CLI ビューからビルドチェックを再実行してください。',
+    buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。Sketch.yaml ヘルパーでプロファイルを作成してからビルドチェックを再実行してください。',
     buildCheckSkipNoProfiles: '[build-check] {sketch} をスキップしました (sketch.yaml にプロファイルがありません)。',
     buildCheckCompileStart: '[build-check] {sketch} ({profile}) をコンパイル中…',
     buildCheckStatusSuccess: '成功',
@@ -386,6 +402,22 @@ const MSG = {
     buildCheckCliError: '[build-check] {sketch} ({profile}) のコンパイル実行に失敗しました (終了コード {code})。',
     buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
     treeBuildCheck: 'ビルドチェック',
+    treeCompile: 'コンパイル',
+    treeUpload: '書き込み',
+    treeUploadData: 'データ書き込み',
+    treeMonitor: 'シリアルモニター',
+    treeHelper: 'Sketch.yaml ヘルパー',
+    treeExamples: 'サンプルを開く',
+    treeInspect: 'インスペクト',
+    treeInspectorOpen: 'インスペクターを開く',
+    treeCliVersion: 'CLI バージョン確認',
+    treeListBoards: 'ボード一覧',
+    treeListAllBoards: '全ボード一覧',
+    treeVersionCheck: 'Sketch.yaml バージョン確認',
+    treeRefresh: 'ビュー更新',
+    treeNewSketch: '新しいスケッチ',
+    treeRunCommand: 'コマンドを実行',
+    treeProfile: 'プロファイル: {profile}',
     versionCheckStart: '[version-check] sketch.yaml を走査してバージョン情報を収集しています…',
     versionCheckNoWorkspace: '[version-check] ワークスペースフォルダーが開かれていません。',
     versionCheckNoSketchYaml: '[version-check] sketch.yaml が見つかりませんでした。',
@@ -2221,7 +2253,7 @@ class ProfileItem extends vscode.TreeItem {
   constructor(dir, profile, parent) {
     super(`Profile: ${profile}`, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'profile';
-    this.tooltip = `${dir} • ${profile}`;
+    this.tooltip = `${dir} | ${t('treeProfile', { profile })}`;
     this.dir = dir;
     this.profile = profile;
     this.id = `profile:${dir}|${profile}`;
@@ -2229,9 +2261,10 @@ class ProfileItem extends vscode.TreeItem {
   }
 }
 class CommandItem extends vscode.TreeItem {
-  constructor(label, action, sketchDir, profile, parent) {
+  constructor(label, action, sketchDir, profile, parent, tooltip) {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'command';
+    this.tooltip = tooltip || label;
     this.command = {
       command: 'arduino-cli.runTreeAction',
       title: label,
@@ -2244,29 +2277,29 @@ class CommandItem extends vscode.TreeItem {
 
 function defaultCommandItems(dir, profile, parent) {
   return [
-    new CommandItem('Compile', 'compile', dir, profile, parent),
-    new CommandItem('Upload', 'upload', dir, profile, parent),
-    new CommandItem('Upload Data', 'uploadData', dir, profile, parent),
-    new CommandItem('Monitor', 'monitor', dir, profile, parent),
-    new CommandItem('Sketch.yaml Helper', 'helper', dir, profile, parent),
-    new CommandItem('Open Examples', 'examples', dir, profile, parent),
-    new CommandItem('Inspect', 'inspect', dir, profile, parent),
+    new CommandItem('Compile', 'compile', dir, profile, parent, t('treeCompile')),
+    new CommandItem('Upload', 'upload', dir, profile, parent, t('treeUpload')),
+    new CommandItem('Upload Data', 'uploadData', dir, profile, parent, t('treeUploadData')),
+    new CommandItem('Monitor', 'monitor', dir, profile, parent, t('treeMonitor')),
+    new CommandItem('Sketch.yaml Helper', 'helper', dir, profile, parent, t('treeHelper')),
+    new CommandItem('Open Examples', 'examples', dir, profile, parent, t('treeExamples')),
+    new CommandItem('Inspect', 'inspect', dir, profile, parent, t('treeInspect')),
   ];
 }
 
 // Commands at the root level (not tied to a specific sketch/profile)
 function globalCommandItems() {
   return [
-    new CommandItem('CLI Version', 'version', '', ''),
-    new CommandItem('List Boards', 'listBoards', '', ''),
-    new CommandItem('List All Boards', 'listAllBoards', '', ''),
-    new CommandItem('Sketch.yaml Helper', 'helper', '', ''),
-    new CommandItem('Open Inspector', 'inspect', '', ''),
-    new CommandItem('Sketch.yaml Versions', 'versionCheck', '', ''),
-    new CommandItem(t('treeBuildCheck'), 'buildCheck', '', ''),
-    new CommandItem('Refresh View', 'refreshView', '', ''),
-    new CommandItem('New Sketch', 'sketchNew', '', ''),
-    new CommandItem('Run Command', 'runArbitrary', '', ''),
+    new CommandItem('CLI Version', 'version', '', '', undefined, t('treeCliVersion')),
+    new CommandItem('List Boards', 'listBoards', '', '', undefined, t('treeListBoards')),
+    new CommandItem('List All Boards', 'listAllBoards', '', '', undefined, t('treeListAllBoards')),
+    new CommandItem('Sketch.yaml Helper', 'helper', '', '', undefined, t('treeHelper')),
+    new CommandItem('Open Inspector', 'inspect', '', '', undefined, t('treeInspectorOpen')),
+    new CommandItem('Sketch.yaml Versions', 'versionCheck', '', '', undefined, t('treeVersionCheck')),
+    new CommandItem('Build Check', 'buildCheck', '', '', undefined, t('treeBuildCheck')),
+    new CommandItem('Refresh View', 'refreshView', '', '', undefined, t('treeRefresh')),
+    new CommandItem('New Sketch', 'sketchNew', '', '', undefined, t('treeNewSketch')),
+    new CommandItem('Run Command', 'runArbitrary', '', '', undefined, t('treeRunCommand')),
   ];
 }
 
@@ -5711,4 +5744,3 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
   } catch { }
   return '';
 }
-

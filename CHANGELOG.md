@@ -3,6 +3,10 @@
 ## 開発中
 - (EN) Added Build Check to the root of the Arduino CLI view for quick access.
 - (JA) Arduino CLI ビューのルートにビルドチェックを追加し、すばやく実行できるようにしました。
+- (EN) Localized Arduino CLI tree tooltips so hover text follows the locale while the visible labels stay in English.
+- (JA) Arduino CLI ビューのツリー項目は英語表示のままにしつつ、マウスオーバー時のツールチップのみローカライズされるようにしました。
+- (EN) Expanded Build Check pop-up guidance to explain how to resolve missing workspace or sketch.yaml situations.
+- (JA) ビルドチェックのポップアップメッセージを詳細化し、ワークスペース未選択や sketch.yaml 未作成時の対処方法を案内するようにしました。
 
 ## 1.3.5
 - (EN) Renamed commands for clarity: Check CLI Version, Check Sketch.yaml Versions, Sketch.yaml Profile Helper.
