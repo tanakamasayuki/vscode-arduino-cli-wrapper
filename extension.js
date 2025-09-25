@@ -5112,6 +5112,7 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   args.push(sketchDir);
   const finalArgs = [...baseArgs, ...args];
   const channel = getOutput();
+  channel.show();
   const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : quoteArg(exe);
   channel.appendLine(`${ANSI.cyan}[inspector] $ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
   channel.appendLine(`${ANSI.dim}[inspector] (cwd: ${sketchDir})${ANSI.reset}`);

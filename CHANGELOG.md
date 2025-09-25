@@ -9,6 +9,8 @@
 - (JA) インスペクター診断の位置をクリックすると対象ファイルの該当行を開くようにしました。
 - (EN) Build Check warning totals now ignore files outside the workspace.
 - (JA) ビルドチェックの警告数でもワークスペース外のファイルを集計対象から除外しました。
+- (EN) Inspector now brings the Arduino Logs terminal to the front when analysis runs.
+- (JA) インスペクター実行時に Arduino Logs ターミナルが自動で前面に表示されるようにしました。
 - (EN) Arduino Logs terminal now reopens and takes focus automatically when CLI commands run after being closed.
 - (JA) CLI コマンド実行時に Arduino Logs 端末が閉じられていても自動で再表示し、フォーカスも合わせるようにしました。
 - (EN) Auto-ran the Inspector analysis when the view opens with both sketch and profile preselected.
