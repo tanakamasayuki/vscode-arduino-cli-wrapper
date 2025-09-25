@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Auto-ran the Inspector analysis when the view opens with both sketch and profile preselected.
+- (JA) スケッチとプロファイルを指定してインスペクターを開いた場合に、自動で分析を開始するようにしました。
 - (EN) Made Inspector tab buttons adopt white text in dark mode to improve legibility.
 - (JA) インスペクターのタブボタンをダークモードでは白字にし、視認性を向上させました。
 

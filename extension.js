@@ -3860,9 +3860,12 @@ async function commandOpenInspector(ctx) {
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true }
   );
+  const requestedSketchDir = ctx && typeof ctx.sketchDir === 'string' ? ctx.sketchDir : '';
+  const requestedProfile = ctx && typeof ctx.profile === 'string' ? ctx.profile : '';
   const initialContext = {
-    sketchDir: ctx && typeof ctx.sketchDir === 'string' ? ctx.sketchDir : '',
-    profile: ctx && typeof ctx.profile === 'string' ? ctx.profile : ''
+    sketchDir: requestedSketchDir,
+    profile: requestedProfile,
+    autoRun: !!(requestedSketchDir && requestedProfile)
   };
   const state = {
     running: false,
@@ -3896,6 +3899,7 @@ async function commandOpenInspector(ctx) {
         sketches,
         context: initialContext
       });
+      if (initialContext.autoRun) initialContext.autoRun = false;
     } catch (err) {
       showError(err);
       panel.webview.postMessage({ type: 'initError', message: err && err.message ? err.message : String(err) });
@@ -5828,4 +5832,3 @@ function getPortConfigBaudFromSketchYamlText(text, profileName) {
   } catch { }
   return '';
 }
-

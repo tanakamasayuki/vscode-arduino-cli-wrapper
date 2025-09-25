@@ -234,7 +234,8 @@
         sketches: [],
         files: {},
         currentAnalysis: null,
-        analysisRequestId: 0
+        analysisRequestId: 0,
+        autoRunDone: false
       };
 
       const titleEl = document.getElementById('title');
@@ -312,6 +313,7 @@
           sketchSelect.selectedIndex = 0;
         }
         updateProfileSelect(context && context.profile ? context.profile : '');
+        maybeAutoRun(context);
       }
 
       function updateProfileSelect(preferProfile) {
@@ -334,6 +336,21 @@
             profileSelect.value = sketch.defaultProfile;
           }
         }
+      }
+
+      function maybeAutoRun(context) {
+        if (!context || !context.autoRun || state.autoRunDone) return;
+        const targetSketch = context.sketchDir || '';
+        const targetProfile = context.profile || '';
+        if (!targetSketch || !targetProfile) return;
+        if (sketchSelect.value !== targetSketch) return;
+        const hasProfileOption = Array.from(profileSelect.options || []).some(opt => opt.value === targetProfile);
+        if (!hasProfileOption) return;
+        profileSelect.value = targetProfile;
+        state.autoRunDone = true;
+        setTimeout(() => {
+          requestAnalysis();
+        }, 50);
       }
 
       function requestAnalysis() {
