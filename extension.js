@@ -2585,16 +2585,12 @@ async function commandBuildCheck() {
         ? data.builder_result.diagnostics
         : [];
       const diagRecords = diagnostics.map(formatInspectorDiagnostic);
-      let warnCount = 0;
-      let errCount = 0;
-      for (const diag of diagnostics) {
-        const severity = String(diag?.severity || '').toUpperCase();
-        if (severity === 'WARNING') warnCount += 1;
-        else if (severity === 'ERROR') errCount += 1;
-      }
+      const visibleDiagnostics = diagRecords.filter((d) => d.severity !== 'WARNING' || isWorkspaceFile(d.file));
+      const warnCount = visibleDiagnostics.filter((d) => d.severity === 'WARNING').length;
+      const errCount = visibleDiagnostics.filter((d) => d.severity === 'ERROR').length;
       detail.warnings = warnCount;
       detail.errors = errCount;
-      detail.diagnostics = diagRecords;
+      detail.diagnostics = visibleDiagnostics;
       totals.warnings += warnCount;
       totals.errors += errCount;
 

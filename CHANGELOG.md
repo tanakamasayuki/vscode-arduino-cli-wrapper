@@ -7,6 +7,8 @@
 - (JA) インスペクターの警告について、ワークスペース外のファイルは集計にも診断タブにも表示しないようにしました。
 - (EN) Inspector diagnostics now let you open the reported location directly from the table.
 - (JA) インスペクター診断の位置をクリックすると対象ファイルの該当行を開くようにしました。
+- (EN) Build Check warning totals now ignore files outside the workspace.
+- (JA) ビルドチェックの警告数でもワークスペース外のファイルを集計対象から除外しました。
 - (EN) Auto-ran the Inspector analysis when the view opens with both sketch and profile preselected.
 - (JA) スケッチとプロファイルを指定してインスペクターを開いた場合に、自動で分析を開始するようにしました。
 - (EN) Made Inspector tab buttons adopt white text in dark mode to improve legibility.
