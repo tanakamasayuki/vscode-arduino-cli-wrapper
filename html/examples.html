@@ -356,7 +356,7 @@
       </div>
     </div>
   </main>
-  <script>
+  <script id="hljs-source" type="application/octet-stream">
     /*!
       Highlight.js v11.9.0 (git: f47103d4f1)
       (c) 2006-2023 undefined and other contributors
@@ -2057,7 +2057,7 @@
             name: "Plain text",
             aliases: ["text", "txt"], disableAutodetect: !0
           }), grmr_python: e => {
-            const n = e.regex, t = /[\p{XID_Start}_]\p{XID_Continue}*/u, a = ["and", "as", "assert", "async", "await", "break", "case", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "match", "nonlocal|10", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield"], i = {
+            const n = e.regex, t = /[_A-Za-z][_A-Za-z0-9]*/, a = ["and", "as", "assert", "async", "await", "break", "case", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "match", "nonlocal|10", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield"], i = {
               $pattern: /[A-Za-z]\w+|__\w+__/, keyword: a,
               built_in: ["__import__", "abs", "all", "any", "ascii", "bin", "bool", "breakpoint", "bytearray", "bytes", "callable", "chr", "classmethod", "compile", "complex", "delattr", "dict", "dir", "divmod", "enumerate", "eval", "exec", "filter", "float", "format", "frozenset", "getattr", "globals", "hasattr", "hash", "help", "hex", "id", "input", "int", "isinstance", "issubclass", "iter", "len", "list", "locals", "map", "max", "memoryview", "min", "next", "object", "oct", "open", "ord", "pow", "print", "property", "range", "repr", "reversed", "round", "set", "setattr", "slice", "sorted", "staticmethod", "str", "sum", "super", "tuple", "type", "vars", "zip"],
               literal: ["__debug__", "Ellipsis", "False", "None", "NotImplemented", "True"],
@@ -2681,7 +2681,7 @@
                 }]
               }
           }, grmr_xml: e => {
-            const n = e.regex, t = n.concat(/[\p{L}_]/u, n.optional(/[\p{L}0-9_.-]*:/u), /[\p{L}0-9_.-]*/u), a = {
+            const n = e.regex, t = n.concat(/[A-Za-z_]/, n.optional(/[A-Za-z0-9_.-]*:/), /[A-Za-z0-9_.-]*/), a = {
               className: "symbol", begin: /&[a-z]+;|&#[0-9]+;|&#x[a-f0-9]+;/
             }, i = {
               begin: /\s/,
@@ -2691,7 +2691,7 @@
             }), o = e.inherit(e.QUOTE_STRING_MODE, { className: "string" }), l = {
               endsWithParent: !0, illegal: /</, relevance: 0, contains: [{
                 className: "attr",
-                begin: /[\p{L}0-9._:-]+/u, relevance: 0
+                begin: /[A-Za-z0-9._:-]+/, relevance: 0
               }, {
                 begin: /=\s*/, relevance: 0, contains: [{
                   className: "string", endsParent: !0, variants: [{ begin: /"/, end: /"/, contains: [a] }, {
@@ -2792,8 +2792,23 @@
         }}); const He = ae; for (const e of Object.keys(Ke)) {
           const n = e.replace("grmr_", "").replace("_", "-"); He.registerLanguage(n, Ke[e])
         }
-    return He}()
-      ; "object" == typeof exports && "undefined" != typeof module && (module.exports = hljs);
+        return He;
+      }();
+      "object" == typeof exports && "undefined" != typeof module && (module.exports = hljs);
+  </script>
+  <script>
+    (() => {
+      const source = document.getElementById('hljs-source');
+      if (!source) {
+        console.error('Highlight.js source element not found');
+        return;
+      }
+      const inline = document.createElement('script');
+      inline.text = source.text;
+      document.head.appendChild(inline);
+      source.remove();
+      inline.remove();
+    })();
   </script>
   <script>
     /*! `cpp` grammar compiled for Highlight.js 11.9.0 */
