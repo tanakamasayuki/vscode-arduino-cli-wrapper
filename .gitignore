@@ -2,3 +2,4 @@
 *.txt
 *.bat
 temp
+.vscode
