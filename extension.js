@@ -12,10 +12,11 @@ const STATE_FQBN = 'arduino-cli.selectedFqbn';
 const STATE_PORT = 'arduino-cli.selectedPort';
 const STATE_BAUD = 'arduino-cli.selectedBaud';
 const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
-const VALID_WARNING_LEVELS = new Set(['none', 'default', 'more', 'all']);
+const VALID_WARNING_LEVELS = new Set(['workspace', 'none', 'default', 'more', 'all']);
 let output;
 let extContext;
 let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings;
+let compileDiagnostics;
 let monitorTerminal;
 // Log terminal (ANSI capable, no command execution)
 let logTerminal;
@@ -72,11 +73,12 @@ const MSG = {
     setBaudCustom: 'Custom…',
     setBaudPrompt: 'Enter baudrate (e.g., 115200)',
     statusSetBaud: 'Baudrate set: {baud}',
-    warningsStatusTooltip: 'Warnings: {level} / Verbose: {verbose}',
-    warningsLevelNone: 'none',
-    warningsLevelDefault: 'default',
-    warningsLevelMore: 'more',
-    warningsLevelAll: 'all',
+  warningsStatusTooltip: 'Warnings: {level} / Verbose: {verbose}',
+  warningsLevelWorkspace: 'workspace-only',
+  warningsLevelNone: 'none',
+  warningsLevelDefault: 'default',
+  warningsLevelMore: 'more',
+  warningsLevelAll: 'all',
     warningsVerboseOn: 'on',
     warningsVerboseOff: 'off',
     warningsQuickPickTitle: 'Select warnings and verbose mode',
@@ -367,11 +369,12 @@ const MSG = {
     setBaudCustom: 'カスタム入力…',
     setBaudPrompt: 'ボーレートを入力（例: 115200）',
     statusSetBaud: 'ボーレートを設定: {baud}',
-    warningsStatusTooltip: '警告: {level} / 詳細ログ: {verbose}',
-    warningsLevelNone: 'なし(none)',
-    warningsLevelDefault: 'デフォルト(default)',
-    warningsLevelMore: '詳細(more)',
-    warningsLevelAll: '全て(all)',
+  warningsStatusTooltip: '警告: {level} / 詳細ログ: {verbose}',
+  warningsLevelWorkspace: 'ワークスペースのみ(workspace)',
+  warningsLevelNone: 'なし(none)',
+  warningsLevelDefault: 'デフォルト(default)',
+  warningsLevelMore: '詳細(more)',
+  warningsLevelAll: '全て(all)',
     warningsVerboseOn: '有効',
     warningsVerboseOff: '無効',
     warningsQuickPickTitle: '警告レベルと詳細ログを選択',
@@ -662,18 +665,19 @@ function getConfig() {
     ? inspectedWarnings.workspaceValue
     : typeof inspectedWarnings?.globalValue !== 'undefined'
       ? inspectedWarnings.globalValue
-      : inspectedWarnings?.defaultValue ?? 'none';
+      : inspectedWarnings?.defaultValue ?? 'workspace';
   const verbose = typeof inspectedVerbose?.workspaceValue !== 'undefined'
     ? inspectedVerbose.workspaceValue
     : typeof inspectedVerbose?.globalValue !== 'undefined'
       ? inspectedVerbose.globalValue
       : inspectedVerbose?.defaultValue ?? false;
+  const normalizedWarnings = typeof warnings === 'string' ? warnings : 'workspace';
   return {
     exe: cfg.get('arduino-cli-wrapper.path', 'arduino-cli'),
     useTerminal: cfg.get('arduino-cli-wrapper.useTerminal', false),
     extra: cfg.get('arduino-cli-wrapper.additionalArgs', []),
     verbose: !!verbose,
-    warnings: typeof warnings === 'string' ? warnings : 'none',
+    warnings: normalizedWarnings,
   };
 }
 
@@ -1709,16 +1713,21 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   }
   const normalizedWarnings = typeof cfg.warnings === 'string' ? cfg.warnings.toLowerCase() : '';
   const warningsLevel = VALID_WARNING_LEVELS.has(normalizedWarnings) ? normalizedWarnings : '';
-  if (warningsLevel && !containsWarningsFlag(baseArgs) && !containsWarningsFlag(originalArgs)) {
+  const workspaceWarningsOnly = warningsLevel === 'workspace';
+  const warningsArg = workspaceWarningsOnly ? 'all' : warningsLevel;
+  if (warningsArg && !containsWarningsFlag(baseArgs) && !containsWarningsFlag(originalArgs)) {
     const sketchIdx = originalArgs.lastIndexOf(sketchDir);
     const insertIdx = sketchIdx >= 0 ? sketchIdx : originalArgs.length;
-    originalArgs.splice(insertIdx, 0, '--warnings', warningsLevel);
+    originalArgs.splice(insertIdx, 0, '--warnings', warningsArg);
   }
 
   const compileArgs = originalArgs.slice();
   const sketchIdx = compileArgs.lastIndexOf(sketchDir);
 
   const finalArgs = [...baseArgs, ...compileArgs];
+  if (compileDiagnostics) {
+    try { compileDiagnostics.clear(); } catch (_) { }
+  }
   const term = getAnsiLogTerminal();
   term.terminal.show(true);
   const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
@@ -1728,18 +1737,32 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   const channel = getOutput();
   return new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
-    const pump = (chunk) => {
+    let stderrBuffer = '';
+    const forward = (chunk) => {
       const raw = chunk.toString();
       term.write(raw.replace(/\r?\n/g, '\r\n'));
     };
-    child.stdout.on('data', pump);
-    child.stderr.on('data', pump);
+    child.stdout.on('data', forward);
+    child.stderr.on('data', (chunk) => {
+      const raw = chunk.toString();
+      stderrBuffer += raw;
+      forward(chunk);
+    });
     child.on('error', (err) => {
       channel.appendLine(`[error] ${err.message}`);
       reject(err);
     });
     child.on('close', async (code) => {
       term.write(`\r\n${ANSI.bold}${(code === 0 ? ANSI.green : ANSI.red)}[exit ${code}]${ANSI.reset}\r\n`);
+      try {
+        updateCompileDiagnosticsFromStderr(stderrBuffer, {
+          cwd: sketchDir,
+          skipWarningsOutsideWorkspace: workspaceWarningsOnly,
+          allowOutsideDiagnostics: !workspaceWarningsOnly
+        });
+      } catch (err) {
+        channel.appendLine(`[warn] Failed to parse diagnostics: ${err.message}`);
+      }
       if (code !== 0) {
         reject(new Error(`arduino-cli exited with code ${code}`));
         return;
@@ -1820,6 +1843,100 @@ async function ensureCompileCommandsSetting(sketchDir) {
     channel.appendLine(`[warn] Failed to update settings: ${err.message}`);
     return false;
   }
+}
+
+function updateCompileDiagnosticsFromStderr(stderrText, options = {}) {
+  if (!compileDiagnostics) return;
+  const diagnosticsByFile = parseCompilerDiagnostics(stderrText, options);
+  compileDiagnostics.clear();
+  for (const [fsPath, entries] of diagnosticsByFile.entries()) {
+    if (!entries || entries.length === 0) continue;
+    try {
+      const uri = vscode.Uri.file(fsPath);
+      compileDiagnostics.set(uri, entries);
+    } catch (_) { }
+  }
+}
+
+function parseCompilerDiagnostics(stderrText, options = {}) {
+  const {
+    cwd = '',
+    skipWarningsOutsideWorkspace = false,
+    allowOutsideDiagnostics = false,
+  } = options;
+  const normalized = String(stderrText || '').replace(/\r\n/g, '\n');
+  const lines = normalized.split('\n');
+  const diagPattern = /:(\d+)(?::(\d+))?:\s+(fatal error|error|warning|note):\s+/i;
+  /** @type {Map<string, vscode.Diagnostic[]>} */
+  const result = new Map();
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (!line) continue;
+    const match = diagPattern.exec(line);
+    if (!match) continue;
+    const filePart = line.slice(0, match.index).trim();
+    if (!filePart) continue;
+    if (/^In file included from\s/i.test(filePart) || /^from\s/i.test(filePart)) continue;
+    let lineNum = Number.parseInt(match[1], 10);
+    if (!Number.isFinite(lineNum) || lineNum < 1) lineNum = 1;
+    let colNum = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(colNum) || colNum < 1) colNum = 1;
+    const severityLabel = match[3].toLowerCase();
+    if (severityLabel === 'note') continue;
+    const message = line.slice(match.index + match[0].length).trim();
+    if (!message) continue;
+    const resolvedPath = normalizeCompilerDiagnosticPath(filePart, cwd);
+    if (!resolvedPath) continue;
+    let severity = vscode.DiagnosticSeverity.Warning;
+    if (severityLabel.includes('error')) {
+      severity = vscode.DiagnosticSeverity.Error;
+    }
+    const isWarning = severity === vscode.DiagnosticSeverity.Warning;
+    const isWorkspace = isWorkspaceFile(resolvedPath);
+    if (!isWorkspace) {
+      if (isWarning && skipWarningsOutsideWorkspace) {
+        continue;
+      }
+      if (!allowOutsideDiagnostics) {
+        continue;
+      }
+    }
+    const position = new vscode.Position(Math.max(0, lineNum - 1), Math.max(0, colNum - 1));
+    const range = new vscode.Range(position, position);
+    const diagnostic = new vscode.Diagnostic(range, message, severity);
+    diagnostic.source = 'arduino-cli';
+    const warnCode = extractWarningCodeFromMessage(message);
+    if (warnCode) diagnostic.code = warnCode;
+    if (result.has(resolvedPath)) {
+      result.get(resolvedPath).push(diagnostic);
+    } else {
+      result.set(resolvedPath, [diagnostic]);
+    }
+  }
+  return result;
+}
+
+function normalizeCompilerDiagnosticPath(rawPath, cwd) {
+  if (!rawPath) return '';
+  let value = String(rawPath).trim();
+  value = value.replace(/^['"]+|['"]+$/g, '');
+  if (!value) return '';
+  try {
+    if (/^[A-Za-z]:$/.test(value)) return '';
+    const resolved = path.isAbsolute(value)
+      ? value
+      : (cwd ? path.resolve(cwd, value) : path.resolve(value));
+    return path.normalize(resolved);
+  } catch (_) {
+    return '';
+  }
+}
+
+function extractWarningCodeFromMessage(message) {
+  if (!message) return undefined;
+  const match = message.match(/\[-W([^\]]+)\]/i);
+  if (!match) return undefined;
+  return match[1];
 }
 
 // Expand GCC -iprefix/-iwithprefixbefore arguments into -I entries for IntelliSense.
@@ -2114,6 +2231,8 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
 function activate(context) {
   extContext = context;
   setupIncludeOrderLint(context);
+  compileDiagnostics = vscode.languages.createDiagnosticCollection('arduinoCliCompile');
+  context.subscriptions.push(compileDiagnostics);
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('arduino-cli.refreshView', () => {
@@ -2932,6 +3051,8 @@ async function detectSketchDirForStatus() {
 
 function getWarningsShortCode(level) {
   switch ((level || '').toLowerCase()) {
+    case 'workspace':
+      return 'all';
     case 'none': return 'none';
     case 'default': return 'default';
     case 'more': return 'more';
@@ -2942,6 +3063,7 @@ function getWarningsShortCode(level) {
 
 function getWarningsLevelLabel(level) {
   const key = (level || '').toLowerCase();
+  if (key === 'workspace') return t('warningsLevelWorkspace');
   if (key === 'none') return t('warningsLevelNone');
   if (key === 'more') return t('warningsLevelMore');
   if (key === 'all') return t('warningsLevelAll');
@@ -2953,7 +3075,8 @@ function getVerboseLabel(verbose) {
 }
 
 function formatWarningsBadge(level, verbose) {
-  const base = getWarningsShortCode(level);
+  const key = (level || '').toLowerCase();
+  const base = key === 'workspace' ? 'all*' : getWarningsShortCode(level);
   return verbose ? `${base}+V` : base;
 }
 
@@ -3141,7 +3264,7 @@ async function commandConfigureWarnings() {
   const cfg = getConfig();
   const currentWarnings = typeof cfg.warnings === 'string' ? cfg.warnings : 'none';
   const currentVerbose = !!cfg.verbose;
-  const levels = ['none', 'default', 'more', 'all'];
+  const levels = ['workspace', 'none', 'default', 'more', 'all'];
   /** @type {vscode.QuickPickItem[]} */
   const items = [];
   for (const level of levels) {

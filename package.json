@@ -164,14 +164,16 @@
         "arduino-cli-wrapper.compileWarnings": {
           "type": "string",
           "enum": [
+            "workspace",
             "none",
             "default",
             "more",
             "all"
           ],
-          "default": "none",
+          "default": "workspace",
           "markdownDescription": "%config.compileWarnings.description%",
           "enumDescriptions": [
+            "%config.compileWarnings.enum.workspace%",
             "%config.compileWarnings.enum.none%",
             "%config.compileWarnings.enum.default%",
             "%config.compileWarnings.enum.more%",

@@ -28,6 +28,7 @@
   "config.path.description": "arduino-cli 実行ファイルのパス (例: arduino-cli, arduino-cli.exe, フルパス)",
   "config.additionalArgs.description": "すべての arduino-cli 実行に付与する追加引数",
   "config.compileWarnings.description": "arduino-cli compile に渡す警告レベル (--warnings) を選択します。（ステータスバーから制御）",
+  "config.compileWarnings.enum.workspace": "すべての警告を有効にしつつ、ワークスペース内のファイルのみ問題として表示します。",
   "config.compileWarnings.enum.none": "コンパイラ警告を無効にします。",
   "config.compileWarnings.enum.default": "Arduino CLI の既定警告レベルを使用します。",
   "config.compileWarnings.enum.more": "追加のコンパイラ警告を有効にします。",

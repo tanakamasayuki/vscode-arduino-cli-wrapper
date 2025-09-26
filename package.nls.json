@@ -28,6 +28,7 @@
   "config.path.description": "Path to the arduino-cli executable (e.g. arduino-cli, arduino-cli.exe, or full path).",
   "config.additionalArgs.description": "Additional arguments to append to every arduino-cli invocation.",
   "config.compileWarnings.description": "Select the warning level passed to arduino-cli compile (--warnings). (Managed from the status bar)",
+  "config.compileWarnings.enum.workspace": "Enable all compiler warnings but only report issues within workspace files.",
   "config.compileWarnings.enum.none": "Disable compiler warnings.",
   "config.compileWarnings.enum.default": "Use Arduino CLI's default warning level.",
   "config.compileWarnings.enum.more": "Enable extra compiler warnings.",
