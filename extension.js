@@ -73,12 +73,12 @@ const MSG = {
     setBaudCustom: 'Custom…',
     setBaudPrompt: 'Enter baudrate (e.g., 115200)',
     statusSetBaud: 'Baudrate set: {baud}',
-  warningsStatusTooltip: 'Warnings: {level} / Verbose: {verbose}',
-  warningsLevelWorkspace: 'workspace-only',
-  warningsLevelNone: 'none',
-  warningsLevelDefault: 'default',
-  warningsLevelMore: 'more',
-  warningsLevelAll: 'all',
+    warningsStatusTooltip: 'Warnings: {level} / Verbose: {verbose}',
+    warningsLevelWorkspace: 'workspace-only',
+    warningsLevelNone: 'none',
+    warningsLevelDefault: 'default',
+    warningsLevelMore: 'more',
+    warningsLevelAll: 'all',
     warningsVerboseOn: 'on',
     warningsVerboseOff: 'off',
     warningsQuickPickTitle: 'Select warnings and verbose mode',
@@ -369,12 +369,12 @@ const MSG = {
     setBaudCustom: 'カスタム入力…',
     setBaudPrompt: 'ボーレートを入力（例: 115200）',
     statusSetBaud: 'ボーレートを設定: {baud}',
-  warningsStatusTooltip: '警告: {level} / 詳細ログ: {verbose}',
-  warningsLevelWorkspace: 'ワークスペースのみ(workspace)',
-  warningsLevelNone: 'なし(none)',
-  warningsLevelDefault: 'デフォルト(default)',
-  warningsLevelMore: '詳細(more)',
-  warningsLevelAll: '全て(all)',
+    warningsStatusTooltip: '警告: {level} / 詳細ログ: {verbose}',
+    warningsLevelWorkspace: 'ワークスペースのみ(workspace)',
+    warningsLevelNone: 'なし(none)',
+    warningsLevelDefault: 'デフォルト(default)',
+    warningsLevelMore: '詳細(more)',
+    warningsLevelAll: '全て(all)',
     warningsVerboseOn: '有効',
     warningsVerboseOff: '無効',
     warningsQuickPickTitle: '警告レベルと詳細ログを選択',
@@ -1754,14 +1754,23 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
     });
     child.on('close', async (code) => {
       term.write(`\r\n${ANSI.bold}${(code === 0 ? ANSI.green : ANSI.red)}[exit ${code}]${ANSI.reset}\r\n`);
+      let diagSummary = { files: 0, diagnostics: 0 };
       try {
-        updateCompileDiagnosticsFromStderr(stderrBuffer, {
+        const result = updateCompileDiagnosticsFromStderr(stderrBuffer, {
           cwd: sketchDir,
           skipWarningsOutsideWorkspace: workspaceWarningsOnly,
           allowOutsideDiagnostics: !workspaceWarningsOnly
         });
+        if (result && typeof result === 'object') {
+          diagSummary = result;
+        }
       } catch (err) {
         channel.appendLine(`[warn] Failed to parse diagnostics: ${err.message}`);
+      }
+      if (diagSummary.diagnostics > 0) {
+        try {
+          await vscode.commands.executeCommand('workbench.actions.view.problems');
+        } catch (_) { }
       }
       if (code !== 0) {
         reject(new Error(`arduino-cli exited with code ${code}`));
@@ -1846,16 +1855,23 @@ async function ensureCompileCommandsSetting(sketchDir) {
 }
 
 function updateCompileDiagnosticsFromStderr(stderrText, options = {}) {
-  if (!compileDiagnostics) return;
+  if (!compileDiagnostics) {
+    return { files: 0, diagnostics: 0 };
+  }
   const diagnosticsByFile = parseCompilerDiagnostics(stderrText, options);
   compileDiagnostics.clear();
+  let fileCount = 0;
+  let totalDiagnostics = 0;
   for (const [fsPath, entries] of diagnosticsByFile.entries()) {
     if (!entries || entries.length === 0) continue;
     try {
       const uri = vscode.Uri.file(fsPath);
       compileDiagnostics.set(uri, entries);
+      fileCount += 1;
+      totalDiagnostics += entries.length;
     } catch (_) { }
   }
+  return { files: fileCount, diagnostics: totalDiagnostics };
 }
 
 function parseCompilerDiagnostics(stderrText, options = {}) {
