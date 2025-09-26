@@ -6,26 +6,38 @@ VS Code extension to run Arduino CLI from the command palette, status bar, and a
 
 ## Features
 
-- Check CLI Version: runs `arduino-cli version`
-- List Connected Boards: shows connected boards
-- List All Boards (listall): lists all boards; accepts an optional filter passed to `arduino-cli board listall <filter>`
-- Compile Sketch: pick a sketch to compile (uses profile or FQBN)
-- Clean Compile: compiles with `--clean`; resets includePath first, then adds only paths discovered during the build
-- Build Check: compiles every profile from each sketch.yaml with `--warnings=all` and aggregates warnings/errors
-- Check Sketch.yaml Versions: scans each sketch.yaml profile to compare platform/library versions with the published indexes and offers inline updates
-- Status Controls: change compile warning level and verbose output straight from the status bar (e.g. `all+V`)
-- Upload Sketch: builds then uploads with selected port and profile/FQBN; closes and reopens monitor if needed
-- Monitor Serial: open a serial monitor (select port and baudrate)
-- Sketch.yaml Helper: open a sketch.yaml helper webview to inspect/apply profiles/libraries
-- Board Details: when using profiles, passes the profile's FQBN with `-b`
-- Run Command: run arbitrary Arduino CLI arguments
-- Configure IntelliSense: compute include paths and write `.vscode/c_cpp_properties.json` without building
-- Include Order Lint: highlight when filesystem headers are included after M5GFX headers in `.ino` files
-- Upload Data (ESP32): build LittleFS/SPIFFS image from `data/` and flash via esptool
-- New Sketch: create a new Arduino sketch folder, open the generated `.ino`, and launch the Sketch.yaml Helper
+### Getting started with commands (Command Palette)
 
+Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:” to see the commands below. Each one carries a short description in the palette, but the summaries here walk through what to expect on your very first run.
 
-All command logs are unified in a dedicated pseudo terminal with ANSI colors.
+- **Check CLI Version** – Confirms that `arduino-cli` is installed and reachable. If it is missing, the extension shows a friendly setup guide.
+- **List Connected Boards** – Scans USB/serial ports and shows the detected boards so you can double‑check the connection before you upload.
+- **List All Boards** – Displays the complete board index. You can type a search word (for example `nano`) to narrow the list, just like running `arduino-cli board listall <filter>` manually.
+- **Board Details** – Shows the technical info for the currently selected profile/FQBN, making it easy to verify you picked the right board package.
+
+### Build and upload workflow
+
+- **Compile Sketch** – Builds the selected sketch. If the folder contains several `.ino` files, a picker helps you choose the right one. Profiles from `sketch.yaml` are applied automatically; otherwise the saved FQBN is used.
+- **Clean Compile** – Runs the same build with `--clean`, resets IntelliSense include paths, and is handy when switching libraries or boards.
+- **Upload Sketch** – Compiles and uploads in one go. You will be prompted for a serial port if one is not already selected, and the monitor is closed/reopened as needed so the port stays free.
+- **Upload Data (ESP32)** – Looks for a `data/` folder, creates a LittleFS or SPIFFS image, and flashes it. Perfect for web assets or configuration files bundled with your sketch.
+- **Build Check** – Compiles every profile defined in `sketch.yaml` with full warnings (`--warnings all`), then shows a summary of warnings and errors so you can spot regressions quickly.
+
+### Keep sketches organised
+
+- **Sketch.yaml Helper** – Opens a helper view where you can review or update board packages, platforms, and libraries without editing YAML by hand.
+- **Check Sketch.yaml Versions** – Audits every profile against the official indexes and offers inline upgrades when newer versions are available.
+- **New Sketch** – Creates a fresh sketch folder, opens the generated `.ino`, and launches the helper so you can configure profiles immediately.
+
+### Fine-tune your tooling
+
+- **Monitor Serial** – Opens a serial terminal with selectable port and baudrate (default 115200). Helpful tips appear if the port is busy.
+- **Configure IntelliSense** – Regenerates `.vscode/c_cpp_properties.json` using the latest compiler flags without running a build.
+- **Run Command** – Lets you pass custom arguments straight to `arduino-cli` when you need an advanced flag that the UI does not expose.
+- **Status controls in the status bar** – Toggle warning levels (`none`, `workspace`, `default`, `more`, `all`) and the `--verbose` switch. The badge (for example `all+V`) updates instantly.
+- **Include Order Lint** – Watches `.ino` files and warns if filesystem headers appear before M5GFX headers, catching a common runtime pitfall.
+
+All command logs are unified in a dedicated pseudo terminal with ANSI colors so you can follow the exact CLI invocation.
 
 ## Explorer View
 

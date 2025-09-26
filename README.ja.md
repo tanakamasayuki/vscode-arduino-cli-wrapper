@@ -6,26 +6,38 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 
 ## 機能
 
-- CLI バージョン確認: `arduino-cli version` を実行
-- List Connected Boards: 接続中のボード一覧を表示
-- List All Boards (listall): すべてのボード一覧。実行時にフィルター入力可（`arduino-cli board listall <filter>` に渡します）
-- Compile Sketch: スケッチをコンパイル（プロファイルまたは FQBN を使用）
-- Clean Compile: `--clean` でクリーンビルド。最初に includePath を空にし、ビルドで検出したパスのみを追加
-- Build Check: すべての sketch.yaml プロファイルを `--warnings=all` 付きでコンパイルし、警告/エラー件数を集計
-- sketch.yaml バージョン確認: 各 sketch.yaml プロファイルを走査し、プラットフォーム/ライブラリーのバージョンを公開インデックスと比較して更新を提案
-- Status Controls: ステータスバーから警告レベルと verbose を切り替え (`all+V` などの短い表示)
-- Upload Sketch: ビルドしてから書き込み。選択したポートとプロファイル/FQBNを使用。必要に応じてモニタを一時停止・再開
-- Monitor Serial: シリアルモニタを起動（ポートとボーレートを選択）
-- Sketch.yaml Helper: sketch.yaml ヘルパーの Web ビューを開き、プロファイル/ライブラリを確認・反映
-- Board Details: プロファイル使用時は `-b` でその FQBN を渡して詳細表示
-- Run Command: 任意の Arduino CLI 引数を実行
-- Configure IntelliSense: ビルドせずに includePath を計算して `.vscode/c_cpp_properties.json` を作成
-- Include Order Lint: `.ino` 内で M5GFX 系ヘッダーより後ろに FS 系ヘッダーを置いた場合に診断を表示
-- Upload Data (ESP32): `data/` から LittleFS/SPIFFS イメージを作成し、esptool で書き込み
-- New Sketch: 新しいスケッチフォルダーを作成し、生成された `.ino` を開いて Sketch.yaml Helper を起動
+### コマンドパレットから始める（初心者ガイド）
 
+**Ctrl+Shift+P**（macOS は **Cmd+Shift+P**）でコマンドパレットを開き、「Arduino CLI」と入力すると下記のコマンドが並びます。それぞれのコマンドに何が起きるのかを、初めての方でも分かるようにまとめました。
 
-すべてのコマンドのログは疑似ターミナルに ANSI カラーで表示されます。
+- **CLI バージョン確認** – `arduino-cli` がインストールされているかチェックします。未設定なら手順付きのガイドが表示されます。
+- **List Connected Boards** – PC に接続されている Arduino ボードを一覧表示し、書き込み前に接続状況を確認できます。
+- **List All Boards** – すべてのボードを検索できます。フィルター欄にキーワードを入力すると `arduino-cli board listall <filter>` と同じ結果が得られます。
+- **Board Details** – 現在選択中のプロファイル/FQBN の詳細情報を表示し、使用しているボード設定を再確認できます。
+
+### ビルドとアップロードの基本操作
+
+- **Compile Sketch** – 選択したスケッチをビルドします。複数の `.ino` がある場合はダイアログで選べます。`sketch.yaml` があればプロファイルを自動で適用、ない場合は保存済みの FQBN を使います。
+- **Clean Compile** – `--clean` オプション付きでクリーンビルドを実行し、IntelliSense の includePath も初期化した上で再計算します。ライブラリを入れ替えた後に便利です。
+- **Upload Sketch** – コンパイルしてそのまま書き込みます。ポートが未設定ならその場で選択でき、必要に応じてシリアルモニタを自動で閉じたり再オープンしたりします。
+- **Upload Data (ESP32)** – `data/` フォルダーを探して LittleFS/SPIFFS のイメージを作成し、ESP32 の SPIFFS パーティションに書き込みます。Web アセットや設定ファイルを同梱したい場合に活躍します。
+- **Build Check** – `sketch.yaml` に定義したすべてのプロファイルを `--warnings all` でビルドし、警告とエラーの集計結果を表示します。リグレッションチェックに最適です。
+
+### スケッチ管理をラクにするツール
+
+- **Sketch.yaml Helper** – Web ビューでボード/プラットフォーム/ライブラリを確認しながら `sketch.yaml` を編集できます。手打ちが不安なときにおすすめです。
+- **sketch.yaml バージョン確認** – 各プロファイルを最新の公開インデックスと照らし合わせ、アップデートがあればその場で提案します。
+- **New Sketch** – 新しいスケッチフォルダーを作成し、生成した `.ino` を開いてヘルパーも同時に起動します。ゼロから環境を整えるのにぴったりです。
+
+### ツール連携と細かな操作
+
+- **Monitor Serial** – シリアルモニタを開き、ポートとボーレートを指定できます（既定は 115200）。ポートが使用中の場合は注意点も表示します。
+- **Configure IntelliSense** – ビルドを走らせずに `.vscode/c_cpp_properties.json` を再生成し、最新のコンパイルフラグをエディタに反映します。
+- **Run Command** – UI にないオプションを試したいときに、任意の引数を `arduino-cli` へ直接渡せます。
+- **ステータスバーのトグル** – 警告レベル（`none` / `workspace` / `default` / `more` / `all`）と `--verbose` の ON/OFF をワンクリックで切替できます。バッジ表記（例: `all+V`）ですぐに状態が分かります。
+- **Include Order Lint** – `.ino` の中で M5GFX 系ヘッダーより前に FS 系ヘッダーを書いた場合に警告を表示し、実行時のトラブルを未然に防ぎます。
+
+すべてのコマンド結果は ANSI カラー付きの疑似ターミナルにまとめて表示され、Arduino CLI の実行内容をそのまま確認できます。
 
 ## エクスプローラー ビュー
 
