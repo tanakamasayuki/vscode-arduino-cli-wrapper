@@ -37,6 +37,13 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - **Check Sketch.yaml Versions** – Audits every profile against the official indexes and offers inline upgrades when newer versions are available.
 - **New Sketch** – Creates a fresh sketch folder, opens the generated `.ino`, and launches the helper so you can configure profiles immediately.
 
+### Explore examples quickly
+
+- **Browse Examples** – Opens a tree of every example sketch exposed by your installed cores and libraries. Unlike the Arduino IDE, you can preview the source before opening it in the editor.
+- **Filter by name or folder** – Use the quick filter box to narrow the list by file or directory names when you already know what you are looking for.
+- **Search inside sketches** – Switch to the built-in grep mode to filter examples by the text they contain (for instance, type `rgb` to find examples that manipulate RGB LEDs or look for a specific function call).
+- **Open with one click** – Once the preview matches what you need, open it directly in the editor and start adapting it to your project.
+
 ### Fine-tune your tooling
 
 - **Monitor Serial** – Opens a serial terminal with selectable port and baudrate (default 115200). Helpful tips appear if the port is busy.
