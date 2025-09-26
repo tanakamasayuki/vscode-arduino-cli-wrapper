@@ -10,6 +10,10 @@ Because you are already working inside VS Code, the extension connects build res
 
 The goal is to make Arduino CLI approachable for beginners while unlocking the advanced workflows—multiple dependency versions, rich IntelliSense, and build automation—that seasoned users expect.
 
+![Arduino CLI Wrapper overview](images/main.png)
+
+*The Explorer view keeps sketches, profiles, and common actions together so you can launch tasks with a click.*
+
 [日本語READMEはこちら](README.ja.md)
 
 ## Features
@@ -37,6 +41,14 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - **Check Sketch.yaml Versions** – Audits every profile against the official indexes and offers inline upgrades when newer versions are available.
 - **New Sketch** – Creates a fresh sketch folder, opens the generated `.ino`, and launches the helper so you can configure profiles immediately.
 
+![Sketch.yaml Helper webview](images/sketch.yaml_helper.png)
+
+*Use the Sketch.yaml Helper to edit profiles without touching raw YAML.*
+
+![Sketch.yaml version comparison](images/sketch.yaml_versions.png)
+
+*See which platforms and libraries have updates pending and apply them in place.*
+
 ### Explore examples quickly
 
 - **Browse Examples** – Opens a tree of every example sketch exposed by your installed cores and libraries. Unlike the Arduino IDE, you can preview the source before opening it in the editor.
@@ -49,8 +61,13 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - **Monitor Serial** – Opens a serial terminal with selectable port and baudrate (default 115200). Helpful tips appear if the port is busy.
 - **Configure IntelliSense** – Regenerates `.vscode/c_cpp_properties.json` using the latest compiler flags without running a build.
 - **Run Command** – Lets you pass custom arguments straight to `arduino-cli` when you need an advanced flag that the UI does not expose.
+- **Inspector** – Examines the generated map file, ELF sections, and other build artifacts so you can understand memory usage at a glance.
 - **Status controls in the status bar** – Toggle warning levels (`none`, `workspace`, `default`, `more`, `all`) and the `--verbose` switch. The badge (for example `all+V`) updates instantly.
 - **Include Order Lint** – Watches `.ino` files and warns if filesystem headers appear before M5GFX headers, catching a common runtime pitfall.
+
+![Inspector analysing build artifacts](images/inspector.png)
+
+*Run the Inspector after a build to review memory usage and section breakdowns.*
 
 All command logs are unified in a dedicated pseudo terminal with ANSI colors so you can follow the exact CLI invocation.
 

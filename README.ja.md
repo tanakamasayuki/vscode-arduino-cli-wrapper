@@ -10,6 +10,10 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 
 さらに ESP32 向けの `data/` フォルダー書き込み機能や、map ファイルなどを解析する Inspector など IDE にはないユーティリティも搭載。Arduino CLI をこれから学ぶ人にも、プロフェッショナルな開発フローを求める人にも便利な環境を提供します。
 
+![拡張機能の全体ビュー](images/main.png)
+
+*エクスプローラービューからスケッチやプロファイル、各種操作をワンクリックで実行できます。*
+
 [English README](README.md)
 
 ## 機能
@@ -37,6 +41,14 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - **sketch.yaml バージョン確認** – 各プロファイルを最新の公開インデックスと照らし合わせ、アップデートがあればその場で提案します。
 - **New Sketch** – 新しいスケッチフォルダーを作成し、生成した `.ino` を開いてヘルパーも同時に起動します。ゼロから環境を整えるのにぴったりです。
 
+![Sketch.yaml Helper の画面](images/sketch.yaml_helper.png)
+
+*Sketch.yaml Helper でボードやライブラリを GUI で編集できます。*
+
+![Sketch.yaml バージョン比較](images/sketch.yaml_versions.png)
+
+*現在のバージョンと公開版との差分を確認し、その場で更新できます。*
+
 ### サンプルを素早く探す
 
 - **Browse Examples** – インストール済みのコアやライブラリが提供するサンプルスケッチをツリー表示します。Arduino IDE と違い、開く前に内容をプレビューできます。
@@ -49,8 +61,13 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - **Monitor Serial** – シリアルモニタを開き、ポートとボーレートを指定できます（既定は 115200）。ポートが使用中の場合は注意点も表示します。
 - **Configure IntelliSense** – ビルドを走らせずに `.vscode/c_cpp_properties.json` を再生成し、最新のコンパイルフラグをエディタに反映します。
 - **Run Command** – UI にないオプションを試したいときに、任意の引数を `arduino-cli` へ直接渡せます。
+- **Inspector** – ビルド後に生成される map ファイルやセクションサイズを解析し、メモリ使用量を一目で把握できます。
 - **ステータスバーのトグル** – 警告レベル（`none` / `workspace` / `default` / `more` / `all`）と `--verbose` の ON/OFF をワンクリックで切替できます。バッジ表記（例: `all+V`）ですぐに状態が分かります。
 - **Include Order Lint** – `.ino` の中で M5GFX 系ヘッダーより前に FS 系ヘッダーを書いた場合に警告を表示し、実行時のトラブルを未然に防ぎます。
+
+![Inspector の画面](images/inspector.png)
+
+*Inspector を使えばメモリマップやセクションごとのサイズを可視化できます。*
 
 すべてのコマンド結果は ANSI カラー付きの疑似ターミナルにまとめて表示され、Arduino CLI の実行内容をそのまま確認できます。
 
