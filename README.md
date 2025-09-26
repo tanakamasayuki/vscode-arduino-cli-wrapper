@@ -2,6 +2,12 @@
 
 VS Code extension to run Arduino CLI from the command palette, status bar, and an Explorer view. It streams colored logs to a pseudo terminal, supports sketch.yaml profiles, and updates IntelliSense includePath during builds.
 
+![Arduino CLI Wrapper overview](images/main.png)
+
+*The Explorer view keeps sketches, profiles, and common actions together so you can launch tasks with a click.*
+
+[日本語READMEはこちら](README.ja.md)
+
 ## Concept
 
 This extension brings the Arduino CLI—normally invoked under the hood of the Arduino IDE—into VS Code so you can reach feature parity (and more) without leaving your editor. By leaning on Arduino CLI profiles, you can pin different versions of platforms and libraries per project through `sketch.yaml`, something that is hard to maintain inside the IDE alone. The helper UIs guide you through editing those profiles and even compare them with the latest releases to suggest upgrades.
@@ -9,12 +15,6 @@ This extension brings the Arduino CLI—normally invoked under the hood of the A
 Because you are already working inside VS Code, the extension connects build results with the Microsoft C/C++ extension: include paths, IntelliSense, diagnostics, and the generated `compile_commands.json` all stay in sync with each compile. You also get a workspace-focused warnings mode that filters out noise from third-party cores (addressing the IDE’s `none` default), plus exclusive utilities such as the ESP32 data uploader and the Inspector for analysing map and artifact files.
 
 The goal is to make Arduino CLI approachable for beginners while unlocking the advanced workflows—multiple dependency versions, rich IntelliSense, and build automation—that seasoned users expect.
-
-![Arduino CLI Wrapper overview](images/main.png)
-
-*The Explorer view keeps sketches, profiles, and common actions together so you can launch tasks with a click.*
-
-[日本語READMEはこちら](README.ja.md)
 
 ## Features
 
