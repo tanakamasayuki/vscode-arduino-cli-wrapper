@@ -109,6 +109,7 @@ const MSG = {
     buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
     treeBuildCheck: 'Build Check',
     treeCompile: 'Compile',
+    treeCleanCompile: 'Clean Compile',
     treeUpload: 'Upload',
     treeUploadData: 'Upload Data',
     treeMonitor: 'Monitor',
@@ -403,6 +404,7 @@ const MSG = {
     buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
     treeBuildCheck: 'ビルドチェック',
     treeCompile: 'コンパイル',
+    treeCleanCompile: 'クリーンコンパイル',
     treeUpload: '書き込み',
     treeUploadData: 'データ書き込み',
     treeMonitor: 'シリアルモニター',
@@ -2122,6 +2124,10 @@ function activate(context) {
         if (!payload || typeof payload !== 'object') return;
         const { action, sketchDir, profile } = payload;
         if (action === 'compile') return runCompileFor(sketchDir, profile);
+        if (action === 'cleanCompile') {
+          if (sketchDir) return runCleanCompileFor(sketchDir, profile);
+          return vscode.commands.executeCommand('arduino-cli.cleanCompile');
+        }
         if (action === 'upload') return runUploadFor(sketchDir, profile);
         if (action === 'version') return vscode.commands.executeCommand('arduino-cli.version');
         if (action === 'listBoards') return vscode.commands.executeCommand('arduino-cli.listBoards');
@@ -2295,6 +2301,7 @@ class CommandItem extends vscode.TreeItem {
 function defaultCommandItems(dir, profile, parent) {
   return [
     new CommandItem('Compile', 'compile', dir, profile, parent, t('treeCompile')),
+    new CommandItem('Clean Compile', 'cleanCompile', dir, profile, parent, t('treeCleanCompile')),
     new CommandItem('Upload', 'upload', dir, profile, parent, t('treeUpload')),
     new CommandItem('Upload Data', 'uploadData', dir, profile, parent, t('treeUploadData')),
     new CommandItem('Monitor', 'monitor', dir, profile, parent, t('treeMonitor')),
@@ -2393,6 +2400,20 @@ async function runCompileFor(sketchDir, profile) {
   }
   args.push(sketchDir);
   await compileWithIntelliSense(sketchDir, args);
+}
+async function runCleanCompileFor(sketchDir, profile) {
+  if (!(await ensureCliReady())) return;
+  const cfg = getConfig();
+  const args = ['compile', '--clean'];
+  if (cfg.verbose) args.push('--verbose');
+  if (profile) args.push('--profile', profile);
+  else {
+    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
+    if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
+    args.push('--fqbn', fqbn);
+  }
+  args.push(sketchDir);
+  await compileWithIntelliSense(sketchDir, args, { emptyIncludePath: true });
 }
 async function runUploadFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
