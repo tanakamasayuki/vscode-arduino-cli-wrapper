@@ -1,12 +1,12 @@
 # Arduino CLI Wrapper (VS Code 拡張機能)
 
+[English README](README.md)
+
 Arduino CLI を VS Code から「コマンドパレット」「ステータスバー」「エクスプローラー」から操作できます。カラー付きの疑似ターミナルにログを集約し、sketch.yaml のプロファイルに対応、ビルド中に IntelliSense の includePath を自動更新します。
 
 ![拡張機能の全体ビュー](images/main.png)
 
 *エクスプローラービューからスケッチやプロファイル、各種操作をワンクリックで実行できます。*
-
-[English README](README.md)
 
 ## コンセプト
 

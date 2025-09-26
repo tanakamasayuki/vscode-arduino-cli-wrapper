@@ -1,12 +1,12 @@
 # Arduino CLI Wrapper (VS Code Extension)
 
+[日本語READMEはこちら](README.ja.md)
+
 VS Code extension to run Arduino CLI from the command palette, status bar, and an Explorer view. It streams colored logs to a pseudo terminal, supports sketch.yaml profiles, and updates IntelliSense includePath during builds.
 
 ![Arduino CLI Wrapper overview](images/main.png)
 
 *The Explorer view keeps sketches, profiles, and common actions together so you can launch tasks with a click.*
-
-[日本語READMEはこちら](README.ja.md)
 
 ## Concept
 
