@@ -2,7 +2,7 @@
   "name": "vscode-arduino-cli-wrapper",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
-  "version": "1.3.8",
+  "version": "1.3.9",
   "publisher": "tanakamasayuki",
   "icon": "images/icon.png",
   "license": "CC0-1.0",
