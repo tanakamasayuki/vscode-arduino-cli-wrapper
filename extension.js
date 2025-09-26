@@ -2166,18 +2166,76 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
       return -1;
     }
     const filtered = [];
+    let workspaceInoMapPromise;
+    const getWorkspaceInoMap = async () => {
+      if (!workspaceInoMapPromise) {
+        workspaceInoMapPromise = (async () => {
+          const map = new Map();
+          try {
+            const files = await vscode.workspace.findFiles('**/*.ino');
+            for (const uri of files) {
+              try {
+                const fsPath = path.normalize(uri.fsPath);
+                const base = path.basename(fsPath).toLowerCase();
+                if (!map.has(base)) {
+                  map.set(base, fsPath);
+                }
+              } catch (_) { }
+            }
+          } catch (_) { }
+          return map;
+        })();
+      }
+      return workspaceInoMapPromise;
+    };
+    const resolveWorkspaceIno = async (inoName) => {
+      if (!inoName) return '';
+      try {
+        const map = await getWorkspaceInoMap();
+        return map.get(inoName.toLowerCase()) || '';
+      } catch (_) {
+        return '';
+      }
+    };
+    const normalizeForCompare = (p) => path.normalize(p || '').replace(/\\+/g, '/').toLowerCase();
+    const buildRootNorm = buildPath ? normalizeForCompare(buildPath) : '';
+    const buildRootWithSep = buildRootNorm && !buildRootNorm.endsWith('/') ? `${buildRootNorm}/` : buildRootNorm;
+
     for (const entry of parsed) {
       if (!entry || typeof entry !== 'object') continue;
       const fileValue = typeof entry.file === 'string' ? entry.file : '';
       if (!fileValue) continue;
-      const normalized = fileValue.replace(/\\/g, '/');
-      if (!/\.ino\.cpp$/i.test(normalized)) continue;
-      const baseName = normalized.split('/').pop();
-      if (!baseName) continue;
-      const inoName = baseName.replace(/\.cpp$/i, '');
+      const dirValue = typeof entry.directory === 'string' ? entry.directory : '';
+      let absFile = '';
+      try {
+        if (path.isAbsolute(fileValue)) absFile = path.normalize(fileValue);
+        else if (dirValue) absFile = path.normalize(path.resolve(dirValue, fileValue));
+        else absFile = path.normalize(path.resolve(fileValue));
+      } catch {
+        absFile = '';
+      }
+
+      const normalizedFile = absFile || (path.isAbsolute(fileValue) ? path.normalize(fileValue) : '');
+      const compareFile = normalizedFile ? normalizeForCompare(normalizedFile) : '';
+      const workspaceFile = normalizedFile ? isWorkspaceFile(normalizedFile) : false;
+      const inBuildPath = buildRootNorm && compareFile
+        ? (compareFile === buildRootNorm || (buildRootWithSep && compareFile.startsWith(buildRootWithSep)))
+        : false;
+
+      if (!workspaceFile && !inBuildPath) continue;
+
+      let targetFile = normalizedFile || path.normalize(fileValue);
+      if (!targetFile) continue;
+      if (/\.ino\.cpp$/i.test(targetFile)) {
+        const resolved = await resolveWorkspaceIno(path.basename(targetFile).replace(/\.cpp$/i, ''));
+        if (!resolved) continue;
+        targetFile = path.normalize(resolved);
+      }
       const clone = JSON.parse(JSON.stringify(entry));
       await normalizeCompileCommandEntry(clone);
-      clone.file = inoName;
+      const outputFile = path.basename(targetFile) || path.basename(fileValue);
+      if (!outputFile) continue;
+      clone.file = outputFile;
       filtered.push(clone);
     }
     if (filtered.length === 0) {
@@ -2205,28 +2263,66 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
     const makeKey = (entry) => {
       const dir = typeof entry.directory === 'string' ? entry.directory : '';
       const file = typeof entry.file === 'string' ? entry.file : '';
-      return `${dir}||${file}`;
+      const normDir = dir ? path.normalize(dir) : '';
+      const normFile = file ? path.normalize(file) : '';
+      return `${normDir}||${normFile}`;
     };
-    for (const entry of existing) {
-      if (!entry || typeof entry !== 'object') continue;
-      await normalizeCompileCommandEntry(entry);
+    const pushEntry = (entry) => {
       const key = makeKey(entry);
-      if (key) {
+      if (!key) return;
+      if (indexByKey.has(key)) {
+        result[indexByKey.get(key)] = entry;
+      } else {
         indexByKey.set(key, result.length);
         result.push(entry);
       }
-    }
+    };
+
     for (const entry of filtered) {
-      const key = makeKey(entry);
-      if (!key) continue;
-      const clone = JSON.parse(JSON.stringify(entry));
-      await normalizeCompileCommandEntry(clone);
-      if (indexByKey.has(key)) {
-        result[indexByKey.get(key)] = clone;
-      } else {
-        indexByKey.set(key, result.length);
-        result.push(clone);
+      pushEntry(entry);
+    }
+
+    for (const entry of existing) {
+      if (!entry || typeof entry !== 'object') continue;
+      const fileValue = typeof entry.file === 'string' ? entry.file : '';
+      if (!fileValue) continue;
+      const dirValue = typeof entry.directory === 'string' ? entry.directory : '';
+      let absFile = '';
+      try {
+        if (path.isAbsolute(fileValue)) absFile = path.normalize(fileValue);
+        else if (dirValue) absFile = path.normalize(path.resolve(dirValue, fileValue));
+        else absFile = path.normalize(path.resolve(fileValue));
+      } catch {
+        absFile = '';
       }
+      const normalizedFile = absFile || (path.isAbsolute(fileValue) ? path.normalize(fileValue) : path.normalize(fileValue));
+      let workspaceFile = absFile ? isWorkspaceFile(absFile) : false;
+      const isBareIno = /\.ino$/i.test(normalizedFile);
+      const isInoCpp = /\.ino\.cpp$/i.test(normalizedFile);
+
+      if (!workspaceFile && isBareIno) {
+        const resolved = await resolveWorkspaceIno(path.basename(normalizedFile));
+        if (!resolved) continue;
+        absFile = resolved;
+        workspaceFile = true;
+      }
+
+      if (!workspaceFile && isInoCpp) {
+        const resolved = await resolveWorkspaceIno(path.basename(normalizedFile).replace(/\.cpp$/i, ''));
+        if (!resolved) continue;
+        absFile = resolved;
+        workspaceFile = true;
+      }
+
+      if (!workspaceFile) continue;
+
+      const clone = JSON.parse(JSON.stringify(entry));
+      if (absFile) clone.file = absFile;
+      await normalizeCompileCommandEntry(clone);
+      const outputFile = path.basename(absFile || normalizedFile) || path.basename(fileValue);
+      if (!outputFile) continue;
+      clone.file = outputFile;
+      pushEntry(clone);
     }
 
     await writeTextFile(destUri, JSON.stringify(result, null, 2) + '\n');
