@@ -56,6 +56,10 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - **Search inside sketches** – Switch to the built-in grep mode to filter examples by the text they contain (for instance, type `rgb` to find examples that manipulate RGB LEDs or look for a specific function call).
 - **Open with one click** – Once the preview matches what you need, open it directly in the editor and start adapting it to your project.
 
+![Examples browser with preview and search](images/examples.png)
+
+*Browse, filter, and preview Arduino examples without leaving VS Code.*
+
 ### Fine-tune your tooling
 
 - **Monitor Serial** – Opens a serial terminal with selectable port and baudrate (default 115200). Helpful tips appear if the port is busy.
