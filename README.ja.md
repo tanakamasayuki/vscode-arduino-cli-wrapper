@@ -90,6 +90,17 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - ESP32 系（esp32/xtensa-esp32/riscv32-esp-elf）では `c17` / `c++23` を優先します。
 - 「Configure IntelliSense」でビルドせずに includePath を計算し、`c_cpp_properties.json` を作成できます。
 
+### clangd や CMake Tools で compile_commands.json を使う
+
+clangd や CMake Tools、VS Code の C/C++ 拡張機能を compile_commands モードで使う場合は、この拡張機能が自動で出力するファイルを指定してください。
+
+1. 「Arduino CLI: Compile Sketch」で一度ビルドを実行します。ビルドが完了すると情報を収集できます。
+2. ワークスペース直下の `.vscode/compile_commands.json` を参照します。ビルドするたびに自動で上書きされ、常に最新の内容になります。
+3. ファイルにはスケッチフォルダー内のソースだけでなく、ビルドディレクトリ内で生成されたファイルのコマンドも含まれています。
+4. 一時的な `.ino.cpp` から生成されたエントリは元の `.ino` 名に戻し、`file` 列はファイル名だけを保持します。異なる PC やワークスペースでも差分が発生しにくくなります。
+
+clangd などの設定で `<ワークスペース>/.vscode/compile_commands.json` を指定すれば、Arduino CLI が使ったコンパイルフラグをそのまま取り込めます。特別な手作業は不要です。
+
 ## 設定
 
 - `arduino-cli-wrapper.path`: `arduino-cli` 実行ファイルのパス
