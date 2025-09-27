@@ -24,6 +24,7 @@
   "cmd.setPort": "Arduino CLI: Set Serial Port",
   "cmd.setBaud": "Arduino CLI: Set Baudrate",
   "cmd.uploadData": "Arduino CLI: Upload Data (FS)",
+  "cmd.runWokwi": "Arduino CLI: Run in Wokwi",
   "config.title": "Arduino CLI Wrapper",
   "config.path.description": "Path to the arduino-cli executable (e.g. arduino-cli, arduino-cli.exe, or full path).",
   "config.additionalArgs.description": "Additional arguments to append to every arduino-cli invocation.",

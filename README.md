@@ -34,6 +34,7 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - **Upload Sketch** – Compiles and uploads in one go. You will be prompted for a serial port if one is not already selected, and the monitor is closed/reopened as needed so the port stays free.
 - **Upload Data (ESP32)** – Looks for a `data/` folder, creates a LittleFS or SPIFFS image, and flashes it. Perfect for web assets or configuration files bundled with your sketch.
 - **Build Check** – Compiles every profile defined in `sketch.yaml` with full warnings (`--warnings all`), then shows a summary of warnings and errors so you can spot regressions quickly.
+- **Run in Wokwi** – When a `sketch.yaml` profile sets `wokwi: true`, compiling that profile exports `.wokwi/<profile>/wokwi.elf`, scaffolds default `diagram.json` / `wokwi.toml`, and adds a "Run in Wokwi" action that opens the diagram in the official simulator extension.
 
 ### Keep sketches organised
 
@@ -130,6 +131,7 @@ Tips:
  - To bootstrap a `sketch.yaml`, use the Helper view to generate a template for your board and libraries, then copy it into a new `sketch.yaml` in your sketch folder.
 - The status bar FQBN indicator switches to a profile name if profiles exist. Use "Arduino CLI: Set Profile" to change it.
 - "Sketch.yaml Helper" shows a helper UI to inspect/apply FQBN, libraries, and platform info for a selected profile.
+- Profiles with `wokwi: true` automatically maintain `.wokwi/<profile>/wokwi.elf`, `diagram.json`, and `wokwi.toml` after each compile so the Wokwi extension can simulate the latest firmware.
 
 ## IntelliSense
 

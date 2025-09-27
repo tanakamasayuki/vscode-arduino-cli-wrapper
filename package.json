@@ -133,6 +133,10 @@
       {
         "command": "arduino-cli.uploadData",
         "title": "%cmd.uploadData%"
+      },
+      {
+        "command": "arduino-cli.runWokwi",
+        "title": "%cmd.runWokwi%"
       }
     ],
     "menus": {

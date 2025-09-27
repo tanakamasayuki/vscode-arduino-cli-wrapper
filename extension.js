@@ -7,6 +7,11 @@ const os = require('os');
 const path = require('path');
 const https = require('https');
 
+const DEFAULT_WOKWI_DIAGRAM = '{\n  "version": 1,\n  "author": "wokwi",\n  "editor": "wokwi",\n  "parts": [ { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} } ],\n  "connections": [],\n  "dependencies": {}\n}\n';
+const DEFAULT_WOKWI_TOML = '[wokwi]\nversion = 1\nfirmware = "wokwi.elf"\n';
+const WOKWI_EXTENSION_IDS = ['wokwi.wokwi-vscode', 'wokwi.wokwi-vscode-preview'];
+const WOKWI_VIEW_TYPES = ['wokwi.diagram', 'wokwi.wokwi', 'wokwi.diagramEditor'];
+
 const OUTPUT_NAME = 'Arduino CLI';
 const STATE_FQBN = 'arduino-cli.selectedFqbn';
 const STATE_PORT = 'arduino-cli.selectedPort';
@@ -118,6 +123,12 @@ const MSG = {
     treeHelper: 'Sketch.yaml Helper',
     treeExamples: 'Open Examples',
     treeInspect: 'Inspect',
+    treeWokwiRun: 'Run in Wokwi',
+    wokwiElfCopied: '[Wokwi] Copied ELF to {dest} for profile {profile}.',
+    wokwiElfMissing: '[Wokwi] No ELF found for profile {profile} (build path: {buildPath}).',
+    wokwiCommandDisabled: '[Wokwi] Profile {profile} is not enabled in sketch.yaml.',
+    wokwiDiagramCreated: '[Wokwi] Created default diagram.json for profile {profile}.',
+    wokwiTomlCreated: '[Wokwi] Created default wokwi.toml for profile {profile}.',
     treeInspectorOpen: 'Open Inspector',
     treeCliVersion: 'Check CLI Version',
     treeListBoards: 'List Boards',
@@ -414,6 +425,12 @@ const MSG = {
     treeHelper: 'Sketch.yaml ヘルパー',
     treeExamples: 'サンプルを開く',
     treeInspect: 'インスペクト',
+    treeWokwiRun: 'wokwiで実行',
+    wokwiElfCopied: '[Wokwi] プロファイル {profile} の ELF を {dest} に配置しました。',
+    wokwiElfMissing: '[Wokwi] プロファイル {profile} の .elf がビルドパス {buildPath} で見つかりませんでした。',
+    wokwiCommandDisabled: '[Wokwi] プロファイル {profile} は sketch.yaml で有効化されていません。',
+    wokwiDiagramCreated: '[Wokwi] プロファイル {profile} 用の diagram.json を初期化しました。',
+    wokwiTomlCreated: '[Wokwi] プロファイル {profile} 用の wokwi.toml を初期化しました。',
     treeInspectorOpen: 'インスペクターを開く',
     treeCliVersion: 'CLI バージョン確認',
     treeListBoards: 'ボード一覧',
@@ -1319,11 +1336,12 @@ async function commandCompile() {
   const yamlInfo = await readSketchYamlInfo(sketchDir);
   let args = ['compile'];
   if (cfg.verbose) args.push('--verbose');
+  let selectedProfile = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
-    const profile = await resolveProfileName(yamlInfo);
-    if (!profile) return; // user cancelled
-    channel.appendLine(`[compile] Using profile from sketch.yaml: ${profile}`);
-    args.push('--profile', profile);
+    selectedProfile = await resolveProfileName(yamlInfo);
+    if (!selectedProfile) return; // user cancelled
+    channel.appendLine(`[compile] Using profile from sketch.yaml: ${selectedProfile}`);
+    args.push('--profile', selectedProfile);
   } else {
     let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
     if (!fqbn) {
@@ -1335,8 +1353,10 @@ async function commandCompile() {
   }
   args.push(sketchDir);
   try {
+    const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
+    const opts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : undefined;
     // Always use the output channel and update IntelliSense during the build
-    await compileWithIntelliSense(sketchDir, args);
+    await compileWithIntelliSense(sketchDir, args, opts);
   } catch (e) {
     showError(e);
   }
@@ -1356,10 +1376,11 @@ async function commandConfigureIntelliSense() {
   const yamlInfo = await readSketchYamlInfo(sketchDir);
   const args = ['compile'];
   if (cfg.verbose) args.push('--verbose');
+  let selectedProfile = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
-    const profile = await resolveProfileName(yamlInfo);
-    if (!profile) return;
-    args.push('--profile', profile);
+    selectedProfile = await resolveProfileName(yamlInfo);
+    if (!selectedProfile) return;
+    args.push('--profile', selectedProfile);
   } else {
     let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
     if (!fqbn) {
@@ -1371,7 +1392,9 @@ async function commandConfigureIntelliSense() {
   }
   args.push(sketchDir);
   try {
-    await compileWithIntelliSense(sketchDir, args);
+    const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
+    const opts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : undefined;
+    await compileWithIntelliSense(sketchDir, args, opts);
   } catch (e) {
     showError(e);
   }
@@ -1401,11 +1424,12 @@ async function commandUpload() {
   // Build first before upload
   const compileArgs = ['compile'];
   if (cfg.verbose) compileArgs.push('--verbose');
+  let selectedProfile = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
-    const profile = await resolveProfileName(yamlInfo);
-    if (!profile) return;
-    channel.appendLine(`[upload] Using profile from sketch.yaml: ${profile}`);
-    compileArgs.push('--profile', profile);
+    selectedProfile = await resolveProfileName(yamlInfo);
+    if (!selectedProfile) return;
+    channel.appendLine(`[upload] Using profile from sketch.yaml: ${selectedProfile}`);
+    compileArgs.push('--profile', selectedProfile);
   } else {
     let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
     if (!fqbn) {
@@ -1421,7 +1445,7 @@ async function commandUpload() {
   const uploadArgs = ['upload'];
   if (cfg.verbose) uploadArgs.push('--verbose');
   if (yamlInfo && yamlInfo.profiles.length > 0) {
-    const profile = yamlInfo.lastResolved || await resolveProfileName(yamlInfo);
+    const profile = selectedProfile || yamlInfo.lastResolved || await resolveProfileName(yamlInfo);
     if (!profile) return;
     uploadArgs.push('--profile', profile);
     // If a port is already selected, pass it explicitly even when using profile
@@ -1441,7 +1465,9 @@ async function commandUpload() {
   uploadArgs.push(sketchDir);
   try {
     // Update IntelliSense during compile
-    await compileWithIntelliSense(sketchDir, compileArgs);
+    const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
+    const compileOpts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : undefined;
+    await compileWithIntelliSense(sketchDir, compileArgs, compileOpts);
 
     // If a serial monitor is open, close it before upload to avoid port conflicts
     let reopenMonitorAfter = false;
@@ -1701,6 +1727,7 @@ async function runExternal(exe, args, opts = {}) {
 
 // Run compile and update IntelliSense by exporting compile_commands.json.
 async function compileWithIntelliSense(sketchDir, args, opts = {}) {
+  const { profileName = '', wokwiEnabled = false } = opts || {};
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
@@ -1787,6 +1814,13 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
             channel.appendLine(t('compileCommandsUpdated', { count }));
           } else if (count === 0) {
             channel.appendLine(t('compileCommandsNoInoEntries'));
+          }
+          if (wokwiEnabled && profileName) {
+            try {
+              await handleWokwiArtifacts(sketchDir, profileName, buildPath);
+            } catch (err) {
+              channel.appendLine(`[warn] ${err.message}`);
+            }
           }
         }
       } catch (err) {
@@ -2335,6 +2369,129 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
   }
 }
 
+async function findElfArtifact(buildPath) {
+  if (!buildPath) return '';
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(buildPath));
+    const elfNames = [];
+    for (const [name, kind] of entries) {
+      if (kind === vscode.FileType.File && name.toLowerCase().endsWith('.elf')) {
+        elfNames.push(name);
+      }
+    }
+    if (elfNames.length === 0) return '';
+    const preferred = elfNames.find((name) => /\.ino\.elf$/i.test(name))
+      || elfNames.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))[0];
+    return path.join(buildPath, preferred);
+  } catch {
+    return '';
+  }
+}
+
+async function ensureWokwiDefaults(baseDirPath, profileName) {
+  const baseUri = vscode.Uri.file(baseDirPath);
+  try { await vscode.workspace.fs.createDirectory(baseUri); } catch { }
+  const channel = getOutput();
+  const diagramUri = vscode.Uri.file(path.join(baseDirPath, 'diagram.json'));
+  if (!(await pathExists(diagramUri))) {
+    await writeTextFile(diagramUri, DEFAULT_WOKWI_DIAGRAM);
+    channel.appendLine(t('wokwiDiagramCreated', { profile: profileName }));
+  }
+  const tomlUri = vscode.Uri.file(path.join(baseDirPath, 'wokwi.toml'));
+  if (!(await pathExists(tomlUri))) {
+    await writeTextFile(tomlUri, DEFAULT_WOKWI_TOML);
+    channel.appendLine(t('wokwiTomlCreated', { profile: profileName }));
+  }
+  return { diagramUri, tomlUri };
+}
+
+function collectWokwiViewTypesFromExtension(extension, pushCandidate) {
+  if (!extension || typeof pushCandidate !== 'function') return;
+  const contributes = extension.packageJSON && extension.packageJSON.contributes;
+  const editors = contributes && contributes.customEditors;
+  if (!Array.isArray(editors)) return;
+  for (const editor of editors) {
+    if (!editor || typeof editor !== 'object') continue;
+    const viewType = typeof editor.viewType === 'string' ? editor.viewType : '';
+    if (!viewType) continue;
+    if (viewType.toLowerCase().includes('wokwi')) pushCandidate(viewType);
+  }
+}
+
+async function openDiagramInWokwi(diagramUri, openOptions) {
+  const channel = getOutput();
+  const candidates = [];
+  const pushCandidate = (viewType) => {
+    if (!viewType || typeof viewType !== 'string') return;
+    if (!candidates.includes(viewType)) candidates.push(viewType);
+  };
+
+  try {
+    for (const extId of WOKWI_EXTENSION_IDS) {
+      const extension = vscode.extensions.getExtension(extId);
+      if (!extension) continue;
+      try {
+        if (!extension.isActive) {
+          await extension.activate();
+        }
+      } catch (activateErr) {
+        const message = activateErr && activateErr.message ? activateErr.message : String(activateErr || 'unknown error');
+        channel.appendLine(`[warn] Failed to activate extension ${extId}: ${message}`);
+      }
+      collectWokwiViewTypesFromExtension(extension, pushCandidate);
+    }
+
+    for (const extension of vscode.extensions.all) {
+      collectWokwiViewTypesFromExtension(extension, pushCandidate);
+    }
+
+    for (const viewType of WOKWI_VIEW_TYPES) pushCandidate(viewType);
+
+    const failures = [];
+    for (const viewType of candidates) {
+      try {
+        await vscode.commands.executeCommand('vscode.openWith', diagramUri, viewType, openOptions);
+        return true;
+      } catch (err) {
+        const message = err && err.message ? err.message : String(err || 'unknown error');
+        failures.push(`${viewType}: ${message}`);
+      }
+    }
+
+    if (failures.length > 0) {
+      channel.appendLine(`[warn] Failed to open diagram with Wokwi editor candidates (${failures.join('; ')}).`);
+    }
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err || 'unknown error');
+    channel.appendLine(`[warn] Unexpected error when opening diagram with Wokwi editor: ${message}`);
+  }
+
+  return false;
+}
+
+async function handleWokwiArtifacts(sketchDir, profileName, buildPath) {
+  if (!sketchDir || !profileName || !buildPath) return;
+  const channel = getOutput();
+  const elfPath = await findElfArtifact(buildPath);
+  if (!elfPath) {
+    channel.appendLine(t('wokwiElfMissing', { profile: profileName, buildPath }));
+    return;
+  }
+  const folderName = sanitizeProfileFolderName(profileName);
+  const wokwiDirPath = path.join(sketchDir, '.wokwi', folderName);
+  await ensureWokwiDefaults(wokwiDirPath, profileName);
+  const elfUri = vscode.Uri.file(elfPath);
+  const destPath = path.join(wokwiDirPath, 'wokwi.elf');
+  const destUri = vscode.Uri.file(destPath);
+  try {
+    const raw = await vscode.workspace.fs.readFile(elfUri);
+    await vscode.workspace.fs.writeFile(destUri, raw);
+    channel.appendLine(t('wokwiElfCopied', { profile: profileName, dest: destPath }));
+  } catch (err) {
+    channel.appendLine(`[warn] ${err.message}`);
+  }
+}
+
 // ESP-IDF include glob augmentation removed per request
 
 /**
@@ -2372,6 +2529,7 @@ function activate(context) {
         if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
         if (action === 'examples') return commandOpenExamplesBrowser({ sketchDir, profile });
         if (action === 'inspect') return commandOpenInspector({ sketchDir, profile });
+        if (action === 'wokwiRun') return commandRunWokwi(sketchDir, profile);
         if (action === 'versionCheck') return vscode.commands.executeCommand('arduino-cli.versionCheck');
         if (action === 'buildCheck') return vscode.commands.executeCommand('arduino-cli.buildCheck');
         if (action === 'refreshView') return vscode.commands.executeCommand('arduino-cli.refreshView');
@@ -2403,6 +2561,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.setPort', () => commandSetPort(false)),
     vscode.commands.registerCommand('arduino-cli.setBaud', () => commandSetBaud(false)),
     vscode.commands.registerCommand('arduino-cli.uploadData', commandUploadData),
+    vscode.commands.registerCommand('arduino-cli.runWokwi', () => commandRunWokwi()),
   );
 
   // Status bar items
@@ -2479,13 +2638,13 @@ class ArduinoCliTreeProvider {
     if (element instanceof ProjectItem) {
       const info = await readSketchYamlInfo(element.dir);
       if (info && info.profiles && info.profiles.length) {
-        return info.profiles.map(p => new ProfileItem(element.dir, p, element));
+        return info.profiles.map(p => new ProfileItem(element.dir, p, element, isProfileWokwiEnabled(info, p)));
       }
       // No profiles: return commands directly under project
       return defaultCommandItems(element.dir, null, element);
     }
     if (element instanceof ProfileItem) {
-      return defaultCommandItems(element.dir, element.profile, element);
+      return defaultCommandItems(element.dir, element.profile, element, { wokwiEnabled: !!element.wokwiEnabled });
     }
     return [];
   }
@@ -2506,7 +2665,7 @@ class ProjectItem extends vscode.TreeItem {
   }
 }
 class ProfileItem extends vscode.TreeItem {
-  constructor(dir, profile, parent) {
+  constructor(dir, profile, parent, wokwiEnabled = false) {
     super(`Profile: ${profile}`, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'profile';
     this.tooltip = `${dir} | ${t('treeProfile', { profile })}`;
@@ -2514,6 +2673,7 @@ class ProfileItem extends vscode.TreeItem {
     this.profile = profile;
     this.id = `profile:${dir}|${profile}`;
     this.parent = parent;
+    this.wokwiEnabled = !!wokwiEnabled;
   }
 }
 class CommandItem extends vscode.TreeItem {
@@ -2531,8 +2691,8 @@ class CommandItem extends vscode.TreeItem {
   }
 }
 
-function defaultCommandItems(dir, profile, parent) {
-  return [
+function defaultCommandItems(dir, profile, parent, features = {}) {
+  const items = [
     new CommandItem('Compile', 'compile', dir, profile, parent, t('treeCompile')),
     new CommandItem('Clean Compile', 'cleanCompile', dir, profile, parent, t('treeCleanCompile')),
     new CommandItem('Upload', 'upload', dir, profile, parent, t('treeUpload')),
@@ -2542,6 +2702,10 @@ function defaultCommandItems(dir, profile, parent) {
     new CommandItem('Open Examples', 'examples', dir, profile, parent, t('treeExamples')),
     new CommandItem('Inspect', 'inspect', dir, profile, parent, t('treeInspect')),
   ];
+  if (features && features.wokwiEnabled) {
+    items.splice(2, 0, new CommandItem('Run in Wokwi', 'wokwiRun', dir, profile, parent, t('treeWokwiRun')));
+  }
+  return items;
 }
 
 // Commands at the root level (not tied to a specific sketch/profile)
@@ -2625,28 +2789,43 @@ async function runCompileFor(sketchDir, profile) {
   const cfg = getConfig();
   const args = ['compile'];
   if (cfg.verbose) args.push('--verbose');
-  if (profile) args.push('--profile', profile); else {
+  let wokwiEnabled = false;
+  if (profile) {
+    args.push('--profile', profile);
+    try {
+      const yamlInfo = await readSketchYamlInfo(sketchDir);
+      wokwiEnabled = isProfileWokwiEnabled(yamlInfo, profile);
+    } catch { }
+  } else {
     // fallback to FQBN/state
     let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
     if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
     args.push('--fqbn', fqbn);
   }
   args.push(sketchDir);
-  await compileWithIntelliSense(sketchDir, args);
+  const opts = profile ? { profileName: profile, wokwiEnabled } : undefined;
+  await compileWithIntelliSense(sketchDir, args, opts);
 }
 async function runCleanCompileFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
   const cfg = getConfig();
   const args = ['compile', '--clean'];
   if (cfg.verbose) args.push('--verbose');
-  if (profile) args.push('--profile', profile);
-  else {
+  let wokwiEnabled = false;
+  if (profile) {
+    args.push('--profile', profile);
+    try {
+      const yamlInfo = await readSketchYamlInfo(sketchDir);
+      wokwiEnabled = isProfileWokwiEnabled(yamlInfo, profile);
+    } catch { }
+  } else {
     let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
     if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
     args.push('--fqbn', fqbn);
   }
   args.push(sketchDir);
-  await compileWithIntelliSense(sketchDir, args, { emptyIncludePath: true });
+  const opts = profile ? { emptyIncludePath: true, profileName: profile, wokwiEnabled } : { emptyIncludePath: true };
+  await compileWithIntelliSense(sketchDir, args, opts);
 }
 async function runUploadFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
@@ -2658,8 +2837,14 @@ async function runUploadFor(sketchDir, profile) {
   // Build args
   const cArgs = ['compile']; if (cfg.verbose) cArgs.push('--verbose');
   const uArgs = ['upload']; if (cfg.verbose) uArgs.push('--verbose');
-  if (profile) { cArgs.push('--profile', profile); uArgs.push('--profile', profile); }
-  else {
+  let wokwiEnabled = false;
+  if (profile) {
+    cArgs.push('--profile', profile); uArgs.push('--profile', profile);
+    try {
+      const yamlInfo = await readSketchYamlInfo(sketchDir);
+      wokwiEnabled = isProfileWokwiEnabled(yamlInfo, profile);
+    } catch { }
+  } else {
     let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
     if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
     cArgs.push('--fqbn', fqbn); uArgs.push('--fqbn', fqbn);
@@ -2667,7 +2852,8 @@ async function runUploadFor(sketchDir, profile) {
   const port = extContext?.workspaceState.get(STATE_PORT, '') || '';
   if (port) uArgs.push('-p', port);
   cArgs.push(sketchDir); uArgs.push(sketchDir);
-  await compileWithIntelliSense(sketchDir, cArgs);
+  const opts = profile ? { profileName: profile, wokwiEnabled } : undefined;
+  await compileWithIntelliSense(sketchDir, cArgs, opts);
   let reopenMonitorAfter = false;
   if (monitorTerminal) { try { monitorTerminal.dispose(); } catch (_) { } monitorTerminal = undefined; reopenMonitorAfter = true; }
   await runCli(uArgs, { cwd: sketchDir, forceSpawn: true });
@@ -2694,6 +2880,44 @@ async function commandUploadDataFor(sketchDir, profile) {
     }
   } catch { }
   await commandUploadData();
+}
+
+async function commandRunWokwi(sketchDir, profile) {
+  try {
+    let targetDir = sketchDir;
+    if (!targetDir) {
+      const ino = await pickInoFromWorkspace();
+      if (!ino) return;
+      targetDir = path.dirname(ino);
+    }
+    const yamlInfo = await readSketchYamlInfo(targetDir);
+    if (!yamlInfo || !Array.isArray(yamlInfo.profiles) || yamlInfo.profiles.length === 0) {
+      vscode.window.showWarningMessage(t('assistNoYaml'));
+      return;
+    }
+    let selectedProfile = profile;
+    if (!selectedProfile) {
+      selectedProfile = await resolveProfileName(yamlInfo);
+      if (!selectedProfile) return;
+    }
+    if (!isProfileWokwiEnabled(yamlInfo, selectedProfile)) {
+      const msg = t('wokwiCommandDisabled', { profile: selectedProfile });
+      getOutput().appendLine(msg);
+      vscode.window.showWarningMessage(msg);
+      return;
+    }
+    const folderName = sanitizeProfileFolderName(selectedProfile);
+    const wokwiDirPath = path.join(targetDir, '.wokwi', folderName);
+    const { diagramUri } = await ensureWokwiDefaults(wokwiDirPath, selectedProfile);
+    const openOptions = { preview: false };
+    const openedWithWokwi = await openDiagramInWokwi(diagramUri, openOptions);
+    if (!openedWithWokwi) {
+      const doc = await vscode.workspace.openTextDocument(diagramUri);
+      await vscode.window.showTextDocument(doc, openOptions);
+    }
+  } catch (err) {
+    showError(err);
+  }
 }
 
 // Register the tree view
@@ -3568,8 +3792,10 @@ async function readSketchYamlInfo(sketchDir) {
     }
     // Extract profile names under profiles:
     const profiles = [];
+    const wokwiProfiles = new Set();
     const lines = text.split(/\r?\n/);
     let inProfiles = false;
+    let currentProfile = '';
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!inProfiles) {
@@ -3578,15 +3804,45 @@ async function readSketchYamlInfo(sketchDir) {
       }
       const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
       if (mKey) {
-        profiles.push(mKey[1].trim());
+        currentProfile = mKey[1].trim();
+        profiles.push(currentProfile);
         continue;
       }
       if (/^\S/.test(line)) break; // end of profiles block
+      if (!currentProfile) continue;
+      const wokwiMatch = line.match(/^\s{4}wokwi\s*:\s*([^#]+)(?:#.*)?$/);
+      if (wokwiMatch) {
+        let value = wokwiMatch[1].trim();
+        if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+          value = value.slice(1, -1);
+        } else if (value.startsWith('\'') && value.endsWith('\'') && value.length >= 2) {
+          value = value.slice(1, -1);
+        }
+        if (/^(true|yes|on|1)$/i.test(value)) {
+          wokwiProfiles.add(currentProfile);
+        }
+        continue;
+      }
     }
-    return { defaultProfile, profiles };
+    return { defaultProfile, profiles, wokwiProfiles };
   } catch {
     return null;
   }
+}
+
+function isProfileWokwiEnabled(yamlInfo, profileName) {
+  if (!yamlInfo || !profileName) return false;
+  const set = yamlInfo.wokwiProfiles;
+  if (set && typeof set.has === 'function') {
+    return set.has(profileName);
+  }
+  return false;
+}
+
+function sanitizeProfileFolderName(profileName) {
+  if (!profileName) return 'default';
+  const sanitized = profileName.replace(/[\\/:*?"<>|]/g, '_').trim();
+  return sanitized || 'default';
 }
 
 /**
