@@ -3088,7 +3088,7 @@ async function commandRunWokwi(sketchDir, profile) {
     }
     const folderName = sanitizeProfileFolderName(selectedProfile);
     const wokwiDirPath = path.join(targetDir, '.wokwi', folderName);
-  const { diagramUri } = await ensureWokwiDefaults(wokwiDirPath, selectedProfile, { sketchDir: targetDir, profileName: selectedProfile });
+    const { diagramUri } = await ensureWokwiDefaults(wokwiDirPath, selectedProfile, { sketchDir: targetDir, profileName: selectedProfile });
     const openOptions = { preview: false };
     const openedWithWokwi = await openDiagramInWokwi(diagramUri, openOptions);
     if (!openedWithWokwi) {
