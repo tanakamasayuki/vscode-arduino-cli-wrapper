@@ -7,8 +7,145 @@ const os = require('os');
 const path = require('path');
 const https = require('https');
 
-const DEFAULT_WOKWI_DIAGRAM = '{\n  "version": 1,\n  "author": "wokwi",\n  "editor": "wokwi",\n  "parts": [ { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} } ],\n  "connections": [],\n  "dependencies": {}\n}\n';
 const DEFAULT_WOKWI_TOML = '[wokwi]\nversion = 1\nfirmware = "wokwi.elf"\n';
+const DEFAULT_WOKWI_DIAGRAM_BASE = Object.freeze({
+  version: 1,
+  author: 'wokwi',
+  editor: 'wokwi',
+  dependencies: {}
+});
+const WOKWI_DIAGRAM_TEMPLATES = Object.freeze({
+  'arduino:avr:uno': {
+    parts: [{ type: 'wokwi-arduino-uno', id: 'uno', top: 0, left: 0, attrs: {} }],
+    connections: []
+  },
+  'arduino:avr:mega': {
+    parts: [{ type: 'wokwi-arduino-mega', id: 'mega', top: 0, left: 0, attrs: {} }],
+    connections: []
+  },
+  'arduino:avr:nano': {
+    parts: [{ type: 'wokwi-arduino-nano', id: 'nano', top: 0, left: 0, attrs: {} }],
+    connections: []
+  },
+  'esp32:esp32:esp32s3box': {
+    parts: [
+      {
+        type: 'board-esp32-s3-box-3',
+        id: 'esp32',
+        top: -24.91,
+        left: -388.54,
+        attrs: { psramSize: '16', flashSize: '16' }
+      }
+    ],
+    connections: [
+      ['$serialMonitor:RX', 'esp32:G14', '', []],
+      ['$serialMonitor:TX', 'esp32:G11', '', []]
+    ]
+  },
+  'esp32:esp32:m5stack_cores3': {
+    parts: [
+      {
+        type: 'board-m5stack-core-s3',
+        id: 'board',
+        top: -179.23,
+        left: -62.59,
+        attrs: { serialInterface: 'USB_SERIAL_JTAG' }
+      }
+    ],
+    connections: []
+  },
+  'm5stack:esp32:m5stack_cores3': {
+    parts: [
+      {
+        type: 'board-m5stack-core-s3',
+        id: 'board',
+        top: -179.23,
+        left: -62.59,
+        attrs: { serialInterface: 'USB_SERIAL_JTAG' }
+      }
+    ],
+    connections: []
+  },
+  'esp32:esp32:xiao_esp32c3': {
+    parts: [
+      { type: 'board-xiao-esp32-c3', id: 'esp', top: 38.97, left: 13.78, attrs: {} },
+      { type: 'wokwi-led', id: 'led1', top: 6, left: -73, attrs: { color: 'red' } },
+      { type: 'wokwi-resistor', id: 'r1', top: 147.95, left: -57.6, attrs: { value: '1000' } },
+      { type: 'wokwi-led', id: 'led2', top: 15.6, left: -101.8, attrs: { color: 'green' } },
+      { type: 'wokwi-resistor', id: 'r2', top: 167.15, left: -57.6, attrs: { value: '1000' } },
+      { type: 'wokwi-junction', id: 'j1', top: 148.8, left: 24, attrs: {} },
+      { type: 'wokwi-led', id: 'led3', top: 25.2, left: -130.6, attrs: { color: 'blue' } },
+      { type: 'wokwi-resistor', id: 'r3', top: 186.35, left: -57.6, attrs: { value: '1000' } }
+    ],
+    connections: [
+      ['esp:D2', 'led1:A', 'green', ['h0']],
+      ['led1:C', 'r1:1', 'black', ['v0']],
+      ['esp:D3', 'led2:A', 'green', ['h0']],
+      ['led2:C', 'r2:1', 'black', ['v0']],
+      ['r2:2', 'j1:J', 'black', ['v0', 'h27.6']],
+      ['j1:J', 'r1:2', 'black', ['v0']],
+      ['esp:GND', 'j1:J', 'black', ['h19.82', 'v86.4']],
+      ['led3:A', 'esp:D4', 'green', ['v0']],
+      ['led3:C', 'r3:1', 'black', ['v0']],
+      ['j1:J', 'r3:2', 'black', ['v0']]
+    ]
+  },
+  'esp32:esp32:xiao_esp32c6': {
+    parts: [
+      { type: 'board-xiao-esp32-c6', id: 'esp', top: 38.97, left: 13.78, attrs: {} },
+      { type: 'wokwi-led', id: 'led1', top: 6, left: -73, attrs: { color: 'red' } },
+      { type: 'wokwi-resistor', id: 'r1', top: 147.95, left: -57.6, attrs: { value: '1000' } },
+      { type: 'wokwi-led', id: 'led2', top: 15.6, left: -101.8, attrs: { color: 'green' } },
+      { type: 'wokwi-resistor', id: 'r2', top: 167.15, left: -57.6, attrs: { value: '1000' } },
+      { type: 'wokwi-junction', id: 'j1', top: 148.8, left: 24, attrs: {} },
+      { type: 'wokwi-led', id: 'led3', top: 25.2, left: -130.6, attrs: { color: 'blue' } },
+      { type: 'wokwi-resistor', id: 'r3', top: 186.35, left: -57.6, attrs: { value: '1000' } }
+    ],
+    connections: [
+      ['esp:D2', 'led1:A', 'green', ['h0']],
+      ['led1:C', 'r1:1', 'black', ['v0']],
+      ['esp:D3', 'led2:A', 'green', ['h0']],
+      ['led2:C', 'r2:1', 'black', ['v0']],
+      ['r2:2', 'j1:J', 'black', ['v0', 'h27.6']],
+      ['j1:J', 'r1:2', 'black', ['v0']],
+      ['esp:GND', 'j1:J', 'black', ['h19.82', 'v86.4']],
+      ['led3:A', 'esp:D4', 'green', ['v0']],
+      ['led3:C', 'r3:1', 'black', ['v0']],
+      ['j1:J', 'r3:2', 'black', ['v0']]
+    ]
+  },
+  'esp32:esp32:xiao_esp32s3': {
+    parts: [
+      { type: 'board-xiao-esp32-s3', id: 'esp', top: 38.97, left: 13.78, attrs: {} },
+      { type: 'wokwi-led', id: 'led1', top: 6, left: -73, attrs: { color: 'red' } },
+      { type: 'wokwi-resistor', id: 'r1', top: 147.95, left: -57.6, attrs: { value: '1000' } },
+      { type: 'wokwi-led', id: 'led2', top: 15.6, left: -101.8, attrs: { color: 'green' } },
+      { type: 'wokwi-resistor', id: 'r2', top: 167.15, left: -57.6, attrs: { value: '1000' } },
+      { type: 'wokwi-junction', id: 'j1', top: 148.8, left: 24, attrs: {} },
+      { type: 'wokwi-led', id: 'led3', top: 25.2, left: -130.6, attrs: { color: 'blue' } },
+      { type: 'wokwi-resistor', id: 'r3', top: 186.35, left: -57.6, attrs: { value: '1000' } }
+    ],
+    connections: [
+      ['esp:D2', 'led1:A', 'green', ['h0']],
+      ['led1:C', 'r1:1', 'black', ['v0']],
+      ['esp:D3', 'led2:A', 'green', ['h0']],
+      ['led2:C', 'r2:1', 'black', ['v0']],
+      ['r2:2', 'j1:J', 'black', ['v0', 'h27.6']],
+      ['j1:J', 'r1:2', 'black', ['v0']],
+      ['esp:GND', 'j1:J', 'black', ['h19.82', 'v86.4']],
+      ['led3:A', 'esp:D4', 'green', ['v0']],
+      ['led3:C', 'r3:1', 'black', ['v0']],
+      ['j1:J', 'r3:2', 'black', ['v0']]
+    ]
+  }
+});
+const WOKWI_GENERIC_ESP32_TEMPLATE = Object.freeze({
+  parts: [{ type: 'board-esp32-devkit-c-v4', id: 'esp', top: 0, left: 0, attrs: {} }],
+  connections: [
+    ['esp:TX', '$serialMonitor:RX', '', []],
+    ['esp:RX', '$serialMonitor:TX', '', []]
+  ]
+});
 const WOKWI_EXTENSION_IDS = ['wokwi.wokwi-vscode', 'wokwi.wokwi-vscode-preview'];
 const WOKWI_VIEW_TYPES = ['wokwi.diagram', 'wokwi.wokwi', 'wokwi.diagramEditor'];
 
@@ -2388,13 +2525,56 @@ async function findElfArtifact(buildPath) {
   }
 }
 
-async function ensureWokwiDefaults(baseDirPath, profileName) {
+function getWokwiDiagramTemplate(fqbn) {
+  if (fqbn) {
+    const normalized = String(fqbn).trim().toLowerCase();
+    if (normalized) {
+      const exact = WOKWI_DIAGRAM_TEMPLATES[normalized];
+      if (exact) return exact;
+      const parts = normalized.split(':');
+      if (parts.length >= 2 && parts[1] === 'esp32') {
+        return WOKWI_GENERIC_ESP32_TEMPLATE;
+      }
+    }
+  }
+  return WOKWI_DIAGRAM_TEMPLATES['arduino:avr:uno'];
+}
+
+function buildWokwiDiagramJson(fqbn) {
+  const template = getWokwiDiagramTemplate(fqbn) || WOKWI_DIAGRAM_TEMPLATES['arduino:avr:uno'];
+  const clone = (value) => JSON.parse(JSON.stringify(value || []));
+  const diagram = {
+    version: DEFAULT_WOKWI_DIAGRAM_BASE.version,
+    author: DEFAULT_WOKWI_DIAGRAM_BASE.author,
+    editor: DEFAULT_WOKWI_DIAGRAM_BASE.editor,
+    parts: clone(template.parts),
+    connections: clone(template.connections),
+    dependencies: {}
+  };
+  return JSON.stringify(diagram, null, 2) + '\n';
+}
+
+async function ensureWokwiDefaults(baseDirPath, profileName, options = {}) {
   const baseUri = vscode.Uri.file(baseDirPath);
   try { await vscode.workspace.fs.createDirectory(baseUri); } catch { }
   const channel = getOutput();
   const diagramUri = vscode.Uri.file(path.join(baseDirPath, 'diagram.json'));
   if (!(await pathExists(diagramUri))) {
-    await writeTextFile(diagramUri, DEFAULT_WOKWI_DIAGRAM);
+    let resolvedFqbn = '';
+    const opt = options || {};
+    if (typeof opt.fqbn === 'string' && opt.fqbn.trim()) {
+      resolvedFqbn = opt.fqbn.trim();
+    }
+    if (!resolvedFqbn && opt.sketchDir) {
+      try {
+        resolvedFqbn = await getFqbnFromSketchYaml(opt.sketchDir, opt.profileName || profileName);
+      } catch { resolvedFqbn = ''; }
+    }
+    if (!resolvedFqbn) {
+      const stored = extContext?.workspaceState?.get(STATE_FQBN, '');
+      if (stored) resolvedFqbn = stored;
+    }
+    await writeTextFile(diagramUri, buildWokwiDiagramJson(resolvedFqbn));
     channel.appendLine(t('wokwiDiagramCreated', { profile: profileName }));
   }
   const tomlUri = vscode.Uri.file(path.join(baseDirPath, 'wokwi.toml'));
@@ -2479,7 +2659,7 @@ async function handleWokwiArtifacts(sketchDir, profileName, buildPath) {
   }
   const folderName = sanitizeProfileFolderName(profileName);
   const wokwiDirPath = path.join(sketchDir, '.wokwi', folderName);
-  await ensureWokwiDefaults(wokwiDirPath, profileName);
+  await ensureWokwiDefaults(wokwiDirPath, profileName, { sketchDir, profileName });
   const elfUri = vscode.Uri.file(elfPath);
   const destPath = path.join(wokwiDirPath, 'wokwi.elf');
   const destUri = vscode.Uri.file(destPath);
@@ -2908,7 +3088,7 @@ async function commandRunWokwi(sketchDir, profile) {
     }
     const folderName = sanitizeProfileFolderName(selectedProfile);
     const wokwiDirPath = path.join(targetDir, '.wokwi', folderName);
-    const { diagramUri } = await ensureWokwiDefaults(wokwiDirPath, selectedProfile);
+  const { diagramUri } = await ensureWokwiDefaults(wokwiDirPath, selectedProfile, { sketchDir: targetDir, profileName: selectedProfile });
     const openOptions = { preview: false };
     const openedWithWokwi = await openDiagramInWokwi(diagramUri, openOptions);
     if (!openedWithWokwi) {

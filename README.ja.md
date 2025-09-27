@@ -34,7 +34,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - **Upload Sketch** – コンパイルしてそのまま書き込みます。ポートが未設定ならその場で選択でき、必要に応じてシリアルモニタを自動で閉じたり再オープンしたりします。
 - **Upload Data (ESP32)** – `data/` フォルダーを探して LittleFS/SPIFFS のイメージを作成し、ESP32 の SPIFFS パーティションに書き込みます。Web アセットや設定ファイルを同梱したい場合に活躍します。
 - **Build Check** – `sketch.yaml` に定義したすべてのプロファイルを `--warnings all` でビルドし、警告とエラーの集計結果を表示します。リグレッションチェックに最適です。
-- **wokwi で実行** – プロファイルに `wokwi: true` を設定すると、ビルド時に `.wokwi/<profile>/wokwi.elf` を出力し、既定の `diagram.json` / `wokwi.toml` を補完したうえで、エクスプローラーに「wokwiで実行」アクションが現れ、公式 Wokwi 拡張機能で図面を開けます。
+- **wokwi で実行** – プロファイルに `wokwi: true` を設定すると、ビルド時に `.wokwi/<profile>/wokwi.elf` を出力し、ボードに合わせた初期値で `diagram.json` / `wokwi.toml` を補完したうえで、エクスプローラーに「wokwiで実行」アクションが現れ、公式 Wokwi 拡張機能で図面を開けます。
 
 ### スケッチ管理をラクにするツール
 
@@ -131,7 +131,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
  - ひな形を作るには「Sketch.yaml Helper」を使ってボードやライブラリを選択し、生成されたテンプレートを `sketch.yaml` として保存してください。
 - ステータスバーの FQBN 表示は、プロファイルがあればプロファイル名に切り替わります。「Arduino CLI: Set Profile」で変更できます。
 - 「Sketch.yaml Helper」では、選択したプロファイルの FQBN やライブラリ、プラットフォーム情報の確認と反映ができます。
-- `wokwi: true` を付けたプロファイルは、コンパイルのたびに `.wokwi/<profile>/wokwi.elf` と `diagram.json` / `wokwi.toml` を自動整備し、Wokwi 拡張機能で最新ファームウェアを即座にシミュレートできます。
+- `wokwi: true` を付けたプロファイルは、コンパイルのたびに `.wokwi/<profile>/wokwi.elf` と `diagram.json` / `wokwi.toml` を自動整備し、Wokwi 拡張機能で最新ファームウェアを即座にシミュレートできます。生成される `diagram.json` は UNO / MEGA / Nano / ESP32 S3 Box / M5Stack CoreS3 / Seeed XIAO ESP32 各モデル / その他 ESP32 (DevKitC) 向けのレイアウトを初期配置します。
 
 ## IntelliSense
 
