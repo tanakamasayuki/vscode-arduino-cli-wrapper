@@ -2267,11 +2267,13 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
       const normFile = file ? path.normalize(file) : '';
       return `${normDir}||${normFile}`;
     };
-    const pushEntry = (entry) => {
+    const pushEntry = (entry, overwrite = true) => {
       const key = makeKey(entry);
       if (!key) return;
       if (indexByKey.has(key)) {
-        result[indexByKey.get(key)] = entry;
+        if (overwrite) {
+          result[indexByKey.get(key)] = entry;
+        }
       } else {
         indexByKey.set(key, result.length);
         result.push(entry);
@@ -2279,7 +2281,7 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
     };
 
     for (const entry of filtered) {
-      pushEntry(entry);
+      pushEntry(entry, true);
     }
 
     for (const entry of existing) {
@@ -2322,7 +2324,7 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
       const outputFile = path.basename(absFile || normalizedFile) || path.basename(fileValue);
       if (!outputFile) continue;
       clone.file = outputFile;
-      pushEntry(clone);
+      pushEntry(clone, false);
     }
 
     await writeTextFile(destUri, JSON.stringify(result, null, 2) + '\n');
