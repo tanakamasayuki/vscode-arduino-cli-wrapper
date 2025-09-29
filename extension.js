@@ -1171,9 +1171,25 @@ async function pickInoFromWorkspace() {
   const wf = await getRelevantWorkspaceFolder();
   if (!wf) return undefined;
   const ignore = '{node_modules,.git,build,out,dist,.vscode}';
-  const files = await vscode.workspace.findFiles(new vscode.RelativePattern(wf, '**/*.ino'), new vscode.RelativePattern(wf, `**/${ignore}/**`), 200);
+  let files = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(wf, '**/*.ino'),
+    new vscode.RelativePattern(wf, `**/${ignore}/**`),
+    200
+  );
 
   if (!files || files.length === 0) {
+    vscode.window.showWarningMessage(t('noInoFound', { name: wf.name }));
+    return undefined;
+  }
+
+  files = files.filter((u) => {
+    const rel = path.relative(wf.uri.fsPath, u.fsPath);
+    if (!rel) return true;
+    const segments = rel.split(/[\\/]+/).slice(0, -1);
+    return !segments.some((seg) => seg.startsWith('.') && seg.length > 1);
+  });
+
+  if (files.length === 0) {
     vscode.window.showWarningMessage(t('noInoFound', { name: wf.name }));
     return undefined;
   }
