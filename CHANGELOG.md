@@ -1,6 +1,9 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.4.1
+
 - (EN) Updated sketch picker to ignore `.ino` files located inside hidden directories so workspace scans stay focused on visible sketches.
 - (JA) 隠しディレクトリ配下の `.ino` ファイルをスケッチ選択から除外し、ワークスペース検索が見えるスケッチに限定されるようにしました。
 
