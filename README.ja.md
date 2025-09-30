@@ -31,6 +31,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 
 - **Compile Sketch** – 選択したスケッチをビルドします。複数の `.ino` がある場合はダイアログで選べます。`sketch.yaml` があればプロファイルを自動で適用、ない場合は保存済みの FQBN を使います。
 - **Clean Compile** – `--clean` オプション付きでクリーンビルドを実行し、IntelliSense の includePath も初期化した上で再計算します。ライブラリを入れ替えた後に便利です。
+- **ローカルビルドパス（設定）** – 設定「Arduino CLI Wrapper › Local Build Path」を有効にすると `--build-path` を自動付与し、`.build/<プロファイル>` 配下にビルド成果物を保存します。Compile / Upload / Inspector などの出力をスケッチ内にまとめて管理できます。
 - **Upload Sketch** – コンパイルしてそのまま書き込みます。ポートが未設定ならその場で選択でき、必要に応じてシリアルモニタを自動で閉じたり再オープンしたりします。
 - **Upload Data (ESP32)** – `data/` フォルダーを探して LittleFS/SPIFFS のイメージを作成し、ESP32 の SPIFFS パーティションに書き込みます。Web アセットや設定ファイルを同梱したい場合に活躍します。
 - **Build Check** – `sketch.yaml` に定義したすべてのプロファイルを `--warnings all` でビルドし、警告とエラーの集計結果を表示します。リグレッションチェックに最適です。
@@ -155,6 +156,7 @@ clangd などの設定で `<ワークスペース>/.vscode/compile_commands.json
 
 - `arduino-cli-wrapper.path`: `arduino-cli` 実行ファイルのパス
 - `arduino-cli-wrapper.additionalArgs`: すべての呼び出しに付与する追加引数（配列）
+- `arduino-cli-wrapper.localBuildPath`: `--build-path` を自動で `.build/<プロファイル>` に設定し、ビルド成果物をプロジェクト直下にまとめます
 - `arduino-cli-wrapper.verbose`: コンパイル/書き込み時に `--verbose` を付与（ステータスバーのトグルと同期）
 - `arduino-cli-wrapper.compileWarnings`: `arduino-cli compile` に渡す警告レベル (`--warnings`) を指定（ステータスバーのトグルと同期）
 - `arduino-cli-wrapper.lint.m5gfxIncludes`: Include 順チェックで M5GFX 系として扱うヘッダー一覧

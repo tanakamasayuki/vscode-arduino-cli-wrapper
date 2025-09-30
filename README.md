@@ -31,6 +31,7 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 
 - **Compile Sketch** – Builds the selected sketch. If the folder contains several `.ino` files, a picker helps you choose the right one. Profiles from `sketch.yaml` are applied automatically; otherwise the saved FQBN is used.
 - **Clean Compile** – Runs the same build with `--clean`, resets IntelliSense include paths, and is handy when switching libraries or boards.
+- **Local Build Path (setting)** – Turn on **Arduino CLI Wrapper › Local Build Path** to pass `--build-path` automatically and store build outputs in `.build/<profile>` under each sketch, keeping artifacts local for Compile, Upload, Inspector, and more.
 - **Upload Sketch** – Compiles and uploads in one go. You will be prompted for a serial port if one is not already selected, and the monitor is closed/reopened as needed so the port stays free.
 - **Upload Data (ESP32)** – Looks for a `data/` folder, creates a LittleFS or SPIFFS image, and flashes it. Perfect for web assets or configuration files bundled with your sketch.
 - **Build Check** – Compiles every profile defined in `sketch.yaml` with full warnings (`--warnings all`), then shows a summary of warnings and errors so you can spot regressions quickly.
@@ -155,6 +156,7 @@ Point clangd or other tools to `<workspace>/.vscode/compile_commands.json` and t
 
 - `arduino-cli-wrapper.path`: Path to the `arduino-cli` executable
 - `arduino-cli-wrapper.additionalArgs`: Extra arguments appended to every invocation (array)
+- `arduino-cli-wrapper.localBuildPath`: Forces `--build-path` to `.build/<profile>` inside the sketch so build artifacts stay alongside the project
 - `arduino-cli-wrapper.verbose`: Adds `--verbose` to compile/upload (mirrors the status bar toggle)
 - `arduino-cli-wrapper.compileWarnings`: Warning level passed to `arduino-cli compile` (`--warnings`, mirrors the status bar toggle)
 - `arduino-cli-wrapper.lint.m5gfxIncludes`: Header list treated as M5GFX family for include-order linting
