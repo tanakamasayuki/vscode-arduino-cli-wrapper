@@ -35,6 +35,7 @@
   "config.compileWarnings.enum.more": "Enable extra compiler warnings.",
   "config.compileWarnings.enum.all": "Enable all compiler warnings.",
   "config.verbose.description": "Add --verbose to compile/upload commands. (Managed from the status bar)",
+  "config.localBuildPath.description": "Store Arduino CLI build outputs under a local `.build/<profile>` folder and pass --build-path automatically during compile commands.",
   "config.lint.m5gfxIncludes.description": "Headers treated as part of the M5GFX family for include-order linting.",
   "config.lint.fsIncludes.description": "Headers treated as filesystem-related for include-order linting.",
   "view.arduinoCli": "Arduino CLI",

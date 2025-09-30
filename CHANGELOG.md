@@ -1,6 +1,12 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Added a Local Build Path setting that pins Arduino CLI build artifacts to `.build/<profile>` under each sketch and automatically appends `--build-path` to compile-related commands.
+- (JA) スケッチ直下の `.build/<プロファイル>` にビルド成果物を保存するローカルビルドパス設定を追加し、コンパイル系コマンドへ自動的に `--build-path` を付与するようにしました。
+- (EN) Workspace scanners now skip `.build` directories so generated artifacts stay out of pickers, reports, and example listings.
+- (JA) `.build` ディレクトリをスキャン対象から除外し、生成物が選択肢やレポート、サンプル一覧に混ざらないようにしました。
+- (EN) Inspector analysis now respects the Local Build Path setting so its temporary outputs live under `.build/<profile>` alongside other commands.
+- (JA) インスペクター分析でもローカルビルドパス設定を反映し、他のコマンドと同様に `.build/<プロファイル>` 配下で一時ファイルを扱うようにしました。
 
 ## 1.4.1
 

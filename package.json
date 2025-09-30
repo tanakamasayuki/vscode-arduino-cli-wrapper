@@ -189,6 +189,11 @@
           "default": false,
           "markdownDescription": "%config.verbose.description%"
         },
+        "arduino-cli-wrapper.localBuildPath": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.localBuildPath.description%"
+        },
         "arduino-cli-wrapper.lint.m5gfxIncludes": {
           "type": "array",
           "default": [

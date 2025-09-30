@@ -35,6 +35,7 @@
   "config.compileWarnings.enum.more": "追加のコンパイラ警告を有効にします。",
   "config.compileWarnings.enum.all": "すべてのコンパイラ警告を有効にします。",
   "config.verbose.description": "compile / upload コマンドに --verbose を付与します。（ステータスバーから制御）",
+  "config.localBuildPath.description": "スケッチ直下の `.build/<プロファイル>` にビルド成果物を保存し、コンパイル時に自動で --build-path を付与します。",
   "config.lint.m5gfxIncludes.description": "include 順チェックで M5GFX 系として扱うヘッダーファイル一覧",
   "config.lint.fsIncludes.description": "include 順チェックで FS 系として扱うヘッダーファイル一覧",
   "view.arduinoCli": "Arduino CLI",

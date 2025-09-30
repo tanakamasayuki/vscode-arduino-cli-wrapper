@@ -155,6 +155,7 @@ const STATE_PORT = 'arduino-cli.selectedPort';
 const STATE_BAUD = 'arduino-cli.selectedBaud';
 const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
 const VALID_WARNING_LEVELS = new Set(['workspace', 'none', 'default', 'more', 'all']);
+const BUILD_DIR_NAME = '.build';
 let output;
 let extContext;
 let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings;
@@ -806,6 +807,47 @@ function headerBasename(header) {
   return String(header || '').split(/[\/]/).pop();
 }
 
+function getPathSegments(fsPath) {
+  if (!fsPath) return [];
+  return path.normalize(String(fsPath)).split(/[\\/]+/).filter(Boolean);
+}
+
+function isHiddenDirectorySegment(segment) {
+  return typeof segment === 'string' && segment.length > 1 && segment.startsWith('.');
+}
+
+function containsHiddenDirectory(fsPath) {
+  const segments = getPathSegments(fsPath);
+  if (segments.length === 0) return false;
+  // Ignore the last segment assuming it is the filename
+  segments.pop();
+  return segments.some(isHiddenDirectorySegment);
+}
+
+function isPathInsideBuildDir(fsPath) {
+  return getPathSegments(fsPath).includes(BUILD_DIR_NAME);
+}
+
+function filterUrisOutsideBuild(uris) {
+  if (!Array.isArray(uris)) return [];
+  return uris.filter((uri) => {
+    if (!uri) return false;
+    const fsPath = typeof uri === 'string' ? uri : uri.fsPath;
+    return !isPathInsideBuildDir(fsPath);
+  });
+}
+
+async function ensureLocalBuildPath(sketchDir, profileName, fqbn) {
+  if (!sketchDir) return '';
+  const labelSource = profileName || fqbn || path.basename(sketchDir) || 'default';
+  const folderName = sanitizeProfileFolderName(labelSource);
+  const target = path.join(sketchDir, BUILD_DIR_NAME, folderName);
+  try {
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(target));
+  } catch (_) { /* ignore directory creation errors */ }
+  return target;
+}
+
 
 /**
  * Read extension configuration from VS Code settings.
@@ -832,6 +874,7 @@ function getConfig() {
     extra: cfg.get('arduino-cli-wrapper.additionalArgs', []),
     verbose: !!verbose,
     warnings: normalizedWarnings,
+    localBuildPath: cfg.get('arduino-cli-wrapper.localBuildPath', false),
   };
 }
 
@@ -1170,7 +1213,7 @@ async function getRelevantWorkspaceFolder() {
 async function pickInoFromWorkspace() {
   const wf = await getRelevantWorkspaceFolder();
   if (!wf) return undefined;
-  const ignore = '{node_modules,.git,build,out,dist,.vscode}';
+  const ignore = '{node_modules,.git,build,out,dist,.vscode,.build}';
   let files = await vscode.workspace.findFiles(
     new vscode.RelativePattern(wf, '**/*.ino'),
     new vscode.RelativePattern(wf, `**/${ignore}/**`),
@@ -1182,12 +1225,7 @@ async function pickInoFromWorkspace() {
     return undefined;
   }
 
-  files = files.filter((u) => {
-    const rel = path.relative(wf.uri.fsPath, u.fsPath);
-    if (!rel) return true;
-    const segments = rel.split(/[\\/]+/).slice(0, -1);
-    return !segments.some((seg) => seg.startsWith('.') && seg.length > 1);
-  });
+  files = files.filter((u) => !containsHiddenDirectory(u.fsPath) && !isPathInsideBuildDir(u.fsPath));
 
   if (files.length === 0) {
     vscode.window.showWarningMessage(t('noInoFound', { name: wf.name }));
@@ -1490,24 +1528,27 @@ async function commandCompile() {
   let args = ['compile'];
   if (cfg.verbose) args.push('--verbose');
   let selectedProfile = '';
+  let resolvedFqbn = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
     selectedProfile = await resolveProfileName(yamlInfo);
     if (!selectedProfile) return; // user cancelled
     channel.appendLine(`[compile] Using profile from sketch.yaml: ${selectedProfile}`);
     args.push('--profile', selectedProfile);
   } else {
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (!fqbn) {
+    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!resolvedFqbn) {
       const set = await commandSetFqbn(true);
       if (!set) return;
-      fqbn = extContext.workspaceState.get(STATE_FQBN, '');
+      resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
     }
-    args.push('--fqbn', fqbn);
+    args.push('--fqbn', resolvedFqbn);
   }
   args.push(sketchDir);
   try {
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
-    const opts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : undefined;
+    const opts = selectedProfile
+      ? { profileName: selectedProfile, wokwiEnabled }
+      : { fqbn: resolvedFqbn };
     // Always use the output channel and update IntelliSense during the build
     await compileWithIntelliSense(sketchDir, args, opts);
   } catch (e) {
@@ -1530,23 +1571,24 @@ async function commandConfigureIntelliSense() {
   const args = ['compile'];
   if (cfg.verbose) args.push('--verbose');
   let selectedProfile = '';
+  let resolvedFqbn = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
     selectedProfile = await resolveProfileName(yamlInfo);
     if (!selectedProfile) return;
     args.push('--profile', selectedProfile);
   } else {
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (!fqbn) {
+    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!resolvedFqbn) {
       const set = await commandSetFqbn(true);
       if (!set) return;
-      fqbn = extContext.workspaceState.get(STATE_FQBN, '');
+      resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
     }
-    args.push('--fqbn', fqbn);
+    args.push('--fqbn', resolvedFqbn);
   }
   args.push(sketchDir);
   try {
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
-    const opts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : undefined;
+    const opts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : { fqbn: resolvedFqbn };
     await compileWithIntelliSense(sketchDir, args, opts);
   } catch (e) {
     showError(e);
@@ -1578,19 +1620,20 @@ async function commandUpload() {
   const compileArgs = ['compile'];
   if (cfg.verbose) compileArgs.push('--verbose');
   let selectedProfile = '';
+  let resolvedFqbn = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
     selectedProfile = await resolveProfileName(yamlInfo);
     if (!selectedProfile) return;
     channel.appendLine(`[upload] Using profile from sketch.yaml: ${selectedProfile}`);
     compileArgs.push('--profile', selectedProfile);
   } else {
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (!fqbn) {
+    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!resolvedFqbn) {
       const set = await commandSetFqbn(true);
       if (!set) return;
-      fqbn = extContext.workspaceState.get(STATE_FQBN, '');
+      resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
     }
-    compileArgs.push('--fqbn', fqbn);
+    compileArgs.push('--fqbn', resolvedFqbn);
   }
   compileArgs.push(sketchDir);
 
@@ -1605,21 +1648,20 @@ async function commandUpload() {
     const selectedPort = extContext?.workspaceState.get(STATE_PORT, '') || '';
     if (selectedPort) uploadArgs.push('-p', selectedPort);
   } else {
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    let port = extContext?.workspaceState.get(STATE_PORT, '');
-    if (!fqbn) {
+    let port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+    if (!resolvedFqbn) {
       const set = await commandSetFqbn(true);
       if (!set) return;
-      fqbn = extContext.workspaceState.get(STATE_FQBN, '');
+      resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
     }
-    if (fqbn) uploadArgs.push('--fqbn', fqbn);
+    if (resolvedFqbn) uploadArgs.push('--fqbn', resolvedFqbn);
     if (port) uploadArgs.push('-p', port);
   }
   uploadArgs.push(sketchDir);
   try {
     // Update IntelliSense during compile
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
-    const compileOpts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : undefined;
+    const compileOpts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : { fqbn: resolvedFqbn };
     await compileWithIntelliSense(sketchDir, compileArgs, compileOpts);
 
     // If a serial monitor is open, close it before upload to avoid port conflicts
@@ -1695,22 +1737,30 @@ async function commandUploadData() {
   if (cfg.verbose) propsArgs.push('--verbose');
 
   let usingProfile = false;
+  let selectedProfile = '';
+  let resolvedFqbn = '';
   const yamlInfo = await readSketchYamlInfo(sketchDir);
   if (yamlInfo && yamlInfo.profiles.length > 0) {
-    const profile = await resolveProfileName(yamlInfo);
-    if (!profile) return;
+    selectedProfile = await resolveProfileName(yamlInfo);
+    if (!selectedProfile) return;
     usingProfile = true;
-    propsArgs.push('--profile', profile);
+    propsArgs.push('--profile', selectedProfile);
   } else {
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (!fqbn) {
+    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!resolvedFqbn) {
       const set = await commandSetFqbn(true);
       if (!set) return;
-      fqbn = extContext.workspaceState.get(STATE_FQBN, '');
+      resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
     }
-    propsArgs.push('--fqbn', fqbn);
+    propsArgs.push('--fqbn', resolvedFqbn);
   }
   propsArgs.push('--show-properties');
+  if (cfg.localBuildPath) {
+    const buildDir = await ensureLocalBuildPath(sketchDir, usingProfile ? selectedProfile : '', usingProfile ? '' : resolvedFqbn);
+    if (buildDir) {
+      propsArgs.push('--build-path', buildDir);
+    }
+  }
   propsArgs.push(sketchDir);
 
   channel.show();
@@ -1880,7 +1930,7 @@ async function runExternal(exe, args, opts = {}) {
 
 // Run compile and update IntelliSense by exporting compile_commands.json.
 async function compileWithIntelliSense(sketchDir, args, opts = {}) {
-  const { profileName = '', wokwiEnabled = false } = opts || {};
+  const { profileName = '', wokwiEnabled = false, fqbn = '' } = opts || {};
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
@@ -1901,8 +1951,39 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
     originalArgs.splice(insertIdx, 0, '--warnings', warningsArg);
   }
 
+  let localBuildPath = '';
+  if (cfg.localBuildPath) {
+    try {
+      localBuildPath = await ensureLocalBuildPath(sketchDir, profileName, fqbn);
+    } catch (_) {
+      localBuildPath = '';
+    }
+    if (localBuildPath) {
+      let replaced = false;
+      for (let i = 0; i < originalArgs.length; i += 1) {
+        const value = originalArgs[i];
+        if (value === '--build-path') {
+          if (i + 1 < originalArgs.length) {
+            originalArgs[i + 1] = localBuildPath;
+            replaced = true;
+          }
+          break;
+        }
+        if (typeof value === 'string' && value.startsWith('--build-path=')) {
+          originalArgs[i] = `--build-path=${localBuildPath}`;
+          replaced = true;
+          break;
+        }
+      }
+      if (!replaced) {
+        const sketchIdx = originalArgs.lastIndexOf(sketchDir);
+        const insertIdx = sketchIdx >= 0 ? sketchIdx : originalArgs.length;
+        originalArgs.splice(insertIdx, 0, '--build-path', localBuildPath);
+      }
+    }
+  }
+
   const compileArgs = originalArgs.slice();
-  const sketchIdx = compileArgs.lastIndexOf(sketchDir);
 
   const finalArgs = [...baseArgs, ...compileArgs];
   if (compileDiagnostics) {
@@ -1958,7 +2039,10 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
       }
       try {
         await ensureCompileCommandsSetting(sketchDir);
-        const buildPath = await detectBuildPathForCompile(exe, baseArgs, originalArgs, sketchDir);
+        let buildPath = localBuildPath;
+        if (!buildPath) {
+          buildPath = await detectBuildPathForCompile(exe, baseArgs, originalArgs, sketchDir);
+        }
         if (!buildPath) {
           channel.appendLine(t('compileCommandsBuildPathMissing'));
         } else {
@@ -1991,6 +2075,25 @@ async function detectBuildPathForCompile(exe, baseArgs, args, sketchDir) {
   }
   if (!derivedArgs.includes(sketchDir)) {
     derivedArgs.push(sketchDir);
+  }
+  for (let i = 0; i < derivedArgs.length; i += 1) {
+    const value = derivedArgs[i];
+    if (value === '--build-path') {
+      const next = derivedArgs[i + 1];
+      if (typeof next === 'string' && next.trim()) {
+        const resolved = path.isAbsolute(next) ? next : path.resolve(sketchDir, next);
+        return path.normalize(resolved);
+      }
+      break;
+    }
+    if (typeof value === 'string' && value.startsWith('--build-path=')) {
+      const raw = value.slice('--build-path='.length).trim();
+      if (raw) {
+        const resolved = path.isAbsolute(raw) ? raw : path.resolve(sketchDir, raw);
+        return path.normalize(resolved);
+      }
+      break;
+    }
   }
   if (!derivedArgs.includes('--show-properties')) {
     const idx = derivedArgs.lastIndexOf(sketchDir);
@@ -2359,7 +2462,7 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
         workspaceInoMapPromise = (async () => {
           const map = new Map();
           try {
-            const files = await vscode.workspace.findFiles('**/*.ino');
+            const files = filterUrisOutsideBuild(await vscode.workspace.findFiles('**/*.ino'));
             for (const uri of files) {
               try {
                 const fsPath = path.normalize(uri.fsPath);
@@ -2924,7 +3027,7 @@ async function findSketches() {
   /** @type {{dir:string,name:string}[]} */
   const results = [];
   try {
-    const uris = await vscode.workspace.findFiles('**/*.ino', '**/{node_modules,.git}/**', 50);
+    const uris = filterUrisOutsideBuild(await vscode.workspace.findFiles('**/*.ino', '**/{node_modules,.git}/**', 50));
     const seen = new Set();
     for (const u of uris) {
       const dir = path.dirname(u.fsPath);
@@ -2965,7 +3068,7 @@ async function findSketchYamlEntries() {
     const pattern = new vscode.RelativePattern(folder, '**/sketch.yaml');
     let matches = [];
     try {
-      matches = await vscode.workspace.findFiles(pattern);
+      matches = filterUrisOutsideBuild(await vscode.workspace.findFiles(pattern));
     } catch (_) {
       matches = [];
     }
@@ -2986,6 +3089,7 @@ async function runCompileFor(sketchDir, profile) {
   const args = ['compile'];
   if (cfg.verbose) args.push('--verbose');
   let wokwiEnabled = false;
+  let resolvedFqbn = '';
   if (profile) {
     args.push('--profile', profile);
     try {
@@ -2994,12 +3098,12 @@ async function runCompileFor(sketchDir, profile) {
     } catch { }
   } else {
     // fallback to FQBN/state
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
-    args.push('--fqbn', fqbn);
+    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!resolvedFqbn) { const set = await commandSetFqbn(true); if (!set) return; resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || ''; }
+    args.push('--fqbn', resolvedFqbn);
   }
   args.push(sketchDir);
-  const opts = profile ? { profileName: profile, wokwiEnabled } : undefined;
+  const opts = profile ? { profileName: profile, wokwiEnabled } : { fqbn: resolvedFqbn };
   await compileWithIntelliSense(sketchDir, args, opts);
 }
 async function runCleanCompileFor(sketchDir, profile) {
@@ -3008,6 +3112,7 @@ async function runCleanCompileFor(sketchDir, profile) {
   const args = ['compile', '--clean'];
   if (cfg.verbose) args.push('--verbose');
   let wokwiEnabled = false;
+  let resolvedFqbn = '';
   if (profile) {
     args.push('--profile', profile);
     try {
@@ -3015,12 +3120,14 @@ async function runCleanCompileFor(sketchDir, profile) {
       wokwiEnabled = isProfileWokwiEnabled(yamlInfo, profile);
     } catch { }
   } else {
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
-    args.push('--fqbn', fqbn);
+    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!resolvedFqbn) { const set = await commandSetFqbn(true); if (!set) return; resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || ''; }
+    args.push('--fqbn', resolvedFqbn);
   }
   args.push(sketchDir);
-  const opts = profile ? { emptyIncludePath: true, profileName: profile, wokwiEnabled } : { emptyIncludePath: true };
+  const opts = profile
+    ? { emptyIncludePath: true, profileName: profile, wokwiEnabled }
+    : { emptyIncludePath: true, fqbn: resolvedFqbn };
   await compileWithIntelliSense(sketchDir, args, opts);
 }
 async function runUploadFor(sketchDir, profile) {
@@ -3034,6 +3141,7 @@ async function runUploadFor(sketchDir, profile) {
   const cArgs = ['compile']; if (cfg.verbose) cArgs.push('--verbose');
   const uArgs = ['upload']; if (cfg.verbose) uArgs.push('--verbose');
   let wokwiEnabled = false;
+  let resolvedFqbn = '';
   if (profile) {
     cArgs.push('--profile', profile); uArgs.push('--profile', profile);
     try {
@@ -3041,14 +3149,14 @@ async function runUploadFor(sketchDir, profile) {
       wokwiEnabled = isProfileWokwiEnabled(yamlInfo, profile);
     } catch { }
   } else {
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (!fqbn) { const set = await commandSetFqbn(true); if (!set) return; fqbn = extContext.workspaceState.get(STATE_FQBN, ''); }
-    cArgs.push('--fqbn', fqbn); uArgs.push('--fqbn', fqbn);
+    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!resolvedFqbn) { const set = await commandSetFqbn(true); if (!set) return; resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || ''; }
+    cArgs.push('--fqbn', resolvedFqbn); uArgs.push('--fqbn', resolvedFqbn);
   }
   const port = extContext?.workspaceState.get(STATE_PORT, '') || '';
   if (port) uArgs.push('-p', port);
   cArgs.push(sketchDir); uArgs.push(sketchDir);
-  const opts = profile ? { profileName: profile, wokwiEnabled } : undefined;
+  const opts = profile ? { profileName: profile, wokwiEnabled } : { fqbn: resolvedFqbn };
   await compileWithIntelliSense(sketchDir, cArgs, opts);
   let reopenMonitorAfter = false;
   if (monitorTerminal) { try { monitorTerminal.dispose(); } catch (_) { } monitorTerminal = undefined; reopenMonitorAfter = true; }
@@ -3161,7 +3269,7 @@ async function commandBuildCheck() {
   for (const folder of folders) {
     const pattern = new vscode.RelativePattern(folder, '**/sketch.yaml');
     let matches = [];
-    try { matches = await vscode.workspace.findFiles(pattern); } catch { matches = []; }
+    try { matches = filterUrisOutsideBuild(await vscode.workspace.findFiles(pattern)); } catch { matches = []; }
     for (const uri of matches) {
       const sketchDir = path.dirname(uri.fsPath);
       if (seenDirs.has(sketchDir)) continue;
@@ -3307,7 +3415,14 @@ async function commandBuildCheck() {
           await ensureCompileCommandsSetting(sketchDir);
           let buildPath = detail.buildPath;
           if (!buildPath) {
-            const detectArgs = ['compile', '--profile', profile, '--warnings=all', '--clean', sketchDir];
+            const detectArgs = ['compile', '--profile', profile, '--warnings=all', '--clean'];
+            if (cfg.localBuildPath) {
+              const overridePath = await ensureLocalBuildPath(sketchDir, profile, '');
+              if (overridePath) {
+                detectArgs.push('--build-path', overridePath);
+              }
+            }
+            detectArgs.push(sketchDir);
             buildPath = await detectBuildPathForCompile(exe, [], detectArgs, sketchDir);
           }
           if (!buildPath) {
@@ -3433,7 +3548,15 @@ function parseBuildCheckJson(raw) {
 }
 
 async function runBuildCheckCompile(exe, sketchDir, profile) {
-  const args = ['compile', '--profile', profile, '--warnings=all', '--clean', '--json', sketchDir];
+  const cfg = getConfig();
+  const args = ['compile', '--profile', profile, '--warnings=all', '--clean', '--json'];
+  if (cfg.localBuildPath) {
+    const buildPath = await ensureLocalBuildPath(sketchDir, profile, '');
+    if (buildPath) {
+      args.push('--build-path', buildPath);
+    }
+  }
+  args.push(sketchDir);
   const channel = getOutput();
   const displayExe = needsPwshCallOperator() ? '& ' + quoteArg(exe) : quoteArg(exe);
   channel.appendLine(ANSI.cyan + '$ ' + displayExe + ' ' + args.map(quoteArg).join(' ') + ANSI.reset);
@@ -3465,23 +3588,32 @@ async function commandCleanCompile() {
   let args = ['compile'];
   if (cfg.verbose) args.push('--verbose');
   args.push('--clean');
+  let resolvedFqbn = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
     const profile = await resolveProfileName(yamlInfo);
     if (!profile) return; // user cancelled
     channel.appendLine(`[clean-compile] Using profile from sketch.yaml: ${profile}`);
     args.push('--profile', profile);
-  } else {
-    let fqbn = extContext?.workspaceState.get(STATE_FQBN, '');
-    if (!fqbn) {
-      const set = await commandSetFqbn(true);
-      if (!set) return;
-      fqbn = extContext.workspaceState.get(STATE_FQBN, '');
+    const opts = { emptyIncludePath: true, profileName: profile };
+    args.push(sketchDir);
+    try {
+      await compileWithIntelliSense(sketchDir, args, opts);
+    } catch (e) {
+      showError(e);
     }
-    args.push('--fqbn', fqbn);
+    return;
   }
+
+  resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+  if (!resolvedFqbn) {
+    const set = await commandSetFqbn(true);
+    if (!set) return;
+    resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
+  }
+  args.push('--fqbn', resolvedFqbn);
   args.push(sketchDir);
   try {
-    await compileWithIntelliSense(sketchDir, args, { emptyIncludePath: true });
+    await compileWithIntelliSense(sketchDir, args, { emptyIncludePath: true, fqbn: resolvedFqbn });
   } catch (e) {
     showError(e);
   }
@@ -3577,7 +3709,13 @@ async function detectSketchDirForStatus() {
   if (folders.length === 0) return undefined;
   const wf = folders[0];
   try {
-    const files = await vscode.workspace.findFiles(new vscode.RelativePattern(wf, '**/*.ino'), new vscode.RelativePattern(wf, '**/{node_modules,.git,build,out,dist,.vscode}/**'), 1);
+    const files = filterUrisOutsideBuild(
+      await vscode.workspace.findFiles(
+        new vscode.RelativePattern(wf, '**/*.ino'),
+        new vscode.RelativePattern(wf, '**/{node_modules,.git,build,out,dist,.vscode,.build}/**'),
+        1
+      )
+    );
     if (files && files.length > 0) return path.dirname(files[0].fsPath);
   } catch { }
   return undefined;
@@ -5801,7 +5939,7 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   }
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
-  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra.slice() : [];
   const args = ['compile', '--warnings=all', '--json', '--clean'];
   let usedProfile = '';
   let usedFqbn = '';
@@ -5818,6 +5956,42 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
     }
     args.push('--fqbn', fqbn);
     usedFqbn = fqbn;
+  }
+  let localBuildPath = '';
+  if (cfg.localBuildPath) {
+    try {
+      localBuildPath = await ensureLocalBuildPath(sketchDir, usedProfile, usedFqbn);
+    } catch (_) {
+      localBuildPath = '';
+    }
+  }
+  if (localBuildPath) {
+    const applyBuildPathOverride = (list) => {
+      if (!Array.isArray(list)) return false;
+      for (let i = 0; i < list.length; i += 1) {
+        const value = list[i];
+        if (value === '--build-path') {
+          if (i + 1 < list.length) {
+            list[i + 1] = localBuildPath;
+          } else {
+            list.push(localBuildPath);
+          }
+          return true;
+        }
+        if (typeof value === 'string' && value.startsWith('--build-path=')) {
+          list[i] = `--build-path=${localBuildPath}`;
+          return true;
+        }
+      }
+      return false;
+    };
+    let applied = applyBuildPathOverride(baseArgs);
+    if (!applied) {
+      applied = applyBuildPathOverride(args);
+    }
+    if (!applied) {
+      args.push('--build-path', localBuildPath);
+    }
   }
   args.push(sketchDir);
   const finalArgs = [...baseArgs, ...args];
@@ -6235,6 +6409,14 @@ async function getShowProperties(sketchDir) {
     if (fqbn) args.push('--fqbn', fqbn);
   }
   args.push('--show-properties');
+  if (cfg.localBuildPath) {
+    const profileName = yamlInfo && yamlInfo.profiles.length > 0 ? (yamlInfo.defaultProfile || yamlInfo.profiles[0]) : '';
+    const fqbn = yamlInfo && yamlInfo.profiles.length > 0 ? '' : (extContext?.workspaceState.get(STATE_FQBN, '') || '');
+    const buildDir = await ensureLocalBuildPath(sketchDir, profileName, fqbn);
+    if (buildDir) {
+      args.push('--build-path', buildDir);
+    }
+  }
   args.push(sketchDir);
   let out = '';
   await new Promise((resolve, reject) => {
@@ -6289,7 +6471,7 @@ async function findDirectoriesNamed(baseUri, name, maxDepth = 5, depth = 0) {
         if (fname.toLowerCase() === name.toLowerCase()) out.push(child);
         else {
           // Skip heavy dirs
-          if (/^(tools|docs|test|tests|examples|build|out|dist|\.git)$/i.test(fname)) continue;
+          if (/^(tools|docs|test|tests|examples|build|out|dist|\.git|\.build)$/i.test(fname)) continue;
           const nested = await findDirectoriesNamed(child, name, maxDepth, depth + 1);
           for (const u of nested) out.push(u);
         }
@@ -6309,6 +6491,7 @@ async function findFilesWithExtension(baseUri, ext, maxDepth = 5, depth = 0) {
       if (ftype === vscode.FileType.File) {
         if (fname.toLowerCase().endsWith(ext.toLowerCase())) out.push(child);
       } else if (ftype === vscode.FileType.Directory) {
+        if (fname === BUILD_DIR_NAME) continue;
         const nested = await findFilesWithExtension(child, ext, maxDepth, depth + 1);
         for (const u of nested) out.push(u);
       }
