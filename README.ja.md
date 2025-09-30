@@ -38,6 +38,20 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - **Debug Sketch** – プロファイルごとの `debug_config` を取り込み、Cortex-Debug があれば `cortex-debug` を起動し、ない場合は Microsoft C/C++ デバッガーにフォールバックします。その際は `request: "launch"` を自動指定するため、「アタッチするプロセスを選択してください」というダイアログはもう表示されません。
 - **wokwi で実行** – プロファイルに `wokwi: true` を設定すると、ビルド時に `.wokwi/<profile>/wokwi.elf` を出力し、ボードに合わせた初期値で `diagram.json` / `wokwi.toml` を補完したうえで、エクスプローラーに「wokwiで実行」アクションが現れ、公式 Wokwi 拡張機能で図面を開けます。
 
+#### デバッグ手順（ステップバイステップ）
+
+1. **`debug_config` を含むプロファイルを用意する。** Arduino IDE 2.x なら同じスケッチ/プロファイルを開き、**Sketch ▶️ Export Compiled Binary with Debug Symbols** を実行すると `.vscode/arduino.json` に `debug_config` が出力されます。そのブロックを `sketch.yaml` にコピーすれば、この拡張機能が OpenOCD や GDB のパス、SVD、`request` 種別などを読み取れるようになります。
+2. **「Arduino CLI: Debug Sketch」を実行する。** 対象スケッチとプロファイルを選ぶと `.vscode/` 配下に 2 つの成果物が生成されます。
+  - `tasks.json` には **Arduino: Debug Build & Upload …** タスクが追加され、デバッガを接続したままファームを書き込めます。ローカルビルドパス設定やプロファイル固有の CLI 引数も反映されます。
+  - `launch.json` には Cortex-Debug 用の構成（拡張機能が入っている場合）と Microsoft C/C++ 用のフォールバックが追加されます。どちらも `debug_config` の OpenOCD / GDB 設定を再利用し、cppdbg 側は常に `"request": "launch"` となるため、従来の「アタッチするプロセスを選択」ダイアログは表示されません。
+3. **新しいタスクでファームを書き込む。** Run and Debug ビューの歯車アイコン、または **Tasks: Run Task…** から生成されたデバッグ用タスクを選択して実行すると、プローブ接続を維持したまま ELF を更新できます。
+4. **デバッグを開始する。** Run and Debug パネルで **Arduino on …**（Cortex-Debug）または `(cppdbg)` の構成を選び、**F5** を押します。Arduino が用意した `thb setup` により `setup()` の先頭で停止するので、ブレークポイントや変数ウォッチ、SVD ビューを使ってデバッグを進められます。
+5. **必要に応じてカスタマイズする。** 生成された `launch.json` は自由に編集できます（例: `overrideAttachCommands` の追加、semihosting コマンド、別の SVD への差し替えなど）。次回再生成するときも極力マージされます。ツールチェーンを差し替える場合は `debug_config` 側のパスを更新しておくと、以降の生成が新しい値を拾います。
+
+ヒント:
+- デバッグビルド実行中は Arduino Logs 端末が前面に来るので、OpenOCD のログをリアルタイムに追えます。
+- プローブをつないだまま **Compile Sketch** や **Upload Sketch** を使っても問題ありません。同じビルドパスが共有されるため、`launch.json` に記載された ELF と直近の書き込み内容がずれることはありません。
+
 ### スケッチ管理をラクにするツール
 
 - **Sketch.yaml Helper** – Web ビューでボード/プラットフォーム/ライブラリを確認しながら `sketch.yaml` を編集できます。手打ちが不安なときにおすすめです。

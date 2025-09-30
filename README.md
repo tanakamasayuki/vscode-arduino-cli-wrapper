@@ -38,6 +38,20 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - **Debug Sketch** – Generates matching tasks and launch configurations from each profile’s `debug_config`. If Cortex-Debug is installed it launches a `cortex-debug` session; otherwise it falls back to the Microsoft C/C++ debugger with `request: "launch"` already set so the old “select a process to attach” prompt no longer appears.
 - **Run in Wokwi** – When a `sketch.yaml` profile sets `wokwi: true`, compiling that profile exports `.wokwi/<profile>/wokwi.elf`, scaffolds board-aware defaults for `diagram.json` / `wokwi.toml`, and adds a "Run in Wokwi" action that opens the diagram in the official simulator extension.
 
+#### Debugging your sketch step-by-step
+
+1. **Prepare a profile with `debug_config`.** The Arduino IDE 2.x can generate it automatically: open the same sketch/profile, pick **Sketch ▶️ Export Compiled Binary with Debug Symbols**, and copy the resulting `debug_config` block from the generated `.vscode/arduino.json` into your `sketch.yaml`. The wrapper reads the same keys (OpenOCD arguments, GDB path, SVD path, `request`, breakpoints) when it scaffolds VS Code launch files.
+2. **Run “Arduino CLI: Debug Sketch”.** Choose the sketch and target profile when prompted. The command produces two artefacts under `.vscode/`:
+  - `tasks.json` gains **Arduino: Debug Build & Upload …** so you can flash the firmware with the probe attached. The task honours the Local Build Path setting and the profile’s CLI arguments.
+  - `launch.json` gains a Cortex-Debug entry (if the extension is installed) and a Microsoft C/C++ fallback. Both reuse the OpenOCD and GDB settings from `debug_config`, and the cppdbg variant always sets `"request": "launch"` to skip the old “select process” prompt.
+3. **Flash the firmware with the new task.** In the Run and Debug view, click the gear icon or run **Tasks: Run Task…** and choose the generated debug build task. This ensures the probe stays connected while the binary is updated.
+4. **Start debugging.** Pick **Arduino on …** (Cortex-Debug) or the `(cppdbg)` configuration from the Run and Debug panel and press **F5**. The session halts in the setup breakpoint defined by Arduino (`thb setup` by default). From here you can set breakpoints, inspect variables, or open the SVD peripheral view.
+5. **Customise if needed.** You can edit the generated `launch.json`—for example to change `overrideAttachCommands`, add semihosting commands, or point to a different SVD file. The wrapper will merge the next regeneration, keeping manual tweaks where possible. If you replace toolchains, update `debug_config` so subsequent runs pick up the new paths.
+
+Tips:
+- The extension keeps the Arduino Logs terminal in focus during the debug build so you can see OpenOCD output.
+- Leaving the probe connected while running **Compile Sketch** or **Upload Sketch** is safe; they now use the same build path as the debug task, so the ELF selected in `launch.json` always matches the latest upload.
+
 ### Keep sketches organised
 
 - **Sketch.yaml Helper** – Opens a helper view where you can review or update board packages, platforms, and libraries without editing YAML by hand.
