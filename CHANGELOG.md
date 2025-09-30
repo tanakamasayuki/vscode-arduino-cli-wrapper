@@ -7,6 +7,10 @@
 - (JA) デバッグビルドでもローカルビルドパス設定を尊重し、OFF の場合は Arduino CLI 既定のビルド先を使いつつ `arduino-cli compile --upload` タスクを生成、ON の場合は従来どおり `.build/<sketch>-<profile>-debug` を利用するようにしました。
 - (EN) When falling back to the Microsoft C/C++ debugger, launch configurations now force `request: "launch"` and reuse the GDB connection details from `debug_config` so the attach prompt no longer appears.
 - (JA) Microsoft C/C++ デバッガーへフォールバックする際に `request: "launch"` を強制し、`debug_config` の GDB 接続情報を引き継ぐことで「プロセスを選択してください」というダイアログが表示されなくなりました。
+- (EN) If Cortex-Debug isn't installed, the generator now removes stale `cortex-debug` entries from launch.json so schema warnings disappear and only cppdbg remains.
+- (JA) Cortex-Debug が未インストールの場合、launch.json から既存の `cortex-debug` エントリを自動削除し、スキーマ警告を解消したうえで cppdbg 設定だけを残すようにしました。
+- (EN) Updated the cppdbg fallback to rely on VS Code's automatic `target remote` handling and dropped the default `monitor reset halt` / `monitor gdb_sync` pair so GDB no longer disconnects immediately when launching without Cortex-Debug.
+- (JA) cppdbg フォールバックでは VS Code 側の `target remote` 処理に任せつつ既定の `monitor reset halt` / `monitor gdb_sync` を削除し、Cortex-Debug なしでも起動直後に GDB が切断されないようにしました。
 
 ## 1.4.2
 - (EN) Added a Local Build Path setting that pins Arduino CLI build artifacts to `.build/<profile>` under each sketch and automatically appends `--build-path` to compile-related commands.

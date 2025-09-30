@@ -40,7 +40,7 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 
 #### Debugging your sketch step-by-step
 
-1. **Prepare a profile with `debug_config`.** The Arduino IDE 2.x can generate it automatically: open the same sketch/profile, pick **Sketch ▶️ Export Compiled Binary with Debug Symbols**, and copy the resulting `debug_config` block from the generated `.vscode/arduino.json` into your `sketch.yaml`. The wrapper reads the same keys (OpenOCD arguments, GDB path, SVD path, `request`, breakpoints) when it scaffolds VS Code launch files.
+1. **Pick the profile and environment.** Set the profile you want to debug as the default in `sketch.yaml` (or be ready to pick it when prompted) and double-check related settings such as the serial port or Local Build Path so the generated tasks line up with your hardware.
 2. **Run “Arduino CLI: Debug Sketch”.** Choose the sketch and target profile when prompted. The command produces two artefacts under `.vscode/`:
   - `tasks.json` gains **Arduino: Debug Build & Upload …** so you can flash the firmware with the probe attached. The task honours the Local Build Path setting and the profile’s CLI arguments.
   - `launch.json` gains a Cortex-Debug entry (if the extension is installed) and a Microsoft C/C++ fallback. Both reuse the OpenOCD and GDB settings from `debug_config`, and the cppdbg variant always sets `"request": "launch"` to skip the old “select process” prompt.
@@ -49,6 +49,7 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 5. **Customise if needed.** You can edit the generated `launch.json`—for example to change `overrideAttachCommands`, add semihosting commands, or point to a different SVD file. The wrapper will merge the next regeneration, keeping manual tweaks where possible. If you replace toolchains, update `debug_config` so subsequent runs pick up the new paths.
 
 Tips:
+- The Arduino IDE 2.x can emit a `debug_config` block via **Sketch ▶️ Export Compiled Binary with Debug Symbols**; pasting it into `sketch.yaml` lets the wrapper reuse Arduino’s OpenOCD / GDB paths, SVD, and `override*` commands for board-specific setups.
 - The extension keeps the Arduino Logs terminal in focus during the debug build so you can see OpenOCD output.
 - Leaving the probe connected while running **Compile Sketch** or **Upload Sketch** is safe; they now use the same build path as the debug task, so the ELF selected in `launch.json` always matches the latest upload.
 

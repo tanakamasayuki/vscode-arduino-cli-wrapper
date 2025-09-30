@@ -1124,8 +1124,18 @@ async function updateTasksJson(workspaceFolder, tasksToAdd) {
   return tasksUri.fsPath;
 }
 
-async function updateLaunchJson(workspaceFolder, configsToAdd) {
+async function updateLaunchJson(workspaceFolder, configsToAdd, options = {}) {
   if (!Array.isArray(configsToAdd) || configsToAdd.length === 0) return '';
+  const removeTypes = new Set(
+    Array.isArray(options.removeTypes)
+      ? options.removeTypes.map((value) => String(value || '').toLowerCase()).filter((value) => value)
+      : []
+  );
+  const removeNames = new Set(
+    Array.isArray(options.removeNames)
+      ? options.removeNames.map((value) => String(value || '')).filter((value) => value)
+      : []
+  );
   let basePath = '';
   if (workspaceFolder && workspaceFolder.uri && workspaceFolder.uri.fsPath) {
     basePath = workspaceFolder.uri.fsPath;
@@ -1148,6 +1158,17 @@ async function updateLaunchJson(workspaceFolder, configsToAdd) {
   }
   if (!data || typeof data !== 'object') data = { version: '0.2.0', configurations: [] };
   if (!Array.isArray(data.configurations)) data.configurations = [];
+  if (removeTypes.size || removeNames.size) {
+    data.configurations = data.configurations.filter((cfg) => {
+      if (!cfg || typeof cfg !== 'object') return true;
+      if (removeNames.size && removeNames.has(cfg.name)) return false;
+      if (removeTypes.size) {
+        const cfgType = typeof cfg.type === 'string' ? cfg.type.toLowerCase() : '';
+        if (cfgType && removeTypes.has(cfgType)) return false;
+      }
+      return true;
+    });
+  }
   const names = new Set(configsToAdd.map((cfg) => cfg && cfg.name));
   data.configurations = data.configurations.filter((cfg) => !names.has(cfg && cfg.name));
   data.configurations.push(...configsToAdd.map((cfg) => JSON.parse(JSON.stringify(cfg))));
@@ -2163,13 +2184,19 @@ async function commandDebug(sketchDir, profileFromTree) {
       if (typeof value === 'string') return value.trim();
       return String(value).trim();
     };
-    const toOptionalBoolean = (value) => {
-      if (typeof value === 'boolean') return value;
-      if (typeof value === 'string') {
-        if (/^true$/i.test(value)) return true;
-        if (/^false$/i.test(value)) return false;
+    const stripTrailingContinue = (commands) => {
+      if (!commands.length) return commands;
+      const result = [...commands];
+      while (result.length) {
+        const raw = result[result.length - 1];
+        const normalized = String(raw).replace(/\s+/g, ' ').trim().toLowerCase();
+        if (normalized === 'c' || normalized === 'cont' || normalized === 'continue') {
+          result.pop();
+          continue;
+        }
+        break;
       }
-      return undefined;
+      return result;
     };
     const toolchainPath = String(props['debug.toolchain.path'] || '').trim();
     const toolchainPrefix = String(props['debug.toolchain.prefix'] || '').trim();
@@ -2178,48 +2205,43 @@ async function commandDebug(sketchDir, profileFromTree) {
     const derivedObjdumpPath = (normalizedToolchainPath && toolchainPrefix)
       ? path.join(normalizedToolchainPath, `${toolchainPrefix}-objdump${exeExt}`)
       : '';
-    const derivedNmPath = (normalizedToolchainPath && toolchainPrefix)
-      ? path.join(normalizedToolchainPath, `${toolchainPrefix}-nm${exeExt}`)
-      : '';
     const objdumpPathConfigured = toTrimmedString(cortexMerged.objdumpPath);
     delete cortexMerged.objdumpPath;
-    const nmPathConfigured = toTrimmedString(cortexMerged.nmPath);
-    delete cortexMerged.nmPath;
     const cortexName = toTrimmedString(cortexMerged.name);
     delete cortexMerged.name;
     const requestValue = toTrimmedString(cortexMerged.request);
     delete cortexMerged.request;
-    const runToMainOverride = toOptionalBoolean(cortexMerged.runToMain);
     delete cortexMerged.runToMain;
+    delete cortexMerged.nmPath;
     const serverArgs = toStringArray(cortexMerged.serverArgs);
     delete cortexMerged.serverArgs;
-    const overrideAttach = toStringArray(cortexMerged.overrideAttachCommands);
+    const overrideAttach = stripTrailingContinue(toStringArray(cortexMerged.overrideAttachCommands));
     delete cortexMerged.overrideAttachCommands;
-    const overrideLaunch = toStringArray(cortexMerged.overrideLaunchCommands);
+    const overrideLaunch = stripTrailingContinue(toStringArray(cortexMerged.overrideLaunchCommands));
     delete cortexMerged.overrideLaunchCommands;
-    const overrideRestart = toStringArray(cortexMerged.overrideRestartCommands);
+    const overrideRestart = stripTrailingContinue(toStringArray(cortexMerged.overrideRestartCommands));
     delete cortexMerged.overrideRestartCommands;
-    const overrideReset = toStringArray(cortexMerged.overrideResetCommands);
+    const overrideReset = stripTrailingContinue(toStringArray(cortexMerged.overrideResetCommands));
     delete cortexMerged.overrideResetCommands;
-    const overrideResume = toStringArray(cortexMerged.overrideResumeCommands);
+    const overrideResume = stripTrailingContinue(toStringArray(cortexMerged.overrideResumeCommands));
     delete cortexMerged.overrideResumeCommands;
-    const overrideRun = toStringArray(cortexMerged.overrideRunCommands);
+    const overrideRun = stripTrailingContinue(toStringArray(cortexMerged.overrideRunCommands));
     delete cortexMerged.overrideRunCommands;
-    const overrideDetach = toStringArray(cortexMerged.overrideDetachCommands);
+    const overrideDetach = stripTrailingContinue(toStringArray(cortexMerged.overrideDetachCommands));
     delete cortexMerged.overrideDetachCommands;
-    const postAttach = toStringArray(cortexMerged.postAttachCommands);
+    const postAttach = stripTrailingContinue(toStringArray(cortexMerged.postAttachCommands));
     delete cortexMerged.postAttachCommands;
-    const postLaunch = toStringArray(cortexMerged.postLaunchCommands);
+    const postLaunch = stripTrailingContinue(toStringArray(cortexMerged.postLaunchCommands));
     delete cortexMerged.postLaunchCommands;
-    const postRestart = toStringArray(cortexMerged.postRestartCommands);
+    const postRestart = stripTrailingContinue(toStringArray(cortexMerged.postRestartCommands));
     delete cortexMerged.postRestartCommands;
-    const postReset = toStringArray(cortexMerged.postResetCommands);
+    const postReset = stripTrailingContinue(toStringArray(cortexMerged.postResetCommands));
     delete cortexMerged.postResetCommands;
-    const postResume = toStringArray(cortexMerged.postResumeCommands);
+    const postResume = stripTrailingContinue(toStringArray(cortexMerged.postResumeCommands));
     delete cortexMerged.postResumeCommands;
-    const connectCommands = toStringArray(cortexMerged.connectCommands);
+    const connectCommands = stripTrailingContinue(toStringArray(cortexMerged.connectCommands));
     delete cortexMerged.connectCommands;
-    const launchCommands = toStringArray(cortexMerged.launchCommands);
+    const launchCommands = stripTrailingContinue(toStringArray(cortexMerged.launchCommands));
     delete cortexMerged.launchCommands;
 
     const buildPathRelative = resolvedBuildPath ? path.relative(targetDir, resolvedBuildPath) : '';
@@ -2228,7 +2250,6 @@ async function commandDebug(sketchDir, profileFromTree) {
       : '';
 
     const objdumpPathRaw = (objdumpPathConfigured || derivedObjdumpPath || '').trim();
-    const nmPathRaw = (nmPathConfigured || derivedNmPath || '').trim();
     const requestKind = requestValue.toLowerCase();
     const cortexRequest = requestKind === 'attach' ? 'attach' : (requestKind === 'launch' ? 'launch' : 'launch');
 
@@ -2326,8 +2347,7 @@ async function commandDebug(sketchDir, profileFromTree) {
       serverpath: openOcdLaunchPath,
       gdbPath: gdbLaunchPath,
       executable: executableLaunchPath,
-      cwd: cwdLaunchPath,
-      runToMain: runToMainOverride !== undefined ? runToMainOverride : false,
+      cwd: cwdLaunchPath
     };
     if (preLaunchTaskLabel) cortexConfig.preLaunchTask = preLaunchTaskLabel;
     if (configFilesNormalized.length) cortexConfig.configFiles = configFilesNormalized;
@@ -2349,7 +2369,6 @@ async function commandDebug(sketchDir, profileFromTree) {
     if (connectCommands.length) cortexConfig.connectCommands = connectCommands;
     if (launchCommands.length) cortexConfig.launchCommands = launchCommands;
     if (objdumpPathRaw) cortexConfig.objdumpPath = toPosixPath(path.normalize(objdumpPathRaw));
-    if (nmPathRaw) cortexConfig.nmPath = toPosixPath(path.normalize(nmPathRaw));
 
     const cortexBlockedKeys = new Set([
       'type', 'servertype', 'serverpath', 'gdbPath', 'executable', 'cwd',
@@ -2393,32 +2412,47 @@ async function commandDebug(sketchDir, profileFromTree) {
       filterStderr: true,
       stopAtEntry: false,
       externalConsole: false,
-      launchCompleteCommand: 'None',
+      launchCompleteCommand: 'exec-continue',
       setupCommands: []
     };
     if (preLaunchTaskLabel) cppdbgConfig.preLaunchTask = preLaunchTaskLabel;
     const cppdbgCommands = [];
     const combinedPrimary = [...overrideAttach, ...overrideLaunch];
     const combinedSecondary = [...postAttach, ...postLaunch];
-    const hasRemoteCommand = combinedPrimary.some((cmd) => /target\s+remote/i.test(cmd))
-      || combinedSecondary.some((cmd) => /target\s+remote/i.test(cmd));
-    if (!hasRemoteCommand) cppdbgCommands.push({ text: 'target remote localhost:3333' });
-    if (combinedPrimary.length) cppdbgCommands.push(...combinedPrimary.map((cmd) => ({ text: cmd })));
-    if (combinedSecondary.length) cppdbgCommands.push(...combinedSecondary.map((cmd) => ({ text: cmd })));
+    const isRemoteConnect = (cmd) => {
+      const normalized = String(cmd || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (!normalized.startsWith('target ')) return false;
+      return /\b(?:extended-)?remote\b/.test(normalized);
+    };
+    const appendSanitizedCommands = (source) => {
+      for (const cmd of source) {
+        const trimmed = String(cmd || '').trim();
+        if (!trimmed) continue;
+        if (isRemoteConnect(trimmed)) continue;
+        cppdbgCommands.push({ text: trimmed });
+      }
+    };
+    appendSanitizedCommands(combinedPrimary);
+    appendSanitizedCommands(combinedSecondary);
     if (!cppdbgCommands.length) {
-      cppdbgCommands.push({ text: 'target remote localhost:3333' });
-      cppdbgCommands.push({ text: 'monitor reset halt' });
-      cppdbgCommands.push({ text: 'monitor gdb_sync' });
+      cppdbgCommands.push({ text: 'thb setup' });
     }
-    cppdbgConfig.setupCommands = cppdbgCommands;
 
-    const configsForFile = [cortexConfig, cppdbgConfig];
-    const launchPath = await updateLaunchJson(workspaceFolder, configsForFile);
+    const hasBreakpointCommand = cppdbgCommands.some((entry) => {
+      const normalized = String(entry.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      return /\b(?:thb|tb|tbreak|hbreak|break\b)/.test(normalized);
+    });
+    cppdbgConfig.setupCommands = cppdbgCommands;
+    cppdbgConfig.launchCompleteCommand = hasBreakpointCommand ? 'exec-continue' : 'None';
+
+    const hasCortex = !!vscode.extensions.getExtension('marus25.cortex-debug');
+    const configsForFile = hasCortex ? [cortexConfig, cppdbgConfig] : [cppdbgConfig];
+    const launchOptions = hasCortex ? undefined : { removeTypes: ['cortex-debug'] };
+    const launchPath = await updateLaunchJson(workspaceFolder, configsForFile, launchOptions);
     if (launchPath) {
       channel.appendLine(t('debugLaunchUpdated', { path: launchPath }));
     }
 
-    const hasCortex = !!vscode.extensions.getExtension('marus25.cortex-debug');
     const configToStart = hasCortex ? cortexConfig : cppdbgConfig;
     channel.appendLine(t('debugLaunchStart', { name: configToStart.name }));
     const started = await vscode.debug.startDebugging(workspaceFolder, configToStart);

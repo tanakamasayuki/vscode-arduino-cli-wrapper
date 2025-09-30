@@ -40,7 +40,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 
 #### デバッグ手順（ステップバイステップ）
 
-1. **`debug_config` を含むプロファイルを用意する。** Arduino IDE 2.x なら同じスケッチ/プロファイルを開き、**Sketch ▶️ Export Compiled Binary with Debug Symbols** を実行すると `.vscode/arduino.json` に `debug_config` が出力されます。そのブロックを `sketch.yaml` にコピーすれば、この拡張機能が OpenOCD や GDB のパス、SVD、`request` 種別などを読み取れるようになります。
+1. **プロファイルと環境を決める。** `sketch.yaml` でデバッグしたいプロファイルを既定にするか、コマンド実行時に選択できるようにしておきます。必要であればシリアルポートやローカルビルドパス設定も合わせて確認しておくとスムーズです。
 2. **「Arduino CLI: Debug Sketch」を実行する。** 対象スケッチとプロファイルを選ぶと `.vscode/` 配下に 2 つの成果物が生成されます。
   - `tasks.json` には **Arduino: Debug Build & Upload …** タスクが追加され、デバッガを接続したままファームを書き込めます。ローカルビルドパス設定やプロファイル固有の CLI 引数も反映されます。
   - `launch.json` には Cortex-Debug 用の構成（拡張機能が入っている場合）と Microsoft C/C++ 用のフォールバックが追加されます。どちらも `debug_config` の OpenOCD / GDB 設定を再利用し、cppdbg 側は常に `"request": "launch"` となるため、従来の「アタッチするプロセスを選択」ダイアログは表示されません。
@@ -49,6 +49,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 5. **必要に応じてカスタマイズする。** 生成された `launch.json` は自由に編集できます（例: `overrideAttachCommands` の追加、semihosting コマンド、別の SVD への差し替えなど）。次回再生成するときも極力マージされます。ツールチェーンを差し替える場合は `debug_config` 側のパスを更新しておくと、以降の生成が新しい値を拾います。
 
 ヒント:
+- Arduino IDE 2.x で **Sketch ▶️ Export Compiled Binary with Debug Symbols** を実行すると `.vscode/arduino.json` に `debug_config` ブロックが生成されます。これを `sketch.yaml` にコピーすると OpenOCD や GDB のパス、SVD、`override*` コマンドなどを取り込めるため、ボード固有の設定を VS Code へ確実に反映できます。
 - デバッグビルド実行中は Arduino Logs 端末が前面に来るので、OpenOCD のログをリアルタイムに追えます。
 - プローブをつないだまま **Compile Sketch** や **Upload Sketch** を使っても問題ありません。同じビルドパスが共有されるため、`launch.json` に記載された ELF と直近の書き込み内容がずれることはありません。
 
