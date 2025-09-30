@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.4.2
 - (EN) Added a Local Build Path setting that pins Arduino CLI build artifacts to `.build/<profile>` under each sketch and automatically appends `--build-path` to compile-related commands.
 - (JA) スケッチ直下の `.build/<プロファイル>` にビルド成果物を保存するローカルビルドパス設定を追加し、コンパイル系コマンドへ自動的に `--build-path` を付与するようにしました。
 - (EN) Workspace scanners now skip `.build` directories so generated artifacts stay out of pickers, reports, and example listings.
@@ -13,7 +15,6 @@
 - (JA) インスペクター実行中の Arduino CLI 出力を Arduino Logs チャンネルへ転送し、失敗時メッセージにも内容を含めることで `exit 1` などの原因を特定しやすくしました。
 
 ## 1.4.1
-
 - (EN) Updated sketch picker to ignore `.ino` files located inside hidden directories so workspace scans stay focused on visible sketches.
 - (JA) 隠しディレクトリ配下の `.ino` ファイルをスケッチ選択から除外し、ワークスペース検索が見えるスケッチに限定されるようにしました。
 
@@ -64,7 +65,6 @@
 - (JA) Sketch.yaml ヘルパーでの反映後に整形を行い、プロファイル内の空行を除去しつつプロファイル間とトップレベルとの区切りを統一しました。
 
 ## 1.3.6
-
 - (EN) Added Build Check to the root of the Arduino CLI view for quick access.
 - (JA) Arduino CLI ビューのルートにビルドチェックを追加し、すばやく実行できるようにしました。
 - (EN) Localized Arduino CLI tree tooltips so hover text follows the locale while the visible labels stay in English.
