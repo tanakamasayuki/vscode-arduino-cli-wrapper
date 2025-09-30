@@ -7,6 +7,10 @@
 - (JA) `.build` ディレクトリをスキャン対象から除外し、生成物が選択肢やレポート、サンプル一覧に混ざらないようにしました。
 - (EN) Inspector analysis now respects the Local Build Path setting so its temporary outputs live under `.build/<profile>` alongside other commands.
 - (JA) インスペクター分析でもローカルビルドパス設定を反映し、他のコマンドと同様に `.build/<プロファイル>` 配下で一時ファイルを扱うようにしました。
+- (EN) Inspector now renders `partitions.csv` as a structured table (with decimal sizes), shows the raw text for both `partitions.csv` and `sdkconfig`, and loads them automatically without extra clicks.
+- (JA) インスペクターで `partitions.csv` をテーブル＋原文で表示し（サイズ欄に 10 進数を併記）、`sdkconfig` も含めて自動で開かれるようにしました。
+- (EN) Inspector streams Arduino CLI output to the Arduino Logs channel and includes the captured text when analysis fails, making debugging `exit 1` errors easier.
+- (JA) インスペクター実行中の Arduino CLI 出力を Arduino Logs チャンネルへ転送し、失敗時メッセージにも内容を含めることで `exit 1` などの原因を特定しやすくしました。
 
 ## 1.4.1
 

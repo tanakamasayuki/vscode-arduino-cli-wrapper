@@ -4816,13 +4816,17 @@ async function commandOpenInspector(ctx) {
           }
           try {
             const content = await readTextFile(vscode.Uri.file(info.path));
-            panel.webview.postMessage({
+            const payload = {
               type: 'fileContent',
               key,
               content,
               path: info.path,
               size: info.size || content.length
-            });
+            };
+            if (key === 'partitions') {
+              payload.partitions = parsePartitionsCsvText(content);
+            }
+            panel.webview.postMessage(payload);
           } catch (err) {
             const detail = err && err.message ? err.message : String(err);
             panel.webview.postMessage({ type: 'fileContent', key, error: `${t('inspectorFileLoadError', { name: key })} ${detail}`.trim() });
@@ -6004,14 +6008,23 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   let stderr = '';
   const code = await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
-    child.stdout.on('data', (d) => { stdout += d.toString(); });
-    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.stdout.on('data', (d) => {
+      const text = d.toString();
+      stdout += text;
+      channel.append(text);
+    });
+    child.stderr.on('data', (d) => {
+      const text = d.toString();
+      stderr += text;
+      channel.append(text);
+    });
     child.on('error', reject);
     child.on('close', resolve);
   });
   const parsed = parseBuildCheckJson(stdout);
   if (!parsed.data) {
-    const detail = parsed.error || (stderr && stderr.trim()) || `exit ${code}`;
+    const fallback = stderr && stderr.trim() ? stderr.trim() : (stdout && stdout.trim() ? stdout.trim() : '');
+    const detail = parsed.error || fallback || `exit ${code}`;
     throw new Error(t('inspectorAnalysisFailed', { msg: detail }));
   }
   const data = parsed.data;
@@ -6138,6 +6151,79 @@ async function gatherInspectorFiles(buildPath, mapPath) {
     } catch (_) { }
   }
   return { private: privateMap, public: publicMap };
+}
+
+function parsePartitionsCsvText(text) {
+  const result = {
+    headers: ['Name', 'Type', 'SubType', 'Offset', 'Size', 'Flags'],
+    rows: []
+  };
+  if (!text) return result;
+  const lines = String(text || '').split(/\r?\n/);
+  for (const rawLine of lines) {
+    if (!rawLine) continue;
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('#')) {
+      const headerLine = trimmed.replace(/^#+\s*/, '').trim();
+      if (headerLine) {
+        const headerParts = headerLine.split(',').map((part) => part.trim()).filter(Boolean);
+        if (headerParts.length >= 3) {
+          result.headers = headerParts;
+        }
+      }
+      continue;
+    }
+    const parts = rawLine.split(',').map((part) => part.trim());
+    if (!parts.length) continue;
+    while (parts.length < 6) parts.push('');
+    const [name = '', type = '', subType = '', offsetRaw = '', sizeRaw = ''] = parts;
+    const remaining = parts.slice(5).filter((value) => value && value.length > 0);
+    const flags = remaining.join(', ');
+    const offsetInfo = parsePartitionNumeric(offsetRaw);
+    const sizeInfo = parsePartitionNumeric(sizeRaw);
+    result.rows.push({
+      name,
+      type,
+      subType,
+      offsetRaw,
+      offsetHex: offsetInfo.hex,
+      offsetDec: offsetInfo.dec,
+      sizeRaw,
+      sizeHex: sizeInfo.hex,
+      sizeDec: sizeInfo.dec,
+      flags
+    });
+  }
+  return result;
+}
+
+function parsePartitionNumeric(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return { raw: '', hex: '', dec: null };
+  }
+  let dec = Number.NaN;
+  if (/^0x[0-9a-f]+$/i.test(raw)) {
+    dec = Number.parseInt(raw, 16);
+  } else if (/^[+-]?\d+$/.test(raw)) {
+    dec = Number.parseInt(raw, 10);
+  } else {
+    const hexMatch = raw.match(/0x[0-9a-f]+/i);
+    if (hexMatch) {
+      dec = Number.parseInt(hexMatch[0], 16);
+    } else {
+      const decMatch = raw.match(/[+-]?\d+/);
+      if (decMatch) {
+        dec = Number.parseInt(decMatch[0], 10);
+      }
+    }
+  }
+  if (!Number.isFinite(dec)) {
+    return { raw, hex: raw, dec: null };
+  }
+  const hex = `0x${dec.toString(16).toUpperCase()}`;
+  return { raw, hex, dec };
 }
 
 async function analyzeInspectorMap(buildPath, sketchDir) {

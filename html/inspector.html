@@ -172,6 +172,21 @@
       padding: 8px;
     }
 
+    .file-table {
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+
+    .file-table.hidden {
+      display: none;
+    }
+
+    .dim-note {
+      opacity: 0.7;
+      font-size: 0.85em;
+      margin-left: 4px;
+    }
+
     .diag-link {
       background: none;
       border: none;
@@ -504,23 +519,81 @@
         }
         const rows = entries.map(([key, info]) => {
           const label = key === 'partitions' ? 'partitions.csv' : key === 'sdkconfig' ? 'sdkconfig' : key;
-          const viewBtn = key === 'map' ? `<button data-file="${key}" data-action="open">${state.strings.inspectorOpenInEditor || 'Open in Editor'}</button>` : `<button data-file="${key}" data-action="load">${state.strings.open || 'Open'}</button>`;
-          return `<div class="file-actions"><span class="mono">${label}</span><span class="mono">${(info.size || 0).toLocaleString()} bytes</span>${viewBtn}</div><pre id="file-${key}" class="file-content hidden"></pre>`;
+          let actions = '';
+          if (key === 'map') {
+            actions = `<button data-file="${key}" data-action="open">${state.strings.inspectorOpenInEditor || 'Open in Editor'}</button>`;
+          } else if (key === 'partitions' || key === 'sdkconfig') {
+            actions = '';
+          } else {
+            actions = `<button data-file="${key}" data-action="load">${state.strings.open || 'Open'}</button>`;
+          }
+          const tablePlaceholder = key === 'partitions' ? `<div id="table-${key}" class="file-table hidden"></div>` : '';
+          const preClasses = (key === 'partitions' || key === 'sdkconfig') ? 'file-content' : 'file-content hidden';
+          const prePlaceholder = (key === 'partitions' || key === 'sdkconfig') ? (state.strings.inspectorStatusPreparing || 'Loading...') : '';
+          return `<div class="file-actions"><span class="mono">${label}</span><span class="mono">${(info.size || 0).toLocaleString()} bytes</span>${actions}</div>${tablePlaceholder}<pre id="file-${key}" class="${preClasses}">${prePlaceholder}</pre>`;
         }).join('');
         filesContent.innerHTML = rows;
+        const autoLoadKeys = [];
+        if (entries.some(([key]) => key === 'partitions')) autoLoadKeys.push('partitions');
+        if (entries.some(([key]) => key === 'sdkconfig')) autoLoadKeys.push('sdkconfig');
+        for (const fileKey of autoLoadKeys) {
+          vscode.postMessage({ type: 'requestFile', key: fileKey });
+        }
       }
 
       function handleFileContent(message) {
         const key = message.key;
         const pre = document.getElementById(`file-${key}`);
         if (!pre) return;
+        const tableEl = document.getElementById(`table-${key}`);
         if (message.error) {
+          if (tableEl) {
+            tableEl.innerHTML = '';
+            tableEl.classList.add('hidden');
+          }
           pre.textContent = message.error;
+          pre.classList.remove('hidden');
+          return;
+        }
+        if (key === 'partitions' && tableEl) {
+          pre.textContent = message.content || '';
+          const tableHtml = renderPartitionsTable(message.partitions);
+          if (tableHtml) {
+            tableEl.innerHTML = tableHtml;
+            tableEl.classList.remove('hidden');
+          } else {
+            tableEl.innerHTML = '';
+            tableEl.classList.add('hidden');
+          }
           pre.classList.remove('hidden');
           return;
         }
         pre.textContent = message.content || '';
         pre.classList.remove('hidden');
+      }
+
+      function renderPartitionsTable(data) {
+        if (!data || !Array.isArray(data.rows) || !data.rows.length) {
+          return `<p>${state.strings.inspectorTableNoData || 'No data'}</p>`;
+        }
+        const fallbackHeaders = ['Name', 'Type', 'SubType', 'Offset', 'Size', 'Flags'];
+        const headers = Array.isArray(data.headers) && data.headers.length >= 3 ? data.headers : fallbackHeaders;
+        const headerCells = fallbackHeaders.map((label, idx) => `<th>${escapeHtml(headers[idx] || label)}</th>`).join('');
+        const rows = data.rows.map((row) => {
+          const offsetCell = formatHexDecCell(row.offsetHex, row.offsetDec, row.offsetRaw);
+          const sizeCell = formatHexDecCell(row.sizeHex, row.sizeDec, row.sizeRaw);
+          return `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.type)}</td><td>${escapeHtml(row.subType)}</td><td class="mono">${offsetCell}</td><td class="mono">${sizeCell}</td><td>${escapeHtml(row.flags)}</td></tr>`;
+        }).join('');
+        return `<table><thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
+      }
+
+      function formatHexDecCell(hexValue, decValue, rawValue) {
+        const primary = hexValue || rawValue || '';
+        if (typeof decValue === 'number' && Number.isFinite(decValue)) {
+          const localeDec = decValue.toLocaleString();
+          return `${escapeHtml(primary)}<span class="dim-note">(${localeDec})</span>`;
+        }
+        return escapeHtml(primary);
       }
 
       function escapeHtml(text) {
