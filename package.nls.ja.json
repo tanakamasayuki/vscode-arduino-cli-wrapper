@@ -11,6 +11,7 @@
   "cmd.compile": "Arduino CLI: スケッチをビルド",
   "cmd.cleanCompile": "Arduino CLI: クリーンビルド",
   "cmd.upload": "Arduino CLI: スケッチをアップロード",
+  "cmd.debug": "Arduino CLI: デバッグを開始",
   "cmd.monitor": "Arduino CLI: シリアルモニター",
   "cmd.versionCheck": "Arduino CLI: sketch.yaml バージョン確認",
   "cmd.refreshView": "Arduino CLI: ビューを更新",

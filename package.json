@@ -19,6 +19,10 @@
     "Other"
   ],
   "main": "./extension.js",
+  "extensionPack": [
+    "marus25.cortex-debug",
+    "ms-vscode.cpptools"
+  ],
   "activationEvents": [
     "onStartupFinished",
     "workspaceContains:**/*.ino"
@@ -105,6 +109,10 @@
       {
         "command": "arduino-cli.upload",
         "title": "%cmd.upload%"
+      },
+      {
+        "command": "arduino-cli.debug",
+        "title": "%cmd.debug%"
       },
       {
         "command": "arduino-cli.monitor",

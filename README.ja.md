@@ -35,6 +35,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - **Upload Sketch** – コンパイルしてそのまま書き込みます。ポートが未設定ならその場で選択でき、必要に応じてシリアルモニタを自動で閉じたり再オープンしたりします。
 - **Upload Data (ESP32)** – `data/` フォルダーを探して LittleFS/SPIFFS のイメージを作成し、ESP32 の SPIFFS パーティションに書き込みます。Web アセットや設定ファイルを同梱したい場合に活躍します。
 - **Build Check** – `sketch.yaml` に定義したすべてのプロファイルを `--warnings all` でビルドし、警告とエラーの集計結果を表示します。リグレッションチェックに最適です。
+- **Debug Sketch** – プロファイルごとの `debug_config` を取り込み、Cortex-Debug があれば `cortex-debug` を起動し、ない場合は Microsoft C/C++ デバッガーにフォールバックします。その際は `request: "launch"` を自動指定するため、「アタッチするプロセスを選択してください」というダイアログはもう表示されません。
 - **wokwi で実行** – プロファイルに `wokwi: true` を設定すると、ビルド時に `.wokwi/<profile>/wokwi.elf` を出力し、ボードに合わせた初期値で `diagram.json` / `wokwi.toml` を補完したうえで、エクスプローラーに「wokwiで実行」アクションが現れ、公式 Wokwi 拡張機能で図面を開けます。
 
 ### スケッチ管理をラクにするツール

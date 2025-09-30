@@ -258,6 +258,7 @@ const MSG = {
     treeUpload: 'Upload',
     treeUploadData: 'Upload Data',
     treeMonitor: 'Monitor',
+    treeDebug: 'Debug',
     treeHelper: 'Sketch.yaml Helper',
     treeExamples: 'Open Examples',
     treeInspect: 'Inspect',
@@ -276,6 +277,15 @@ const MSG = {
     treeNewSketch: 'New Sketch',
     treeRunCommand: 'Run Command',
     treeProfile: 'Profile: {profile}',
+    debugStart: 'Preparing debug session for {sketch} ({profile})…',
+    debugStartNoProfile: 'Preparing debug session for {sketch}…',
+    debugCompileFailed: 'Debug build failed: {msg}',
+    debugMissingGdb: 'Failed to locate GDB executable (prefix: {prefix}).',
+    debugMissingOpenOcd: 'Failed to locate OpenOCD executable.',
+    debugTasksUpdated: 'Updated debug tasks in {path}.',
+    debugLaunchUpdated: 'Updated debug configurations in {path}.',
+    debugLaunchStart: 'Starting debug configuration: {name}',
+    debugLaunchFailed: 'Failed to start debug session: {msg}',
     versionCheckStart: '[version-check] Scanning sketch.yaml files…',
     versionCheckNoWorkspace: '[version-check] No workspace folder is open.',
     versionCheckNoSketchYaml: '[version-check] No sketch.yaml files found.',
@@ -560,6 +570,7 @@ const MSG = {
     treeUpload: '書き込み',
     treeUploadData: 'データ書き込み',
     treeMonitor: 'シリアルモニター',
+    treeDebug: 'デバッグ',
     treeHelper: 'Sketch.yaml ヘルパー',
     treeExamples: 'サンプルを開く',
     treeInspect: 'インスペクト',
@@ -578,6 +589,15 @@ const MSG = {
     treeNewSketch: '新しいスケッチ',
     treeRunCommand: 'コマンドを実行',
     treeProfile: 'プロファイル: {profile}',
+    debugStart: 'デバッグを準備中: {sketch}（{profile}）…',
+    debugStartNoProfile: 'デバッグを準備中: {sketch}…',
+    debugCompileFailed: 'デバッグ用ビルドに失敗しました: {msg}',
+    debugMissingGdb: 'デバッグ用 GDB を特定できませんでした（プレフィックス: {prefix}）。',
+    debugMissingOpenOcd: 'OpenOCD のパスを特定できませんでした。',
+    debugTasksUpdated: 'tasks.json を更新しました: {path}',
+    debugLaunchUpdated: 'launch.json を更新しました: {path}',
+    debugLaunchStart: 'デバッグ構成を起動します: {name}',
+    debugLaunchFailed: 'デバッグ構成の起動に失敗しました: {msg}',
     versionCheckStart: '[version-check] sketch.yaml を走査してバージョン情報を収集しています…',
     versionCheckNoWorkspace: '[version-check] ワークスペースフォルダーが開かれていません。',
     versionCheckNoSketchYaml: '[version-check] sketch.yaml が見つかりませんでした。',
@@ -846,6 +866,294 @@ async function ensureLocalBuildPath(sketchDir, profileName, fqbn) {
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(target));
   } catch (_) { /* ignore directory creation errors */ }
   return target;
+}
+
+async function ensureDebugBuildPath(sketchDir, profileName, fqbn) {
+  if (!sketchDir) return '';
+  const sketchBase = sanitizeProfileFolderName(path.basename(sketchDir) || 'sketch');
+  const profileLabel = sanitizeProfileFolderName(profileName || fqbn || 'default');
+  const folderName = `${sketchBase}-${profileLabel}-debug`;
+  const target = path.join(sketchDir, BUILD_DIR_NAME, folderName);
+  try {
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(target));
+  } catch (_) { /* ignore directory creation errors */ }
+  return target;
+}
+
+function parseCliProperties(text) {
+  const output = Object.create(null);
+  if (!text) return output;
+  const lines = String(text).split(/\r?\n/);
+  for (const raw of lines) {
+    if (!raw) continue;
+    const idx = raw.indexOf('=');
+    if (idx <= 0) continue;
+    const key = raw.slice(0, idx).trim();
+    if (!key) continue;
+    const value = raw.slice(idx + 1).trim();
+    output[key] = value;
+  }
+  return output;
+}
+
+function extractIndexedValues(props, prefix) {
+  if (!props || typeof props !== 'object') return [];
+  const values = [];
+  const prefixWithDot = `${prefix}.`;
+  for (const key of Object.keys(props)) {
+    if (key === prefix) {
+      values.push(props[key]);
+      continue;
+    }
+    if (!key.startsWith(prefixWithDot)) continue;
+    const suffix = key.slice(prefixWithDot.length);
+    const index = Number.parseInt(suffix, 10);
+    if (Number.isFinite(index)) {
+      values[index] = props[key];
+    } else {
+      values.push(props[key]);
+    }
+  }
+  return values.filter((v) => typeof v === 'string' && v.trim());
+}
+
+function resolveOpenOcdExecutable(props) {
+  if (!props || typeof props !== 'object') return '';
+  const explicit = String(props['debug.server.openocd.path'] || '').trim();
+  if (explicit) return explicit;
+  const bases = [];
+  for (const key of Object.keys(props)) {
+    if (!key.startsWith('runtime.tools.')) continue;
+    if (!key.endsWith('.path')) continue;
+    if (!key.toLowerCase().includes('openocd')) continue;
+    const value = String(props[key] || '').trim();
+    if (value) bases.push(value);
+  }
+  for (const base of bases) {
+    const normalized = base.replace(/[\\/]+$/, '');
+    const candidate = path.join(normalized, 'bin', process.platform === 'win32' ? 'openocd.exe' : 'openocd');
+    if (candidate) return candidate;
+  }
+  return '';
+}
+
+function resolveGdbExecutable(props) {
+  if (!props || typeof props !== 'object') return '';
+  const direct = String(props['debug.toolchain.gdb'] || '').trim();
+  if (direct) return direct;
+  const base = String(props['debug.toolchain.path'] || '').trim();
+  if (!base) return '';
+  let exeName = String(props['debug.toolchain.gdbExecutable'] || '').trim();
+  if (!exeName) {
+    const prefix = String(props['debug.toolchain.prefix'] || '').trim();
+    exeName = prefix ? `${prefix}-gdb` : 'gdb';
+  }
+  const normalizedBase = base.replace(/[\\/]+$/, '');
+  let full = path.join(normalizedBase, exeName);
+  if (process.platform === 'win32' && !full.toLowerCase().endsWith('.exe')) {
+    full += '.exe';
+  }
+  return full;
+}
+
+const CORTEX_DEBUG_ARRAY_FIELDS = new Set([
+  'overrideAttachCommands',
+  'overrideLaunchCommands',
+  'overrideRestartCommands',
+  'overrideResetCommands',
+  'overrideResumeCommands',
+  'overrideRunCommands',
+  'overrideDetachCommands',
+  'postAttachCommands',
+  'postLaunchCommands',
+  'postRestartCommands',
+  'postResetCommands',
+  'postResumeCommands',
+  'serverArgs',
+  'connectCommands',
+  'launchCommands'
+]);
+
+function normalizeCortexDebugValue(value) {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    if (/^(true|false)$/i.test(trimmed)) return trimmed.toLowerCase() === 'true';
+    return trimmed;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => normalizeCortexDebugValue(entry))
+      .filter((entry) => entry !== undefined && entry !== '');
+  }
+  return value;
+}
+
+function setNestedCortexValue(target, parts, value) {
+  if (!target || typeof target !== 'object' || !Array.isArray(parts) || parts.length === 0) return;
+  let cursor = target;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const key = parts[i];
+    if (!key) continue;
+    if (!cursor[key] || typeof cursor[key] !== 'object' || Array.isArray(cursor[key])) {
+      cursor[key] = {};
+    }
+    cursor = cursor[key];
+  }
+  const lastKey = parts[parts.length - 1];
+  if (lastKey) cursor[lastKey] = value;
+}
+
+function extractCortexDebugEntries(props, prefix) {
+  const result = {};
+  if (!props || typeof props !== 'object') return result;
+  for (const propKey of Object.keys(props)) {
+    if (!propKey.startsWith(prefix)) continue;
+    const remainder = propKey.slice(prefix.length);
+    if (!remainder) continue;
+    const parts = remainder.split('.').filter((part) => part !== '');
+    if (parts.length === 0) continue;
+    const field = parts.shift();
+    if (!field) continue;
+    const rawValue = props[propKey];
+    const normalized = normalizeCortexDebugValue(rawValue);
+    if (normalized === undefined || normalized === '') continue;
+    if (CORTEX_DEBUG_ARRAY_FIELDS.has(field)) {
+      const arr = Array.isArray(result[field]) ? result[field] : [];
+      if (parts.length && /^\d+$/.test(parts[0])) {
+        const index = Number.parseInt(parts.shift(), 10);
+        if (Number.isFinite(index)) arr[index] = normalized;
+      } else if (Array.isArray(normalized)) {
+        arr.push(...normalized);
+      } else {
+        arr.push(normalized);
+      }
+      result[field] = arr.filter((entry) => entry !== undefined && entry !== '');
+      continue;
+    }
+    if (parts.length > 0) {
+      if (!result[field] || typeof result[field] !== 'object' || Array.isArray(result[field])) {
+        result[field] = {};
+      }
+      setNestedCortexValue(result[field], parts, normalized);
+      continue;
+    }
+    result[field] = normalized;
+  }
+  return result;
+}
+
+function extractCortexDebugGlobal(props) {
+  return extractCortexDebugEntries(props, 'debug.cortex-debug.custom.');
+}
+
+function extractCortexDebugCustom(props, candidates) {
+  if (!props || typeof props !== 'object') return null;
+  for (const rawKey of candidates) {
+    if (!rawKey) continue;
+    const key = rawKey.trim();
+    if (!key) continue;
+    const prefix = `debug_config.${key}.cortex-debug.custom.`;
+    const result = extractCortexDebugEntries(props, prefix);
+    if (Object.keys(result).length > 0) return result;
+  }
+  return null;
+}
+
+function toPosixPath(p) {
+  if (!p) return '';
+  return String(p).replace(/\\/g, '/');
+}
+
+function toLaunchPath(workspaceFolder, absolutePath) {
+  if (!absolutePath) return '';
+  const normalized = path.normalize(absolutePath);
+  if (workspaceFolder && workspaceFolder.uri && workspaceFolder.uri.fsPath) {
+    try {
+      const rel = path.relative(workspaceFolder.uri.fsPath, normalized);
+      if (!rel) {
+        return '${workspaceFolder}';
+      }
+      if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+        const posixRel = rel.split(path.sep).join('/');
+        return `${'${workspaceFolder}'}/${posixRel}`;
+      }
+    } catch (_) { }
+  }
+  return toPosixPath(normalized);
+}
+
+function quoteForTaskCommand(exe) {
+  if (!exe) return exe;
+  const s = String(exe);
+  if (s.startsWith('"') && s.endsWith('"')) return s;
+  if (/\s/.test(s)) return `"${s}"`;
+  return s;
+}
+
+async function updateTasksJson(workspaceFolder, tasksToAdd) {
+  if (!Array.isArray(tasksToAdd) || tasksToAdd.length === 0) return '';
+  let basePath = '';
+  if (workspaceFolder && workspaceFolder.uri && workspaceFolder.uri.fsPath) {
+    basePath = workspaceFolder.uri.fsPath;
+  } else if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+    basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+  }
+  if (!basePath) throw new Error('Workspace folder not available for tasks.json');
+  const vscodeDir = path.join(basePath, '.vscode');
+  try { await vscode.workspace.fs.createDirectory(vscode.Uri.file(vscodeDir)); } catch (_) { }
+  const tasksUri = vscode.Uri.file(path.join(vscodeDir, 'tasks.json'));
+  let data = { version: '2.0.0', tasks: [] };
+  if (await pathExists(tasksUri)) {
+    try {
+      const text = await readTextFile(tasksUri);
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') data = parsed;
+    } catch (err) {
+      getOutput().appendLine(`[warn] Failed to parse tasks.json: ${err.message}`);
+    }
+  }
+  if (!data || typeof data !== 'object') data = { version: '2.0.0', tasks: [] };
+  if (!Array.isArray(data.tasks)) data.tasks = [];
+  const existingLabels = new Set(tasksToAdd.map((task) => task && task.label));
+  data.tasks = data.tasks.filter((task) => !existingLabels.has(task && task.label));
+  data.tasks.push(...tasksToAdd.map((task) => JSON.parse(JSON.stringify(task))));
+  if (!data.version) data.version = '2.0.0';
+  await writeTextFile(tasksUri, JSON.stringify(data, null, 2) + '\n');
+  return tasksUri.fsPath;
+}
+
+async function updateLaunchJson(workspaceFolder, configsToAdd) {
+  if (!Array.isArray(configsToAdd) || configsToAdd.length === 0) return '';
+  let basePath = '';
+  if (workspaceFolder && workspaceFolder.uri && workspaceFolder.uri.fsPath) {
+    basePath = workspaceFolder.uri.fsPath;
+  } else if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+    basePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+  }
+  if (!basePath) throw new Error('Workspace folder not available for launch.json');
+  const vscodeDir = path.join(basePath, '.vscode');
+  try { await vscode.workspace.fs.createDirectory(vscode.Uri.file(vscodeDir)); } catch (_) { }
+  const launchUri = vscode.Uri.file(path.join(vscodeDir, 'launch.json'));
+  let data = { version: '0.2.0', configurations: [] };
+  if (await pathExists(launchUri)) {
+    try {
+      const text = await readTextFile(launchUri);
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') data = parsed;
+    } catch (err) {
+      getOutput().appendLine(`[warn] Failed to parse launch.json: ${err.message}`);
+    }
+  }
+  if (!data || typeof data !== 'object') data = { version: '0.2.0', configurations: [] };
+  if (!Array.isArray(data.configurations)) data.configurations = [];
+  const names = new Set(configsToAdd.map((cfg) => cfg && cfg.name));
+  data.configurations = data.configurations.filter((cfg) => !names.has(cfg && cfg.name));
+  data.configurations.push(...configsToAdd.map((cfg) => JSON.parse(JSON.stringify(cfg))));
+  if (!data.version) data.version = '0.2.0';
+  await writeTextFile(launchUri, JSON.stringify(data, null, 2) + '\n');
+  return launchUri.fsPath;
 }
 
 
@@ -1684,6 +1992,444 @@ async function commandUpload() {
   }
 }
 
+async function commandDebug(sketchDir, profileFromTree) {
+  try {
+    if (!(await ensureCliReady())) return;
+    let targetDir = sketchDir;
+    if (!targetDir) {
+      const ino = await pickInoFromWorkspace();
+      if (!ino) return;
+      targetDir = path.dirname(ino);
+    }
+    const channel = getOutput();
+    const targetUri = vscode.Uri.file(targetDir);
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri)
+      || (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+        ? vscode.workspace.workspaceFolders[0]
+        : undefined);
+
+    const yamlInfo = await readSketchYamlInfo(targetDir);
+    let selectedProfile = '';
+    if (yamlInfo && Array.isArray(yamlInfo.profiles) && yamlInfo.profiles.length > 0) {
+      if (profileFromTree && yamlInfo.profiles.includes(profileFromTree)) {
+        selectedProfile = profileFromTree;
+      } else {
+        const resolved = await resolveProfileName(yamlInfo);
+        if (!resolved) return;
+        selectedProfile = resolved;
+      }
+    }
+
+    let usedFqbn = '';
+    if (selectedProfile) {
+      usedFqbn = await getFqbnFromSketchYaml(targetDir, selectedProfile);
+    }
+    if (!usedFqbn) {
+      usedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+      if (!usedFqbn) {
+        const set = await commandSetFqbn(true);
+        if (!set) return;
+        usedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
+      }
+    }
+
+    let port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+    if (!port) {
+      const set = await commandSetPort(true);
+      if (!set) return;
+      port = extContext.workspaceState.get(STATE_PORT, '') || '';
+    }
+
+    const sketchName = path.basename(targetDir) || 'sketch';
+    const displayProfile = selectedProfile || usedFqbn || 'default';
+    channel.show();
+    if (selectedProfile) {
+      channel.appendLine(t('debugStart', { sketch: sketchName, profile: displayProfile }));
+    } else {
+      channel.appendLine(t('debugStartNoProfile', { sketch: sketchName }));
+    }
+
+    const cfg = getConfig();
+    const useLocalBuildPath = !!cfg.localBuildPath;
+    let debugBuildPath = '';
+    if (useLocalBuildPath) {
+      debugBuildPath = await ensureDebugBuildPath(targetDir, selectedProfile, usedFqbn);
+    }
+    const compileArgs = ['compile'];
+    if (cfg.verbose) compileArgs.push('--verbose');
+    if (selectedProfile) compileArgs.push('--profile', selectedProfile);
+    else compileArgs.push('--fqbn', usedFqbn);
+    if (useLocalBuildPath && debugBuildPath) {
+      const relativeBuild = path.relative(targetDir, debugBuildPath);
+      const buildPathArg = relativeBuild && !relativeBuild.startsWith('..') ? relativeBuild : debugBuildPath;
+      compileArgs.push('--build-path', buildPathArg);
+    }
+    compileArgs.push('--build-property', 'compiler.cpp.extra_flags=-Og -g3');
+    compileArgs.push('--build-property', 'compiler.c.extra_flags=-Og -g3');
+    compileArgs.push('--build-property', 'compiler.S.extra_flags=-g3');
+    compileArgs.push('--build-property', 'compiler.optimization_flags=-Og -g3');
+    compileArgs.push('--show-properties');
+    compileArgs.push(targetDir);
+
+    let compileResult;
+    try {
+      compileResult = await compileWithIntelliSense(targetDir, compileArgs, {
+        profileName: selectedProfile,
+        fqbn: usedFqbn,
+        skipLocalBuildPath: true,
+      });
+    } catch (err) {
+      channel.appendLine(t('debugCompileFailed', { msg: err.message }));
+      showError(err);
+      return;
+    }
+
+    const props = parseCliProperties(compileResult.stdout || '');
+    const resolvedBuildPathRaw = props['build.path'] || debugBuildPath || '';
+    const resolvedBuildPath = resolvedBuildPathRaw ? path.normalize(resolvedBuildPathRaw) : '';
+    const projectName = props['build.project_name'] || path.basename(targetDir);
+    const defaultElf = projectName.endsWith('.elf') ? projectName : `${projectName}.elf`;
+    const elfPath = path.normalize(props['debug.executable'] || path.join(resolvedBuildPath, defaultElf));
+    const gdbPath = resolveGdbExecutable(props);
+    if (!gdbPath) {
+      vscode.window.showErrorMessage(t('debugMissingGdb', { prefix: props['debug.toolchain.prefix'] || '?' }));
+      return;
+    }
+    const openOcdPath = resolveOpenOcdExecutable(props);
+    if (!openOcdPath) {
+      vscode.window.showErrorMessage(t('debugMissingOpenOcd'));
+      return;
+    }
+
+    const openOcdScripts = extractIndexedValues(props, 'debug.server.openocd.scripts');
+    if (openOcdScripts.length === 0) {
+      const fallbackScript = String(props['build.openocdscript'] || '').trim();
+      if (fallbackScript) openOcdScripts.push(fallbackScript);
+    }
+    if (openOcdScripts.length === 0) {
+      vscode.window.showErrorMessage(t('debugMissingOpenOcd'));
+      return;
+    }
+    const scriptsDir = String(props['debug.server.openocd.scripts_dir'] || '').trim() || path.dirname(openOcdPath);
+    const svdFileRaw = String(props['debug.svd_file'] || props['debug.svdFile'] || '').trim();
+    const cortexGlobal = extractCortexDebugGlobal(props);
+    const candidateKeys = [];
+    const seenKeys = new Set();
+    const pushKey = (value) => {
+      if (!value) return;
+      const trimmed = String(value).trim();
+      if (!trimmed) return;
+      if (!seenKeys.has(trimmed)) {
+        candidateKeys.push(trimmed);
+        seenKeys.add(trimmed);
+      }
+      const lower = trimmed.toLowerCase();
+      if (!seenKeys.has(lower)) {
+        candidateKeys.push(lower);
+        seenKeys.add(lower);
+      }
+    };
+    pushKey(props['build.target']);
+    pushKey(props['build.arch']);
+    pushKey(props['build.mcu']);
+    if (usedFqbn) {
+      const segments = String(usedFqbn).split(':');
+      for (const segment of segments) pushKey(segment);
+    }
+    pushKey('default');
+    const additionalConfigs = extractIndexedValues(props, 'debug.additional_config');
+    for (const cfgName of additionalConfigs) {
+      pushKey(cfgName);
+      const parts = String(cfgName || '').split('.');
+      if (parts.length > 0) pushKey(parts[parts.length - 1]);
+    }
+    const cortexCustom = extractCortexDebugCustom(props, candidateKeys) || {};
+    const cortexMerged = { ...cortexGlobal };
+    for (const [key, value] of Object.entries(cortexCustom)) {
+      cortexMerged[key] = value;
+    }
+    const toStringArray = (value) => {
+      if (Array.isArray(value)) {
+        return value
+          .map((entry) => (entry === null || entry === undefined) ? '' : String(entry).trim())
+          .filter((entry) => entry);
+      }
+      if (value === null || value === undefined) return [];
+      const str = String(value).trim();
+      return str ? [str] : [];
+    };
+    const toTrimmedString = (value) => {
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'string') return value.trim();
+      return String(value).trim();
+    };
+    const toOptionalBoolean = (value) => {
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        if (/^true$/i.test(value)) return true;
+        if (/^false$/i.test(value)) return false;
+      }
+      return undefined;
+    };
+    const toolchainPath = String(props['debug.toolchain.path'] || '').trim();
+    const toolchainPrefix = String(props['debug.toolchain.prefix'] || '').trim();
+    const normalizedToolchainPath = toolchainPath ? path.normalize(toolchainPath) : '';
+    const exeExt = process.platform === 'win32' ? '.exe' : '';
+    const derivedObjdumpPath = (normalizedToolchainPath && toolchainPrefix)
+      ? path.join(normalizedToolchainPath, `${toolchainPrefix}-objdump${exeExt}`)
+      : '';
+    const derivedNmPath = (normalizedToolchainPath && toolchainPrefix)
+      ? path.join(normalizedToolchainPath, `${toolchainPrefix}-nm${exeExt}`)
+      : '';
+    const objdumpPathConfigured = toTrimmedString(cortexMerged.objdumpPath);
+    delete cortexMerged.objdumpPath;
+    const nmPathConfigured = toTrimmedString(cortexMerged.nmPath);
+    delete cortexMerged.nmPath;
+    const cortexName = toTrimmedString(cortexMerged.name);
+    delete cortexMerged.name;
+    const requestValue = toTrimmedString(cortexMerged.request);
+    delete cortexMerged.request;
+    const runToMainOverride = toOptionalBoolean(cortexMerged.runToMain);
+    delete cortexMerged.runToMain;
+    const serverArgs = toStringArray(cortexMerged.serverArgs);
+    delete cortexMerged.serverArgs;
+    const overrideAttach = toStringArray(cortexMerged.overrideAttachCommands);
+    delete cortexMerged.overrideAttachCommands;
+    const overrideLaunch = toStringArray(cortexMerged.overrideLaunchCommands);
+    delete cortexMerged.overrideLaunchCommands;
+    const overrideRestart = toStringArray(cortexMerged.overrideRestartCommands);
+    delete cortexMerged.overrideRestartCommands;
+    const overrideReset = toStringArray(cortexMerged.overrideResetCommands);
+    delete cortexMerged.overrideResetCommands;
+    const overrideResume = toStringArray(cortexMerged.overrideResumeCommands);
+    delete cortexMerged.overrideResumeCommands;
+    const overrideRun = toStringArray(cortexMerged.overrideRunCommands);
+    delete cortexMerged.overrideRunCommands;
+    const overrideDetach = toStringArray(cortexMerged.overrideDetachCommands);
+    delete cortexMerged.overrideDetachCommands;
+    const postAttach = toStringArray(cortexMerged.postAttachCommands);
+    delete cortexMerged.postAttachCommands;
+    const postLaunch = toStringArray(cortexMerged.postLaunchCommands);
+    delete cortexMerged.postLaunchCommands;
+    const postRestart = toStringArray(cortexMerged.postRestartCommands);
+    delete cortexMerged.postRestartCommands;
+    const postReset = toStringArray(cortexMerged.postResetCommands);
+    delete cortexMerged.postResetCommands;
+    const postResume = toStringArray(cortexMerged.postResumeCommands);
+    delete cortexMerged.postResumeCommands;
+    const connectCommands = toStringArray(cortexMerged.connectCommands);
+    delete cortexMerged.connectCommands;
+    const launchCommands = toStringArray(cortexMerged.launchCommands);
+    delete cortexMerged.launchCommands;
+
+    const buildPathRelative = resolvedBuildPath ? path.relative(targetDir, resolvedBuildPath) : '';
+    const buildPathForTasks = resolvedBuildPath
+      ? (buildPathRelative && !buildPathRelative.startsWith('..') ? buildPathRelative : resolvedBuildPath)
+      : '';
+
+    const objdumpPathRaw = (objdumpPathConfigured || derivedObjdumpPath || '').trim();
+    const nmPathRaw = (nmPathConfigured || derivedNmPath || '').trim();
+    const requestKind = requestValue.toLowerCase();
+    const cortexRequest = requestKind === 'attach' ? 'attach' : (requestKind === 'launch' ? 'launch' : 'launch');
+
+    const displayName = `${sketchName} (${displayProfile})`;
+    const baseArgs = Array.isArray(cfg.extra) ? cfg.extra.slice() : [];
+    const exeCommand = quoteForTaskCommand(cfg.exe || 'arduino-cli');
+    const taskCwd = toLaunchPath(workspaceFolder, targetDir) || path.normalize(targetDir);
+    let preLaunchTaskLabel = '';
+    const taskDefinitions = [];
+    if (useLocalBuildPath && buildPathForTasks) {
+      const compileTaskLabel = `Arduino: Debug Build ${displayName}`;
+      const uploadTaskLabel = `Arduino: Debug Upload ${displayName}`;
+      const compileTaskArgs = [...baseArgs, 'compile'];
+      if (cfg.verbose) compileTaskArgs.push('--verbose');
+      if (selectedProfile) compileTaskArgs.push('--profile', selectedProfile);
+      else compileTaskArgs.push('--fqbn', usedFqbn);
+      compileTaskArgs.push('--build-path', buildPathForTasks);
+      compileTaskArgs.push('--build-property', 'compiler.cpp.extra_flags=-Og -g3');
+      compileTaskArgs.push('--build-property', 'compiler.c.extra_flags=-Og -g3');
+      compileTaskArgs.push('--build-property', 'compiler.S.extra_flags=-g3');
+      compileTaskArgs.push('--build-property', 'compiler.optimization_flags=-Og -g3');
+      compileTaskArgs.push('.');
+
+      const uploadTaskArgs = [...baseArgs, 'upload'];
+      if (cfg.verbose) uploadTaskArgs.push('--verbose');
+      if (selectedProfile) uploadTaskArgs.push('--profile', selectedProfile);
+      else uploadTaskArgs.push('--fqbn', usedFqbn);
+      if (port) uploadTaskArgs.push('-p', port);
+      uploadTaskArgs.push('--input-dir', buildPathForTasks);
+      uploadTaskArgs.push('.');
+
+      taskDefinitions.push({
+        label: compileTaskLabel,
+        type: 'shell',
+        command: exeCommand,
+        args: compileTaskArgs,
+        options: { cwd: taskCwd },
+        problemMatcher: ['$gcc']
+      });
+      taskDefinitions.push({
+        label: uploadTaskLabel,
+        type: 'shell',
+        command: exeCommand,
+        args: uploadTaskArgs,
+        options: { cwd: taskCwd },
+        dependsOn: compileTaskLabel,
+        problemMatcher: ['$gcc']
+      });
+      preLaunchTaskLabel = uploadTaskLabel;
+    } else {
+      const combinedTaskLabel = `Arduino: Debug Build & Upload ${displayName}`;
+      const compileUploadArgs = [...baseArgs, 'compile'];
+      if (cfg.verbose) compileUploadArgs.push('--verbose');
+      if (selectedProfile) compileUploadArgs.push('--profile', selectedProfile);
+      else compileUploadArgs.push('--fqbn', usedFqbn);
+      if (port) compileUploadArgs.push('--port', port);
+      compileUploadArgs.push('--upload');
+      compileUploadArgs.push('--build-property', 'compiler.cpp.extra_flags=-Og -g3');
+      compileUploadArgs.push('--build-property', 'compiler.c.extra_flags=-Og -g3');
+      compileUploadArgs.push('--build-property', 'compiler.S.extra_flags=-g3');
+      compileUploadArgs.push('--build-property', 'compiler.optimization_flags=-Og -g3');
+      compileUploadArgs.push('.');
+
+      taskDefinitions.push({
+        label: combinedTaskLabel,
+        type: 'shell',
+        command: exeCommand,
+        args: compileUploadArgs,
+        options: { cwd: taskCwd },
+        problemMatcher: ['$gcc']
+      });
+      preLaunchTaskLabel = combinedTaskLabel;
+    }
+
+    const tasksPath = await updateTasksJson(workspaceFolder, taskDefinitions);
+    if (tasksPath) {
+      channel.appendLine(t('debugTasksUpdated', { path: tasksPath }));
+    }
+
+    const gdbLaunchPath = toPosixPath(path.normalize(gdbPath));
+    const openOcdLaunchPath = toPosixPath(path.normalize(openOcdPath));
+    const executableLaunchPath = toLaunchPath(workspaceFolder, elfPath) || toPosixPath(elfPath);
+    const cwdLaunchPath = toLaunchPath(workspaceFolder, targetDir) || toPosixPath(path.normalize(targetDir));
+    const svdLaunchPath = svdFileRaw
+      ? (toLaunchPath(workspaceFolder, path.normalize(svdFileRaw)) || toPosixPath(path.normalize(svdFileRaw)))
+      : '';
+    const searchDirList = scriptsDir ? [toPosixPath(path.normalize(scriptsDir))] : [];
+    const configFilesNormalized = openOcdScripts.map((script) => toPosixPath(script));
+
+    const cortexConfig = {
+      name: cortexName || `Arduino Debug ${displayName}`,
+      type: 'cortex-debug',
+      request: cortexRequest,
+      servertype: 'openocd',
+      serverpath: openOcdLaunchPath,
+      gdbPath: gdbLaunchPath,
+      executable: executableLaunchPath,
+      cwd: cwdLaunchPath,
+      runToMain: runToMainOverride !== undefined ? runToMainOverride : false,
+    };
+    if (preLaunchTaskLabel) cortexConfig.preLaunchTask = preLaunchTaskLabel;
+    if (configFilesNormalized.length) cortexConfig.configFiles = configFilesNormalized;
+    if (searchDirList.length) cortexConfig.searchDir = searchDirList;
+    if (svdLaunchPath) cortexConfig.svdFile = svdLaunchPath;
+    if (serverArgs.length) cortexConfig.serverArgs = serverArgs;
+    if (overrideAttach.length) cortexConfig.overrideAttachCommands = overrideAttach;
+    if (overrideLaunch.length) cortexConfig.overrideLaunchCommands = overrideLaunch;
+    if (overrideRestart.length) cortexConfig.overrideRestartCommands = overrideRestart;
+    if (overrideReset.length) cortexConfig.overrideResetCommands = overrideReset;
+    if (overrideResume.length) cortexConfig.overrideResumeCommands = overrideResume;
+    if (overrideRun.length) cortexConfig.overrideRunCommands = overrideRun;
+    if (overrideDetach.length) cortexConfig.overrideDetachCommands = overrideDetach;
+    if (postAttach.length) cortexConfig.postAttachCommands = postAttach;
+    if (postLaunch.length) cortexConfig.postLaunchCommands = postLaunch;
+    if (postRestart.length) cortexConfig.postRestartCommands = postRestart;
+    if (postReset.length) cortexConfig.postResetCommands = postReset;
+    if (postResume.length) cortexConfig.postResumeCommands = postResume;
+    if (connectCommands.length) cortexConfig.connectCommands = connectCommands;
+    if (launchCommands.length) cortexConfig.launchCommands = launchCommands;
+    if (objdumpPathRaw) cortexConfig.objdumpPath = toPosixPath(path.normalize(objdumpPathRaw));
+    if (nmPathRaw) cortexConfig.nmPath = toPosixPath(path.normalize(nmPathRaw));
+
+    const cortexBlockedKeys = new Set([
+      'type', 'servertype', 'serverpath', 'gdbPath', 'executable', 'cwd',
+      'preLaunchTask', 'configFiles', 'searchDir', 'svdFile', 'runToMain',
+      'serverArgs', 'overrideAttachCommands', 'overrideLaunchCommands', 'overrideRestartCommands',
+      'overrideResetCommands', 'overrideResumeCommands', 'overrideRunCommands', 'overrideDetachCommands',
+      'postAttachCommands', 'postLaunchCommands', 'postRestartCommands', 'postResetCommands',
+      'postResumeCommands', 'connectCommands', 'launchCommands', 'objdumpPath', 'nmPath', 'name', 'request'
+    ]);
+    for (const [key, value] of Object.entries(cortexMerged)) {
+      if (value === undefined || value === null) continue;
+      if (cortexBlockedKeys.has(key)) continue;
+      if (typeof value === 'string' && !value.trim()) continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+      cortexConfig[key] = value;
+    }
+
+    const debugServerArgsParts = [];
+    if (scriptsDir) debugServerArgsParts.push('-s', scriptsDir);
+    for (const script of openOcdScripts) debugServerArgsParts.push('--file', script);
+    if (serverArgs.length) debugServerArgsParts.push(...serverArgs);
+    const debugServerArgs = debugServerArgsParts.length
+      ? debugServerArgsParts.map((part) => quoteArg(part)).join(' ')
+      : '';
+
+    const cppdbgConfig = {
+      name: `Arduino Debug ${displayName} (cppdbg)`,
+      type: 'cppdbg',
+      // cpptools requires request="launch" when driving a remote gdb-server via miDebuggerServerAddress.
+      request: 'launch',
+      program: executableLaunchPath,
+      cwd: cwdLaunchPath,
+      MIMode: 'gdb',
+      miDebuggerPath: gdbLaunchPath,
+      miDebuggerServerAddress: 'localhost:3333',
+      debugServerPath: openOcdLaunchPath,
+      debugServerArgs,
+      serverStarted: 'Info : Listening on port 3333',
+      serverLaunchTimeout: 20000,
+      filterStdout: true,
+      filterStderr: true,
+      stopAtEntry: false,
+      externalConsole: false,
+      launchCompleteCommand: 'None',
+      setupCommands: []
+    };
+    if (preLaunchTaskLabel) cppdbgConfig.preLaunchTask = preLaunchTaskLabel;
+    const cppdbgCommands = [];
+    const combinedPrimary = [...overrideAttach, ...overrideLaunch];
+    const combinedSecondary = [...postAttach, ...postLaunch];
+    const hasRemoteCommand = combinedPrimary.some((cmd) => /target\s+remote/i.test(cmd))
+      || combinedSecondary.some((cmd) => /target\s+remote/i.test(cmd));
+    if (!hasRemoteCommand) cppdbgCommands.push({ text: 'target remote localhost:3333' });
+    if (combinedPrimary.length) cppdbgCommands.push(...combinedPrimary.map((cmd) => ({ text: cmd })));
+    if (combinedSecondary.length) cppdbgCommands.push(...combinedSecondary.map((cmd) => ({ text: cmd })));
+    if (!cppdbgCommands.length) {
+      cppdbgCommands.push({ text: 'target remote localhost:3333' });
+      cppdbgCommands.push({ text: 'monitor reset halt' });
+      cppdbgCommands.push({ text: 'monitor gdb_sync' });
+    }
+    cppdbgConfig.setupCommands = cppdbgCommands;
+
+    const configsForFile = [cortexConfig, cppdbgConfig];
+    const launchPath = await updateLaunchJson(workspaceFolder, configsForFile);
+    if (launchPath) {
+      channel.appendLine(t('debugLaunchUpdated', { path: launchPath }));
+    }
+
+    const hasCortex = !!vscode.extensions.getExtension('marus25.cortex-debug');
+    const configToStart = hasCortex ? cortexConfig : cppdbgConfig;
+    channel.appendLine(t('debugLaunchStart', { name: configToStart.name }));
+    const started = await vscode.debug.startDebugging(workspaceFolder, configToStart);
+    if (!started) {
+      vscode.window.showErrorMessage(t('debugLaunchFailed', { msg: 'startDebugging returned false' }));
+    }
+  } catch (err) {
+    showError(err);
+  }
+}
+
 /**
  * Build and upload the contents of `data/` as a filesystem image to ESP32.
  * - Uses `arduino-cli compile --show-properties` to locate tool paths, build.path, upload.speed
@@ -1930,7 +2676,7 @@ async function runExternal(exe, args, opts = {}) {
 
 // Run compile and update IntelliSense by exporting compile_commands.json.
 async function compileWithIntelliSense(sketchDir, args, opts = {}) {
-  const { profileName = '', wokwiEnabled = false, fqbn = '' } = opts || {};
+  const { profileName = '', wokwiEnabled = false, fqbn = '', skipLocalBuildPath = false } = opts || {};
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
@@ -1952,7 +2698,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   }
 
   let localBuildPath = '';
-  if (cfg.localBuildPath) {
+  if (cfg.localBuildPath && !skipLocalBuildPath) {
     try {
       localBuildPath = await ensureLocalBuildPath(sketchDir, profileName, fqbn);
     } catch (_) {
@@ -1999,15 +2745,19 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   return new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
     let stderrBuffer = '';
-    const forward = (chunk) => {
-      const raw = chunk.toString();
+    let stdoutBuffer = '';
+    const writeToTerminal = (raw) => {
       term.write(raw.replace(/\r?\n/g, '\r\n'));
     };
-    child.stdout.on('data', forward);
+    child.stdout.on('data', (chunk) => {
+      const raw = chunk.toString();
+      stdoutBuffer += raw;
+      writeToTerminal(raw);
+    });
     child.stderr.on('data', (chunk) => {
       const raw = chunk.toString();
       stderrBuffer += raw;
-      forward(chunk);
+      writeToTerminal(raw);
     });
     child.on('error', (err) => {
       channel.appendLine(`[error] ${err.message}`);
@@ -2063,7 +2813,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
       } catch (err) {
         channel.appendLine(`[warn] ${err.message}`);
       }
-      resolve({ code });
+      resolve({ code, stdout: stdoutBuffer, stderr: stderrBuffer });
     });
   });
 }
@@ -2818,6 +3568,7 @@ function activate(context) {
           return vscode.commands.executeCommand('arduino-cli.cleanCompile');
         }
         if (action === 'upload') return runUploadFor(sketchDir, profile);
+        if (action === 'debug') return commandDebug(sketchDir, profile);
         if (action === 'version') return vscode.commands.executeCommand('arduino-cli.version');
         if (action === 'listBoards') return vscode.commands.executeCommand('arduino-cli.listBoards');
         if (action === 'listAllBoards') return vscode.commands.executeCommand('arduino-cli.listAllBoards');
@@ -2853,6 +3604,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.buildCheck', commandBuildCheck),
     vscode.commands.registerCommand('arduino-cli.cleanCompile', commandCleanCompile),
     vscode.commands.registerCommand('arduino-cli.upload', commandUpload),
+    vscode.commands.registerCommand('arduino-cli.debug', () => commandDebug()),
     vscode.commands.registerCommand('arduino-cli.monitor', commandMonitor),
     vscode.commands.registerCommand('arduino-cli.setProfile', () => commandSetProfile(false)),
     vscode.commands.registerCommand('arduino-cli.configureIntelliSense', commandConfigureIntelliSense),
@@ -2997,6 +3749,7 @@ function defaultCommandItems(dir, profile, parent, features = {}) {
     new CommandItem('Upload', 'upload', dir, profile, parent, t('treeUpload')),
     new CommandItem('Upload Data', 'uploadData', dir, profile, parent, t('treeUploadData')),
     new CommandItem('Monitor', 'monitor', dir, profile, parent, t('treeMonitor')),
+    new CommandItem('Debug', 'debug', dir, profile, parent, t('treeDebug')),
     new CommandItem('Sketch.yaml Helper', 'helper', dir, profile, parent, t('treeHelper')),
     new CommandItem('Open Examples', 'examples', dir, profile, parent, t('treeExamples')),
     new CommandItem('Inspect', 'inspect', dir, profile, parent, t('treeInspect')),
@@ -3017,6 +3770,7 @@ function globalCommandItems() {
     new CommandItem('Open Inspector', 'inspect', '', '', undefined, t('treeInspectorOpen')),
     new CommandItem('Sketch.yaml Versions', 'versionCheck', '', '', undefined, t('treeVersionCheck')),
     new CommandItem('Build Check', 'buildCheck', '', '', undefined, t('treeBuildCheck')),
+    new CommandItem('Debug', 'debug', '', '', undefined, t('treeDebug')),
     new CommandItem('Refresh View', 'refreshView', '', '', undefined, t('treeRefresh')),
     new CommandItem('New Sketch', 'sketchNew', '', '', undefined, t('treeNewSketch')),
     new CommandItem('Run Command', 'runArbitrary', '', '', undefined, t('treeRunCommand')),
