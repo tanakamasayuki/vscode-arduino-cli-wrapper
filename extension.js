@@ -2207,8 +2207,7 @@ async function commandDebug(sketchDir, profileFromTree) {
       : '';
     const objdumpPathConfigured = toTrimmedString(cortexMerged.objdumpPath);
     delete cortexMerged.objdumpPath;
-    const cortexName = toTrimmedString(cortexMerged.name);
-    delete cortexMerged.name;
+  delete cortexMerged.name;
     const requestValue = toTrimmedString(cortexMerged.request);
     delete cortexMerged.request;
     delete cortexMerged.runToMain;
@@ -2253,7 +2252,8 @@ async function commandDebug(sketchDir, profileFromTree) {
     const requestKind = requestValue.toLowerCase();
     const cortexRequest = requestKind === 'attach' ? 'attach' : (requestKind === 'launch' ? 'launch' : 'launch');
 
-    const displayName = `${sketchName} (${displayProfile})`;
+  const displayName = `${sketchName} (${displayProfile})`;
+  const baseDebugName = `Arduino Debug ${displayName}`;
     const baseArgs = Array.isArray(cfg.extra) ? cfg.extra.slice() : [];
     const exeCommand = quoteForTaskCommand(cfg.exe || 'arduino-cli');
     const taskCwd = toLaunchPath(workspaceFolder, targetDir) || path.normalize(targetDir);
@@ -2340,7 +2340,7 @@ async function commandDebug(sketchDir, profileFromTree) {
     const configFilesNormalized = openOcdScripts.map((script) => toPosixPath(script));
 
     const cortexConfig = {
-      name: cortexName || `Arduino Debug ${displayName}`,
+      name: `${baseDebugName} (cortex-debug)`,
       type: 'cortex-debug',
       request: cortexRequest,
       servertype: 'openocd',
@@ -2395,7 +2395,7 @@ async function commandDebug(sketchDir, profileFromTree) {
       : '';
 
     const cppdbgConfig = {
-      name: `Arduino Debug ${displayName} (cppdbg)`,
+      name: `${baseDebugName} (cppdbg)`,
       type: 'cppdbg',
       // cpptools requires request="launch" when driving a remote gdb-server via miDebuggerServerAddress.
       request: 'launch',
