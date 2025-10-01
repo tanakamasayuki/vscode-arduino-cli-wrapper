@@ -2184,6 +2184,7 @@ async function commandDebug(sketchDir, profileFromTree) {
       if (typeof value === 'string') return value.trim();
       return String(value).trim();
     };
+    const normalizeCommandText = (cmd) => String(cmd || '').replace(/\s+/g, ' ').trim();
     const stripTrailingContinue = (commands) => {
       if (!commands.length) return commands;
       const result = [...commands];
@@ -2198,6 +2199,16 @@ async function commandDebug(sketchDir, profileFromTree) {
       }
       return result;
     };
+    const fixDeprecatedMonitorCommand = (cmd) => {
+      const normalized = normalizeCommandText(cmd);
+      if (!normalized) return '';
+      if (normalized.toLowerCase() === 'monitor gdb_sync') return 'monitor gdb sync';
+      return normalized;
+    };
+    const mapCortexCommands = (value) =>
+      stripTrailingContinue(toStringArray(value))
+        .map((cmd) => fixDeprecatedMonitorCommand(cmd))
+        .filter((cmd) => !!cmd);
     const toolchainPath = String(props['debug.toolchain.path'] || '').trim();
     const toolchainPrefix = String(props['debug.toolchain.prefix'] || '').trim();
     const normalizedToolchainPath = toolchainPath ? path.normalize(toolchainPath) : '';
@@ -2214,33 +2225,33 @@ async function commandDebug(sketchDir, profileFromTree) {
     delete cortexMerged.nmPath;
     const serverArgs = toStringArray(cortexMerged.serverArgs);
     delete cortexMerged.serverArgs;
-    const overrideAttach = stripTrailingContinue(toStringArray(cortexMerged.overrideAttachCommands));
+    const overrideAttach = mapCortexCommands(cortexMerged.overrideAttachCommands);
     delete cortexMerged.overrideAttachCommands;
-    const overrideLaunch = stripTrailingContinue(toStringArray(cortexMerged.overrideLaunchCommands));
+    const overrideLaunch = mapCortexCommands(cortexMerged.overrideLaunchCommands);
     delete cortexMerged.overrideLaunchCommands;
-    const overrideRestart = stripTrailingContinue(toStringArray(cortexMerged.overrideRestartCommands));
+    const overrideRestart = mapCortexCommands(cortexMerged.overrideRestartCommands);
     delete cortexMerged.overrideRestartCommands;
-    const overrideReset = stripTrailingContinue(toStringArray(cortexMerged.overrideResetCommands));
+    const overrideReset = mapCortexCommands(cortexMerged.overrideResetCommands);
     delete cortexMerged.overrideResetCommands;
-    const overrideResume = stripTrailingContinue(toStringArray(cortexMerged.overrideResumeCommands));
+    const overrideResume = mapCortexCommands(cortexMerged.overrideResumeCommands);
     delete cortexMerged.overrideResumeCommands;
-    const overrideRun = stripTrailingContinue(toStringArray(cortexMerged.overrideRunCommands));
+    const overrideRun = mapCortexCommands(cortexMerged.overrideRunCommands);
     delete cortexMerged.overrideRunCommands;
-    const overrideDetach = stripTrailingContinue(toStringArray(cortexMerged.overrideDetachCommands));
+    const overrideDetach = mapCortexCommands(cortexMerged.overrideDetachCommands);
     delete cortexMerged.overrideDetachCommands;
-    const postAttach = stripTrailingContinue(toStringArray(cortexMerged.postAttachCommands));
+    const postAttach = mapCortexCommands(cortexMerged.postAttachCommands);
     delete cortexMerged.postAttachCommands;
-    const postLaunch = stripTrailingContinue(toStringArray(cortexMerged.postLaunchCommands));
+    const postLaunch = mapCortexCommands(cortexMerged.postLaunchCommands);
     delete cortexMerged.postLaunchCommands;
-    const postRestart = stripTrailingContinue(toStringArray(cortexMerged.postRestartCommands));
+    const postRestart = mapCortexCommands(cortexMerged.postRestartCommands);
     delete cortexMerged.postRestartCommands;
-    const postReset = stripTrailingContinue(toStringArray(cortexMerged.postResetCommands));
+    const postReset = mapCortexCommands(cortexMerged.postResetCommands);
     delete cortexMerged.postResetCommands;
-    const postResume = stripTrailingContinue(toStringArray(cortexMerged.postResumeCommands));
+    const postResume = mapCortexCommands(cortexMerged.postResumeCommands);
     delete cortexMerged.postResumeCommands;
-    const connectCommands = stripTrailingContinue(toStringArray(cortexMerged.connectCommands));
+    const connectCommands = mapCortexCommands(cortexMerged.connectCommands);
     delete cortexMerged.connectCommands;
-    const launchCommands = stripTrailingContinue(toStringArray(cortexMerged.launchCommands));
+    const launchCommands = mapCortexCommands(cortexMerged.launchCommands);
     delete cortexMerged.launchCommands;
 
     const buildPathRelative = resolvedBuildPath ? path.relative(targetDir, resolvedBuildPath) : '';
@@ -2419,10 +2430,9 @@ async function commandDebug(sketchDir, profileFromTree) {
     const cppdbgCommands = [];
     const combinedPrimary = [...overrideAttach, ...overrideLaunch];
     const combinedSecondary = [...postAttach, ...postLaunch];
-    const normalizeCommandText = (cmd) => String(cmd || '').replace(/\s+/g, ' ').trim();
     const isBlockedMonitorCommand = (cmd) => {
       const normalized = normalizeCommandText(cmd).toLowerCase();
-      return normalized === 'monitor reset halt' || normalized === 'monitor gdb_sync';
+      return normalized === 'monitor reset halt' || normalized === 'monitor gdb_sync' || normalized === 'monitor gdb sync';
     };
     const isRemoteConnect = (cmd) => {
       const normalized = String(cmd || '').replace(/\s+/g, ' ').trim().toLowerCase();
