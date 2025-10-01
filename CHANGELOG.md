@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.4.3
 - (EN) Debug command now mirrors Arduino IDE `debug_config` data (request type, OpenOCD server args, GDB command overrides, objdump/nm paths) so Cortex-Debug attaches cleanly without endless resets or missing tool errors.
 - (JA) デバッグコマンドで Arduino IDE の `debug_config` (request 種別・OpenOCD サーバー引数・GDB コマンド上書き・objdump/nm のパスなど) を取り込み、Cortex-Debug がリセットループやツール未検出を起こさずにアタッチできるようにしました。
 - (EN) Respect the Local Build Path setting during debug builds: when disabled, builds use Arduino CLI’s default location and the generated task now runs `arduino-cli compile --upload`; when enabled, tasks continue to target `.build/<sketch>-<profile>-debug`.
