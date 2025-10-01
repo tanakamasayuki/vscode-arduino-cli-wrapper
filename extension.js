@@ -2185,6 +2185,11 @@ async function commandDebug(sketchDir, profileFromTree) {
       return String(value).trim();
     };
     const normalizeCommandText = (cmd) => String(cmd || '').replace(/\s+/g, ' ').trim();
+    const isBreakpointCommand = (cmd) => {
+      const normalized = normalizeCommandText(cmd).toLowerCase();
+      if (!normalized) return false;
+      return /^(?:thb|tb|tbreak|hbreak|break|b)\b/.test(normalized);
+    };
     const stripTrailingContinue = (commands) => {
       if (!commands.length) return commands;
       const result = [...commands];
@@ -2209,6 +2214,21 @@ async function commandDebug(sketchDir, profileFromTree) {
       stripTrailingContinue(toStringArray(value))
         .map((cmd) => fixDeprecatedMonitorCommand(cmd))
         .filter((cmd) => !!cmd);
+    const ensureContinueAfterBreakpointStrings = (commands) => {
+      if (!Array.isArray(commands) || commands.length === 0) return commands;
+      const result = [];
+      for (let i = 0; i < commands.length; i++) {
+        const cmd = commands[i];
+        result.push(cmd);
+        if (isBreakpointCommand(cmd)) {
+          const next = normalizeCommandText(commands[i + 1]).toLowerCase();
+          if (next !== 'continue' && next !== 'cont' && next !== 'c') {
+            result.push('continue');
+          }
+        }
+      }
+      return result;
+    };
     const detectGdbServerPort = (args) => {
       for (const entry of args) {
         const cleaned = normalizeCommandText(entry).replace(/["']/g, '');
@@ -2240,33 +2260,37 @@ async function commandDebug(sketchDir, profileFromTree) {
     const gdbPort = detectGdbServerPort(serverArgs);
     const gdbServerAddress = gdbPort ? `localhost:${gdbPort}` : 'localhost:3333';
     const gdbServerStartedMessage = buildServerStartedMessage(gdbPort);
-    const overrideAttach = mapCortexCommands(cortexMerged.overrideAttachCommands);
+    const overrideAttachRaw = mapCortexCommands(cortexMerged.overrideAttachCommands);
     delete cortexMerged.overrideAttachCommands;
-    const overrideLaunch = mapCortexCommands(cortexMerged.overrideLaunchCommands);
+    const overrideAttach = ensureContinueAfterBreakpointStrings(overrideAttachRaw);
+    const overrideLaunchRaw = mapCortexCommands(cortexMerged.overrideLaunchCommands);
     delete cortexMerged.overrideLaunchCommands;
-    const overrideRestart = mapCortexCommands(cortexMerged.overrideRestartCommands);
+    const overrideLaunch = ensureContinueAfterBreakpointStrings(overrideLaunchRaw);
+    const overrideRestart = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.overrideRestartCommands));
     delete cortexMerged.overrideRestartCommands;
-    const overrideReset = mapCortexCommands(cortexMerged.overrideResetCommands);
+    const overrideReset = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.overrideResetCommands));
     delete cortexMerged.overrideResetCommands;
-    const overrideResume = mapCortexCommands(cortexMerged.overrideResumeCommands);
+    const overrideResume = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.overrideResumeCommands));
     delete cortexMerged.overrideResumeCommands;
-    const overrideRun = mapCortexCommands(cortexMerged.overrideRunCommands);
+    const overrideRun = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.overrideRunCommands));
     delete cortexMerged.overrideRunCommands;
-    const overrideDetach = mapCortexCommands(cortexMerged.overrideDetachCommands);
+    const overrideDetach = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.overrideDetachCommands));
     delete cortexMerged.overrideDetachCommands;
-    const postAttach = mapCortexCommands(cortexMerged.postAttachCommands);
+    const postAttachRaw = mapCortexCommands(cortexMerged.postAttachCommands);
     delete cortexMerged.postAttachCommands;
-    const postLaunch = mapCortexCommands(cortexMerged.postLaunchCommands);
+    const postAttach = ensureContinueAfterBreakpointStrings(postAttachRaw);
+    const postLaunchRaw = mapCortexCommands(cortexMerged.postLaunchCommands);
     delete cortexMerged.postLaunchCommands;
-    const postRestart = mapCortexCommands(cortexMerged.postRestartCommands);
+    const postLaunch = ensureContinueAfterBreakpointStrings(postLaunchRaw);
+    const postRestart = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.postRestartCommands));
     delete cortexMerged.postRestartCommands;
-    const postReset = mapCortexCommands(cortexMerged.postResetCommands);
+    const postReset = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.postResetCommands));
     delete cortexMerged.postResetCommands;
-    const postResume = mapCortexCommands(cortexMerged.postResumeCommands);
+    const postResume = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.postResumeCommands));
     delete cortexMerged.postResumeCommands;
-    const connectCommands = mapCortexCommands(cortexMerged.connectCommands);
+    const connectCommands = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.connectCommands));
     delete cortexMerged.connectCommands;
-    const launchCommands = mapCortexCommands(cortexMerged.launchCommands);
+    const launchCommands = ensureContinueAfterBreakpointStrings(mapCortexCommands(cortexMerged.launchCommands));
     delete cortexMerged.launchCommands;
 
     const buildPathRelative = resolvedBuildPath ? path.relative(targetDir, resolvedBuildPath) : '';
@@ -2443,9 +2467,9 @@ async function commandDebug(sketchDir, profileFromTree) {
       setupCommands: []
     };
     if (preLaunchTaskLabel) cppdbgConfig.preLaunchTask = preLaunchTaskLabel;
-    const cppdbgCommands = [];
-    const combinedPrimary = [...overrideAttach, ...overrideLaunch];
-    const combinedSecondary = [...postAttach, ...postLaunch];
+    let cppdbgCommands = [];
+    const combinedPrimary = [...overrideAttachRaw, ...overrideLaunchRaw];
+    const combinedSecondary = [...postAttachRaw, ...postLaunchRaw];
     const isBlockedMonitorCommand = (cmd) => {
       const normalized = normalizeCommandText(cmd).toLowerCase();
       return normalized === 'monitor reset halt' || normalized === 'monitor gdb_sync' || normalized === 'monitor gdb sync';
@@ -2469,11 +2493,7 @@ async function commandDebug(sketchDir, profileFromTree) {
     if (!cppdbgCommands.length) {
       cppdbgCommands.push({ text: 'thb setup' });
     }
-
-    const hasBreakpointCommand = cppdbgCommands.some((entry) => {
-      const normalized = String(entry.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
-      return /\b(?:thb|tb|tbreak|hbreak|break\b)/.test(normalized);
-    });
+    const hasBreakpointCommand = cppdbgCommands.some((entry) => isBreakpointCommand(entry && entry.text));
     cppdbgConfig.setupCommands = cppdbgCommands;
     cppdbgConfig.launchCompleteCommand = hasBreakpointCommand ? 'exec-continue' : 'None';
 
