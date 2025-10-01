@@ -116,6 +116,10 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
     }
 
+    .numeric {
+      text-align: right;
+    }
+
     pre {
       background: rgba(128, 128, 128, 0.12);
       padding: 10px;
@@ -422,7 +426,7 @@
           { label: str.inspectorSummaryBuildPath || 'Build path', value: summary.buildPath || '-' },
           { label: 'Exit', value: typeof summary.exitCode === 'number' ? summary.exitCode : '' }
         ];
-        const sectionRows = sections.map((s) => `<tr><td>${s.name}</td><td class="mono">${s.size.toLocaleString()}</td><td class="mono">${s.max ? s.max.toLocaleString() : '-'}</td></tr>`).join('');
+        const sectionRows = sections.map((s) => `<tr><td>${s.name}</td><td class="mono numeric">${s.size.toLocaleString()}</td><td class="mono numeric">${s.max ? s.max.toLocaleString() : '-'}</td></tr>`).join('');
         summaryContent.innerHTML = `
           <div class="flex-row">
             <div class="box">
@@ -434,7 +438,7 @@
             <div class="box">
               <h2>${str.inspectorSectionsHeaderName || 'Section usage'}</h2>
               <table>
-                <thead><tr><th>${str.inspectorSectionsHeaderName || 'Section'}</th><th>${str.inspectorSectionsHeaderUsed || 'Used'}</th><th>${str.inspectorSectionsHeaderMax || 'Max'}</th></tr></thead>
+                <thead><tr><th>${str.inspectorSectionsHeaderName || 'Section'}</th><th class="numeric">${str.inspectorSectionsHeaderUsed || 'Used'}</th><th class="numeric">${str.inspectorSectionsHeaderMax || 'Max'}</th></tr></thead>
                 <tbody>${sectionRows || `<tr><td colspan="3">${str.inspectorTableNoData || 'No data'}</td></tr>`}</tbody>
               </table>
             </div>
@@ -468,13 +472,13 @@
         const sections = mapPayload.sections || [];
         const symbols = mapPayload.topSymbols || [];
         const objects = mapPayload.topObjects || [];
-        const sectionRows = sections.map((s) => `<tr><td>${escapeHtml(s.name)}</td><td class="mono">${s.size.toLocaleString()}</td><td>${s.count}</td></tr>`).join('');
+        const sectionRows = sections.map((s) => `<tr><td>${escapeHtml(s.name)}</td><td class="mono numeric">${s.size.toLocaleString()}</td><td>${s.count}</td></tr>`).join('');
         const symbolRows = symbols.map((s) => `<tr><td>${escapeHtml(s.symbol)}</td><td class="mono">${s.size.toLocaleString()}</td><td>${escapeHtml(s.section)}</td><td class="mono">${escapeHtml(s.object)}</td></tr>`).join('');
         const objectRows = objects.map((o) => `<tr><td>${escapeHtml(o.object)}</td><td class="mono">${o.size.toLocaleString()}</td><td>${o.count}</td></tr>`).join('');
         mapContent.innerHTML = `
           <h2>${state.strings.inspectorSectionsHeaderName || 'Sections'}</h2>
           <table>
-            <thead><tr><th>${state.strings.inspectorSectionsHeaderName || 'Section'}</th><th>${state.strings.inspectorSectionsHeaderUsed || 'Used'}</th><th>#</th></tr></thead>
+            <thead><tr><th>${state.strings.inspectorSectionsHeaderName || 'Section'}</th><th class="numeric">${state.strings.inspectorSectionsHeaderUsed || 'Used'}</th><th>#</th></tr></thead>
             <tbody>${sectionRows || `<tr><td colspan="3">${state.strings.inspectorTableNoData || 'No data'}</td></tr>`}</tbody>
           </table>
           <h2>${state.strings.inspectorTabSymbols || 'Top Symbols'}</h2>
