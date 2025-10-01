@@ -16,7 +16,27 @@ Because you are already working inside VS Code, the extension connects build res
 
 The goal is to make Arduino CLI approachable for beginners while unlocking the advanced workflows—multiple dependency versions, rich IntelliSense, and build automation—that seasoned users expect.
 
-## Features
+## Quick Start
+
+1) Install Arduino CLI
+- Put it in `PATH` or set a full path in the setting `arduino-cli-wrapper.path`.
+- Confirm with "Arduino CLI: Check CLI Version" (a guide appears if not configured).
+  - Windows: installer https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi or `winget install ArduinoSA.CLI`
+  - Linux / macOS: follow https://arduino.github.io/arduino-cli/latest/installation/
+
+2) Open a sketch folder
+- When a folder contains `.ino`, the status bar shows Compile/Upload/Monitor plus FQBN/Port/Baud/Warn.
+
+3) Compile / Upload / Monitor
+- Build: run "Arduino CLI: Compile Sketch" or click Compile.
+- Upload: run "Arduino CLI: Upload Sketch" or click Upload. Select the serial port first; the extension passes `-p` explicitly even when using profiles.
+- Monitor: run "Arduino CLI: Monitor Serial" or click Monitor. Baudrate defaults to 115200 and can be changed from the status bar.
+
+Tips:
+- If multiple `.ino` files exist, a picker appears to choose one. If an `.ino` editor is active, it is preferred.
+- If the FQBN cannot be inferred, you can enter one manually.
+
+## Everyday operations and UI
 
 ### Getting started with commands (Command Palette)
 
@@ -26,16 +46,45 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - **List Connected Boards** – Scans USB/serial ports and shows the detected boards so you can double‑check the connection before you upload.
 - **List All Boards** – Displays the complete board index. You can type a search word (for example `nano`) to narrow the list, just like running `arduino-cli board listall <filter>` manually.
 - **Board Details** – Shows the technical info for the currently selected profile/FQBN, making it easy to verify you picked the right board package.
+- **Compile Sketch** – Builds the active sketch. If multiple `.ino` files live in the folder you will be prompted to pick one, and any profile data from `sketch.yaml` is applied automatically.
+- **Clean Compile** – Rebuilds with `--clean`, refreshing IntelliSense include paths so swapped libraries or platforms are reflected immediately.
+- **Upload Sketch** – Compiles and flashes in a single step. You can pick the serial port during the command if one is not already configured.
+- **Build Check** – Runs through every profile declared in `sketch.yaml`, compiling each with full warnings and presenting a consolidated summary of errors and warnings.
+- **Debug Sketch** – Generates profile-aware debug assets; see “Debug your sketch (advanced)” for the full walkthrough before running it the first time.
 
-### Build and upload workflow
+### Status bar
+
+- `$(tools) Compile`: compiles the `.ino` in the current workspace folder
+- `$(cloud-upload) Upload`: uploads the `.ino` in the current workspace folder
+- `$(pulse) Monitor`: opens the serial monitor
+- `$(circuit-board) <FQBN/Profile>`:
+  - If `sketch.yaml` exists, shows the default or first profile and lets you switch via "Arduino CLI: Set Profile".
+  - Otherwise shows FQBN and lets you change via "Arduino CLI: Set FQBN".
+- `$(plug) <Port>`: shows current serial port (click to change)
+- `$(watch) <Baud>`: shows current baudrate (click to change)
+- `$(megaphone) <Warnings>`: shows compile warnings/verbose badge (click to pick combinations)
+
+Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Baud are stored per workspace and persist across restarts.
+
+### Explorer view
+
+- Adds an "Arduino CLI" view under Explorer.
+- Lists detected sketch folders; shows profiles from `sketch.yaml` when available.
+- Per project/profile actions: Compile, Upload, Debug, Upload Data, Monitor, Sketch.yaml Helper, Open Examples.
+  - Debug appears on profile nodes only so you can launch the generated debug configuration for the selected profile in one click.
+- Global actions at the top: CLI Version, List Boards, List All Boards, Sketch.yaml Helper, Refresh View, New Sketch, Run Command.
+- Sketch items display workspace-relative paths, and nodes are expanded by default.
+
+## Build and upload fundamentals
 
 - **Compile Sketch** – Builds the selected sketch. If the folder contains several `.ino` files, a picker helps you choose the right one. Profiles from `sketch.yaml` are applied automatically; otherwise the saved FQBN is used.
 - **Clean Compile** – Runs the same build with `--clean`, resets IntelliSense include paths, and is handy when switching libraries or boards.
 - **Local Build Path (setting)** – Turn on **Arduino CLI Wrapper › Local Build Path** to pass `--build-path` automatically and store build outputs in `.build/<profile>` under each sketch, keeping artifacts local for Compile, Upload, Inspector, and more.
 - **Upload Sketch** – Compiles and uploads in one go. You will be prompted for a serial port if one is not already selected, and the monitor is closed/reopened as needed so the port stays free.
-- **Upload Data (ESP32)** – Looks for a `data/` folder, creates a LittleFS or SPIFFS image, and flashes it. Perfect for web assets or configuration files bundled with your sketch.
 - **Build Check** – Compiles every profile defined in `sketch.yaml` with full warnings (`--warnings all`), then shows a summary of warnings and errors so you can spot regressions quickly.
 - **Run in Wokwi** – When a `sketch.yaml` profile sets `wokwi: true`, compiling that profile exports `.wokwi/<profile>/wokwi.elf`, scaffolds board-aware defaults for `diagram.json` / `wokwi.toml`, and adds a "Run in Wokwi" action that opens the diagram in the official simulator extension.
+
+## Sketch management and utilities
 
 ### Keep sketches organised
 
@@ -77,11 +126,28 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 
 All command logs are unified in a dedicated pseudo terminal with ANSI colors so you can follow the exact CLI invocation.
 
-### Debug your sketch (advanced)
+## Profiles and data flashing
+
+### Upload Data (ESP32)
+
+- Requires a `data/` folder under your sketch directory and an ESP32 filesystem include in the sketch (`#include <LittleFS.h>` or `#include <SPIFFS.h>`).
+- Builds an image via `mklittlefs` or `mkspiffs` and flashes it with `esptool` to the SPIFFS partition.
+- Reads tool paths and upload speed from `arduino-cli compile --show-properties` and parses `partitions.csv` in the build output to find offset/size.
+- Closes an open serial monitor before flashing and reopens it after.
+
+### sketch.yaml and Profiles
+
+- When `sketch.yaml` exists, compile/upload use profiles; otherwise FQBN is used.
+  - To bootstrap a `sketch.yaml`, use the Helper view to generate a template for your board and libraries, then copy it into a new `sketch.yaml` in your sketch folder.
+- The status bar FQBN indicator switches to a profile name if profiles exist. Use "Arduino CLI: Set Profile" to change it.
+- "Sketch.yaml Helper" shows a helper UI to inspect/apply FQBN, libraries, and platform info for a selected profile.
+- Profiles with `wokwi: true` automatically maintain `.wokwi/<profile>/wokwi.elf`, `diagram.json`, and `wokwi.toml` after each compile so the Wokwi extension can simulate the latest firmware. The generated `diagram.json` seeds board-specific layouts (UNO, MEGA, Nano, ESP32 S3 Box, M5Stack CoreS3, Seeed XIAO ESP32 families, and generic ESP32).
+
+## Debug your sketch (advanced)
 
 - **Debug Sketch** – Generates matching tasks and launch configurations for each profile by reusing the board’s debugger metadata discovered through Arduino CLI. If Cortex-Debug is installed it launches a `cortex-debug` session; otherwise it falls back to the Microsoft C/C++ debugger with `request: "launch"` already set so the old “select a process to attach” prompt no longer appears.
 
-#### Step-by-step workflow
+### Step-by-step workflow
 
 1. **Pick the profile and environment.** Set the profile you want to debug as the default in `sketch.yaml` (or be ready to pick it when prompted) and double-check related settings such as the serial port or Local Build Path so the generated tasks line up with your hardware.
 2. **Run “Arduino CLI: Debug Sketch”.** Choose the sketch and target profile when prompted. The command produces two artefacts under `.vscode/`:
@@ -99,64 +165,9 @@ Tips:
 - The extension keeps the Arduino Logs terminal in focus during the debug build so you can see OpenOCD output.
 - Leaving the probe connected while running **Compile Sketch** or **Upload Sketch** is safe; they now use the same build path as the debug task, so the ELF selected in `launch.json` always matches the latest upload.
 
-## Explorer View
+## IntelliSense and developer tooling
 
-- Adds an "Arduino CLI" view under Explorer.
-- Lists detected sketch folders; shows profiles from `sketch.yaml` when available.
-- Per project/profile actions: Compile, Upload, Upload Data, Monitor, Sketch.yaml Helper, Open Examples.
-- Global actions at the top: CLI Version, List Boards, List All Boards, Sketch.yaml Helper, Refresh View, New Sketch, Run Command.
-- Sketch items display workspace-relative paths, and nodes are expanded by default.
-
-## Status Bar
-
-- `$(tools) Compile`: compiles the `.ino` in the current workspace folder
-- `$(cloud-upload) Upload`: uploads the `.ino` in the current workspace folder
-- `$(pulse) Monitor`: opens the serial monitor
-- `$(circuit-board) <FQBN/Profile>`:
-  - If `sketch.yaml` exists, shows the default or first profile and lets you switch via "Arduino CLI: Set Profile".
-  - Otherwise shows FQBN and lets you change via "Arduino CLI: Set FQBN".
-- `$(plug) <Port>`: shows current serial port (click to change)
-- `$(watch) <Baud>`: shows current baudrate (click to change)
-- `$(megaphone) <Warnings>`: shows compile warnings/verbose badge (click to pick combinations)
-
-Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Baud are stored per workspace and persist across restarts.
-
-## Quick Start
-
-1) Install Arduino CLI
-- Put it in `PATH` or set a full path in the setting `arduino-cli-wrapper.path`.
-- Confirm with "Arduino CLI: Check CLI Version" (a guide appears if not configured).
-  - Windows: installer https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi or `winget install ArduinoSA.CLI`
-  - Linux / macOS: follow https://arduino.github.io/arduino-cli/latest/installation/
-
-2) Open a sketch folder
-- When a folder contains `.ino`, the status bar shows Compile/Upload/Monitor plus FQBN/Port/Baud/Warn.
-
-3) Compile / Upload / Monitor
-- Build: run "Arduino CLI: Compile Sketch" or click Compile.
-- Upload: run "Arduino CLI: Upload Sketch" or click Upload. Select the serial port first; the extension passes `-p` explicitly even when using profiles.
-- Monitor: run "Arduino CLI: Monitor Serial" or click Monitor. Baudrate defaults to 115200 and can be changed from the status bar.
-
-Tips:
-- If multiple `.ino` files exist, a picker appears to choose one. If an `.ino` editor is active, it is preferred.
-- If the FQBN cannot be inferred, you can enter one manually.
-
-## Upload Data (ESP32)
-
-- Requires a `data/` folder under your sketch directory and an ESP32 filesystem include in the sketch (`#include <LittleFS.h>` or `#include <SPIFFS.h>`).
-- Builds an image via `mklittlefs` or `mkspiffs` and flashes it with `esptool` to the SPIFFS partition.
-- Reads tool paths and upload speed from `arduino-cli compile --show-properties` and parses `partitions.csv` in the build output to find offset/size.
-- Closes an open serial monitor before flashing and reopens it after.
-
-## sketch.yaml and Profiles
-
-- When `sketch.yaml` exists, compile/upload use profiles; otherwise FQBN is used.
- - To bootstrap a `sketch.yaml`, use the Helper view to generate a template for your board and libraries, then copy it into a new `sketch.yaml` in your sketch folder.
-- The status bar FQBN indicator switches to a profile name if profiles exist. Use "Arduino CLI: Set Profile" to change it.
-- "Sketch.yaml Helper" shows a helper UI to inspect/apply FQBN, libraries, and platform info for a selected profile.
-- Profiles with `wokwi: true` automatically maintain `.wokwi/<profile>/wokwi.elf`, `diagram.json`, and `wokwi.toml` after each compile so the Wokwi extension can simulate the latest firmware. The generated `diagram.json` seeds board-specific layouts (UNO, MEGA, Nano, ESP32 S3 Box, M5Stack CoreS3, Seeed XIAO ESP32 families, and generic ESP32).
-
-## IntelliSense
+### IntelliSense
 
 - During builds, the extension parses compiler lines (`-I`, `-isystem`, `-iprefix`) and updates `.vscode/c_cpp_properties.json` (configuration `Arduino`). While the build runs, it only appends newly discovered paths to minimize churn; when the build finishes, it prunes unused and non-existent entries.
 - Clean builds reset `includePath` first, then add only discovered paths.
