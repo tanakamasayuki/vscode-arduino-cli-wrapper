@@ -35,26 +35,7 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - **Upload Sketch** – Compiles and uploads in one go. You will be prompted for a serial port if one is not already selected, and the monitor is closed/reopened as needed so the port stays free.
 - **Upload Data (ESP32)** – Looks for a `data/` folder, creates a LittleFS or SPIFFS image, and flashes it. Perfect for web assets or configuration files bundled with your sketch.
 - **Build Check** – Compiles every profile defined in `sketch.yaml` with full warnings (`--warnings all`), then shows a summary of warnings and errors so you can spot regressions quickly.
-- **Debug Sketch** – Generates matching tasks and launch configurations for each profile by reusing the board’s debugger metadata discovered through Arduino CLI. If Cortex-Debug is installed it launches a `cortex-debug` session; otherwise it falls back to the Microsoft C/C++ debugger with `request: "launch"` already set so the old “select a process to attach” prompt no longer appears.
 - **Run in Wokwi** – When a `sketch.yaml` profile sets `wokwi: true`, compiling that profile exports `.wokwi/<profile>/wokwi.elf`, scaffolds board-aware defaults for `diagram.json` / `wokwi.toml`, and adds a "Run in Wokwi" action that opens the diagram in the official simulator extension.
-
-#### Debugging your sketch step-by-step
-
-1. **Pick the profile and environment.** Set the profile you want to debug as the default in `sketch.yaml` (or be ready to pick it when prompted) and double-check related settings such as the serial port or Local Build Path so the generated tasks line up with your hardware.
-2. **Run “Arduino CLI: Debug Sketch”.** Choose the sketch and target profile when prompted. The command produces two artefacts under `.vscode/`:
-  - `tasks.json` gains **Arduino: Debug Build & Upload …** so you can flash the firmware with the probe attached. The task honours the Local Build Path setting and the profile’s CLI arguments.
-  - `launch.json` gains a Cortex-Debug entry (if the extension is installed) and a Microsoft C/C++ fallback. The extension lifts the necessary OpenOCD and GDB settings straight from Arduino CLI output, and the cppdbg variant always sets `"request": "launch"` to skip the old “select process” prompt.
-   Run this command at least once per profile—the generated files are required before any debug session can start. Re-run it whenever cores, board packages, or tool versions change so the tasks stay in sync with the data discovered from Arduino CLI.
-   While generating these files the extension parses `arduino-cli compile --show-properties` and related board metadata so the launch settings mirror your CLI environment. Once the files are refreshed the extension immediately runs the Arduino CLI debug build task and launches the matching configuration, dropping you into a halted session without extra clicks—the first breakpoint is Arduino’s `thb setup`, so you start paused at `setup()`.
-  The first run rebuilds every translation unit with debug options, so expect a noticeably longer compile. VS Code may prompt you to confirm whether the task should keep running—leave the dialog untouched and wait; compilation and upload will finish, then the debugger starts on its own.
-3. **Keep configurations fresh.** Rerun **Arduino CLI: Debug Sketch** whenever you change hardware, switch profiles, or update Arduino CLI/tooling—the command regenerates tasks, rewrites launch settings, and starts a new debug session so everything stays aligned.
-4. **Reuse the generated setup.** When nothing has changed since the last run, you can start debugging from the Run and Debug view or by pressing **F5**; both paths reuse the configuration and build output created by the command.
-5. **Customise if needed.** You can edit the generated `launch.json`—for example to change `overrideAttachCommands`, add semihosting commands, or point to a different SVD file. The wrapper will merge the next regeneration, keeping manual tweaks where possible. If you replace toolchains, rerun the command so it captures the new paths directly from Arduino CLI.
-
-Tips:
-- The extension owns the debugger configuration. Each run of **Arduino CLI: Debug Sketch** parses `arduino-cli compile --show-properties` and related board metadata, so you never have to maintain debugger arguments manually.
-- The extension keeps the Arduino Logs terminal in focus during the debug build so you can see OpenOCD output.
-- Leaving the probe connected while running **Compile Sketch** or **Upload Sketch** is safe; they now use the same build path as the debug task, so the ELF selected in `launch.json` always matches the latest upload.
 
 ### Keep sketches organised
 
@@ -95,6 +76,28 @@ Tips:
 *Run the Inspector after a build to review memory usage and section breakdowns.*
 
 All command logs are unified in a dedicated pseudo terminal with ANSI colors so you can follow the exact CLI invocation.
+
+### Debug your sketch (advanced)
+
+- **Debug Sketch** – Generates matching tasks and launch configurations for each profile by reusing the board’s debugger metadata discovered through Arduino CLI. If Cortex-Debug is installed it launches a `cortex-debug` session; otherwise it falls back to the Microsoft C/C++ debugger with `request: "launch"` already set so the old “select a process to attach” prompt no longer appears.
+
+#### Step-by-step workflow
+
+1. **Pick the profile and environment.** Set the profile you want to debug as the default in `sketch.yaml` (or be ready to pick it when prompted) and double-check related settings such as the serial port or Local Build Path so the generated tasks line up with your hardware.
+2. **Run “Arduino CLI: Debug Sketch”.** Choose the sketch and target profile when prompted. The command produces two artefacts under `.vscode/`:
+  - `tasks.json` gains **Arduino: Debug Build & Upload …** so you can flash the firmware with the probe attached. The task honours the Local Build Path setting and the profile’s CLI arguments.
+  - `launch.json` gains a Cortex-Debug entry (if the extension is installed) and a Microsoft C/C++ fallback. The extension lifts the necessary OpenOCD and GDB settings straight from Arduino CLI output, and the cppdbg variant always sets `"request": "launch"` to skip the old “select process” prompt.
+   Run this command at least once per profile—the generated files are required before any debug session can start. Re-run it whenever cores, board packages, or tool versions change so the tasks stay in sync with the data discovered from Arduino CLI.
+   While generating these files the extension parses `arduino-cli compile --show-properties` and related board metadata so the launch settings mirror your CLI environment. Once the files are refreshed the extension immediately runs the Arduino CLI debug build task and launches the matching configuration, dropping you into a halted session without extra clicks—the first breakpoint is Arduino’s `thb setup`, so you start paused at `setup()`.
+   The first run rebuilds every translation unit with debug options, so expect a noticeably longer compile. VS Code may prompt you to confirm whether the task should keep running—leave the dialog untouched and wait; compilation and upload will finish, then the debugger starts on its own.
+3. **Keep configurations fresh.** Rerun **Arduino CLI: Debug Sketch** whenever you change hardware, switch profiles, or update Arduino CLI/tooling—the command regenerates tasks, rewrites launch settings, and starts a new debug session so everything stays aligned.
+4. **Reuse the generated setup.** When nothing has changed since the last run, you can start debugging from the Run and Debug view or by pressing **F5**; both paths reuse the configuration and build output created by the command.
+5. **Customise if needed.** You can edit the generated `launch.json`—for example to change `overrideAttachCommands`, add semihosting commands, or point to a different SVD file. The wrapper will merge the next regeneration, keeping manual tweaks where possible. If you replace toolchains, rerun the command so it captures the new paths directly from Arduino CLI.
+
+Tips:
+- The extension owns the debugger configuration. Each run of **Arduino CLI: Debug Sketch** parses `arduino-cli compile --show-properties` and related board metadata, so you never have to maintain debugger arguments manually.
+- The extension keeps the Arduino Logs terminal in focus during the debug build so you can see OpenOCD output.
+- Leaving the probe connected while running **Compile Sketch** or **Upload Sketch** is safe; they now use the same build path as the debug task, so the ELF selected in `launch.json` always matches the latest upload.
 
 ## Explorer View
 
