@@ -2419,6 +2419,11 @@ async function commandDebug(sketchDir, profileFromTree) {
     const cppdbgCommands = [];
     const combinedPrimary = [...overrideAttach, ...overrideLaunch];
     const combinedSecondary = [...postAttach, ...postLaunch];
+    const normalizeCommandText = (cmd) => String(cmd || '').replace(/\s+/g, ' ').trim();
+    const isBlockedMonitorCommand = (cmd) => {
+      const normalized = normalizeCommandText(cmd).toLowerCase();
+      return normalized === 'monitor reset halt' || normalized === 'monitor gdb_sync';
+    };
     const isRemoteConnect = (cmd) => {
       const normalized = String(cmd || '').replace(/\s+/g, ' ').trim().toLowerCase();
       if (!normalized.startsWith('target ')) return false;
@@ -2429,6 +2434,7 @@ async function commandDebug(sketchDir, profileFromTree) {
         const trimmed = String(cmd || '').trim();
         if (!trimmed) continue;
         if (isRemoteConnect(trimmed)) continue;
+        if (isBlockedMonitorCommand(trimmed)) continue;
         cppdbgCommands.push({ text: trimmed });
       }
     };
