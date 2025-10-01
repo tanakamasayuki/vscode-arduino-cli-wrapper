@@ -2209,6 +2209,18 @@ async function commandDebug(sketchDir, profileFromTree) {
       stripTrailingContinue(toStringArray(value))
         .map((cmd) => fixDeprecatedMonitorCommand(cmd))
         .filter((cmd) => !!cmd);
+    const detectGdbServerPort = (args) => {
+      for (const entry of args) {
+        const cleaned = normalizeCommandText(entry).replace(/["']/g, '');
+        const match = /\bgdb[_ ]port\s+(\d{2,5})\b/i.exec(cleaned);
+        if (match) return match[1];
+      }
+      return '';
+    };
+    const buildServerStartedMessage = (port) => {
+      const resolved = port || '3333';
+      return `Info : Listening on port ${resolved} for gdb connections`;
+    };
     const toolchainPath = String(props['debug.toolchain.path'] || '').trim();
     const toolchainPrefix = String(props['debug.toolchain.prefix'] || '').trim();
     const normalizedToolchainPath = toolchainPath ? path.normalize(toolchainPath) : '';
@@ -2225,6 +2237,9 @@ async function commandDebug(sketchDir, profileFromTree) {
     delete cortexMerged.nmPath;
     const serverArgs = toStringArray(cortexMerged.serverArgs);
     delete cortexMerged.serverArgs;
+    const gdbPort = detectGdbServerPort(serverArgs);
+    const gdbServerAddress = gdbPort ? `localhost:${gdbPort}` : 'localhost:3333';
+    const gdbServerStartedMessage = buildServerStartedMessage(gdbPort);
     const overrideAttach = mapCortexCommands(cortexMerged.overrideAttachCommands);
     delete cortexMerged.overrideAttachCommands;
     const overrideLaunch = mapCortexCommands(cortexMerged.overrideLaunchCommands);
@@ -2361,6 +2376,7 @@ async function commandDebug(sketchDir, profileFromTree) {
       cwd: cwdLaunchPath
     };
     if (preLaunchTaskLabel) cortexConfig.preLaunchTask = preLaunchTaskLabel;
+    if (gdbServerAddress) cortexConfig.gdbTarget = gdbServerAddress;
     if (configFilesNormalized.length) cortexConfig.configFiles = configFilesNormalized;
     if (searchDirList.length) cortexConfig.searchDir = searchDirList;
     if (svdLaunchPath) cortexConfig.svdFile = svdLaunchPath;
@@ -2414,11 +2430,11 @@ async function commandDebug(sketchDir, profileFromTree) {
       cwd: cwdLaunchPath,
       MIMode: 'gdb',
       miDebuggerPath: gdbLaunchPath,
-      miDebuggerServerAddress: 'localhost:3333',
+      miDebuggerServerAddress: gdbServerAddress,
       debugServerPath: openOcdLaunchPath,
       debugServerArgs,
-      serverStarted: 'Info : Listening on port 3333',
-      serverLaunchTimeout: 20000,
+      serverStarted: gdbServerStartedMessage,
+      serverLaunchTimeout: 40000,
       filterStdout: true,
       filterStderr: true,
       stopAtEntry: false,
