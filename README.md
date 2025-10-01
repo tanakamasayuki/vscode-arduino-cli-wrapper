@@ -24,6 +24,13 @@ The goal is to make Arduino CLI approachable for beginners while unlocking the a
   - Windows: installer https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi or `winget install ArduinoSA.CLI`
   - Linux / macOS: follow https://arduino.github.io/arduino-cli/latest/installation/
 
+### Recommended VS Code extensions
+
+This extension declares an `extensionPack` so you can pull in the supporting tooling with one click. Install the extensions that match your workflow:
+
+- **C/C++ (ms-vscode.cpptools)** – Delivers IntelliSense, navigation, and the default `cppdbg` debugger. It is part of a standard C/C++ environment, so we strongly encourage having it installed alongside this wrapper.
+- **Cortex-Debug (marus25.cortex-debug)** – Adds advanced hardware-debug tooling such as register, peripheral, and memory views. Recommended when you rely on the debugger; optional if you only need lightweight or no debugging.
+
 2) Open a sketch folder
 - When a folder contains `.ino`, the status bar shows Compile/Upload/Monitor plus FQBN/Port/Baud/Warn.
 

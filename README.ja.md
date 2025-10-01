@@ -24,6 +24,13 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
   - Windows: インストーラー https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi または `winget install ArduinoSA.CLI`
   - Linux / macOS: https://arduino.github.io/arduino-cli/latest/installation/
 
+  ### 推奨 VS Code 拡張機能
+
+  この拡張機能は `extensionPack` で以下の VS Code 拡張機能を推奨しています。開発体験を高めるため、用途に応じてインストールしてください。
+
+  - **C/C++ (ms-vscode.cpptools)** – IntelliSense、コード補完、既定の `cppdbg` デバッガーなど、C/C++ 言語を扱うのに必須となる基本機能を提供します。Arduino CLI Wrapper を使う場合は常に導入しておくことをおすすめします。
+  - **Cortex-Debug (marus25.cortex-debug)** – レジスタやペリフェラルビュー、メモリマップ表示など高度なハードウェアデバッグ機能を備えています。本格的なデバッグを行う場合に導入してください。簡易的なデバッグしか行わない、あるいはデバッグ機能を使わない場合は必須ではありません。
+
 2) スケッチフォルダーを開く
 - `.ino` を含むフォルダーを開くと、Compile/Upload/Monitor と FQBN/Port/Baud/Warn がステータスバーに表示されます。
 
