@@ -3783,14 +3783,18 @@ function defaultCommandItems(dir, profile, parent, features = {}) {
     new CommandItem('Upload', 'upload', dir, profile, parent, t('treeUpload')),
     new CommandItem('Upload Data', 'uploadData', dir, profile, parent, t('treeUploadData')),
     new CommandItem('Monitor', 'monitor', dir, profile, parent, t('treeMonitor')),
-    new CommandItem('Debug', 'debug', dir, profile, parent, t('treeDebug')),
-    new CommandItem('Sketch.yaml Helper', 'helper', dir, profile, parent, t('treeHelper')),
-    new CommandItem('Open Examples', 'examples', dir, profile, parent, t('treeExamples')),
-    new CommandItem('Inspect', 'inspect', dir, profile, parent, t('treeInspect')),
   ];
   if (features && features.wokwiEnabled) {
     items.splice(2, 0, new CommandItem('Run in Wokwi', 'wokwiRun', dir, profile, parent, t('treeWokwiRun')));
   }
+  if (profile !== null && profile !== undefined && profile !== '') {
+    items.push(new CommandItem('Debug', 'debug', dir, profile, parent, t('treeDebug')));
+  }
+  items.push(
+    new CommandItem('Sketch.yaml Helper', 'helper', dir, profile, parent, t('treeHelper')),
+    new CommandItem('Open Examples', 'examples', dir, profile, parent, t('treeExamples')),
+    new CommandItem('Inspect', 'inspect', dir, profile, parent, t('treeInspect')),
+  );
   return items;
 }
 
@@ -3804,7 +3808,6 @@ function globalCommandItems() {
     new CommandItem('Open Inspector', 'inspect', '', '', undefined, t('treeInspectorOpen')),
     new CommandItem('Sketch.yaml Versions', 'versionCheck', '', '', undefined, t('treeVersionCheck')),
     new CommandItem('Build Check', 'buildCheck', '', '', undefined, t('treeBuildCheck')),
-    new CommandItem('Debug', 'debug', '', '', undefined, t('treeDebug')),
     new CommandItem('Refresh View', 'refreshView', '', '', undefined, t('treeRefresh')),
     new CommandItem('New Sketch', 'sketchNew', '', '', undefined, t('treeNewSketch')),
     new CommandItem('Run Command', 'runArbitrary', '', '', undefined, t('treeRunCommand')),
