@@ -259,6 +259,8 @@ const MSG = {
     cliWindowsBoardListFail: '[cli][win] Failed to list serial ports via arduino-cli.exe: {msg}',
     windowsSerialPortLabel: 'Windows host: {port}',
     windowsSerialPortDetail: 'Detected via Windows arduino-cli.exe',
+    cliWindowsPathConvertFail: '[cli][win] Failed to convert path for Windows upload: {msg}',
+    cliWindowsUploadFallback: '[cli][win] Upload via arduino-cli.exe failed ({msg}). Falling back to WSL arduino-cli.',
     buildCheckStart: '[build-check] Scanning sketch.yaml files…',
     buildCheckNoWorkspace: '[build-check] No workspace folder is open. Open a folder in VS Code and re-run Build Check from the Arduino CLI view.',
     buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found. Use the Sketch.yaml Helper to create profiles, then run Build Check again.',
@@ -578,6 +580,8 @@ const MSG = {
     cliWindowsBoardListFail: '[cli][win] Windows 側の arduino-cli.exe でシリアルポート一覧取得に失敗しました: {msg}',
     windowsSerialPortLabel: 'Windows ホスト: {port}',
     windowsSerialPortDetail: 'Windows 側の arduino-cli.exe で検出',
+    cliWindowsPathConvertFail: '[cli][win] Windows 側アップロード用のパス変換に失敗しました: {msg}',
+    cliWindowsUploadFallback: '[cli][win] arduino-cli.exe でのアップロードに失敗したため WSL 側の arduino-cli へフォールバックします ({msg})。',
     buildCheckStart: '[build-check] sketch.yaml を走査しています…',
     buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。VS Code でフォルダーを開き、Arduino CLI ビューからビルドチェックを再実行してください。',
     buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。Sketch.yaml ヘルパーでプロファイルを作成してからビルドチェックを再実行してください。',
@@ -676,6 +680,66 @@ function t(key, vars) {
   const str = (_isJa ? MSG.ja[key] : MSG.en[key]) || MSG.en[key] || key;
   if (!vars) return str;
   return str.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : ''));
+}
+
+function formatStoredPortValue(port, host) {
+  const trimmed = typeof port === 'string' ? port.trim() : '';
+  if (!trimmed) return '';
+  if (host === 'windows') return t('windowsSerialPortLabel', { port: trimmed });
+  return trimmed;
+}
+
+function parseStoredPortValue(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return { raw: '', display: '', host: '', cliPort: '' };
+  const lower = raw.toLowerCase();
+  if (lower.includes('windows')) {
+    const idx = raw.lastIndexOf(':');
+    const cliPort = idx >= 0 ? raw.slice(idx + 1).trim() : raw;
+    return { raw, display: raw, host: 'windows', cliPort };
+  }
+  return { raw, display: raw, host: 'local', cliPort: raw };
+}
+
+function getStoredPortInfo() {
+  if (!extContext) return { raw: '', display: '', host: '', cliPort: '' };
+  const raw = extContext.workspaceState.get(STATE_PORT, '') || '';
+  return parseStoredPortValue(raw);
+}
+
+async function convertPathForWindowsCli(p) {
+  if (!_isWslEnv) return p;
+  if (!p) return '';
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    const child = cp.spawn('wslpath', ['-w', p], { shell: false });
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('error', (err) => {
+      const msg = err && err.message ? err.message : String(err || 'unknown');
+      getOutput().appendLine(t('cliWindowsPathConvertFail', { msg }));
+      resolve('');
+    });
+    child.on('close', (code) => {
+      if (code === 0) {
+        const rawOut = stdout.trim();
+        const normalized = rawOut ? rawOut.replace(/\\/g, '/') : '';
+        resolve(normalized);
+      } else {
+        const msg = stderr.trim() || `exit ${code}`;
+        getOutput().appendLine(t('cliWindowsPathConvertFail', { msg }));
+        resolve('');
+      }
+    });
+  });
+}
+
+function shouldUseWindowsSerial(portInfo) {
+  if (!_isWslEnv) return false;
+  if (!portInfo) return false;
+  if (portInfo.host === 'windows') return true;
+  return /^com\d+/i.test(portInfo.cliPort || '');
 }
 
 const DEFAULT_M5GFX_HEADERS = [
@@ -1535,6 +1599,37 @@ function runCli(args, opts = {}) {
   });
 }
 
+function runWindowsCli(args, opts = {}) {
+  const cfg = getConfig();
+  const exe = 'arduino-cli.exe';
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const finalArgs = [...baseArgs, ...args];
+  const channel = getOutput();
+  const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
+  channel.show();
+  channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
+  if (opts.cwd) channel.appendLine(`${ANSI.dim}(cwd: ${opts.cwd})${ANSI.reset}`);
+
+  return new Promise((resolve, reject) => {
+    const child = cp.spawn(exe, finalArgs, {
+      cwd: opts.cwd || undefined,
+      shell: false,
+    });
+    child.stdout.on('data', (d) => channel.append(d.toString()));
+    child.stderr.on('data', (d) => channel.append(d.toString()));
+    child.on('error', (err) => {
+      const msg = err && err.message ? err.message : String(err || 'unknown');
+      channel.appendLine(`[error] ${msg}`);
+      reject(err);
+    });
+    child.on('close', (code) => {
+      channel.appendLine(`${ANSI.bold}${ANSI.green}[exit ${code}]${ANSI.reset}`);
+      if (code === 0) resolve({ code });
+      else reject(new Error(`arduino-cli.exe exited with code ${code}`));
+    });
+  });
+}
+
 /**
  * Determine the relevant workspace folder based on the active editor
  * or a user pick when multiple workspace folders are present.
@@ -1671,16 +1766,30 @@ async function runCliForJson(exe, args, channel) {
 function extractBoardsFromParsedList(parsed, transform) {
   const boards = [];
   const applyTransform = typeof transform === 'function' ? transform : undefined;
+  const defaultHost = _isWslEnv ? 'wsl' : 'local';
   const addBoard = (obj) => {
     let item = {
       port: obj.port || 'unknown',
       boardName: obj.boardName || obj.name || '',
       fqbn: obj.fqbn || '',
       protocol: obj.protocol || '',
+      host: obj.host || defaultHost,
+      displayPort: obj.displayPort || '',
+      storageValue: obj.storageValue,
     };
     if (applyTransform) {
       const transformed = applyTransform(item, obj);
       if (transformed) item = transformed;
+    }
+    if (!item.displayPort) {
+      item.displayPort = item.host === 'windows'
+        ? formatStoredPortValue(item.port, 'windows')
+        : (item.port || 'unknown');
+    }
+    if (!item.storageValue) {
+      item.storageValue = item.host === 'windows'
+        ? formatStoredPortValue(item.port, 'windows')
+        : (item.port || '');
     }
     boards.push(item);
   };
@@ -1720,6 +1829,15 @@ function buildBoardDetail(board) {
   if (board.protocol) parts.push(`Protocol: ${board.protocol}`);
   if (board.sourceLabel) parts.push(board.sourceLabel);
   return parts.length ? parts.join(' | ') : undefined;
+}
+
+function hasBuildPathFlag(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    const value = args[i];
+    if (value === '--build-path') return true;
+    if (typeof value === 'string' && value.startsWith('--build-path=')) return true;
+  }
+  return false;
 }
 
 /**
@@ -2044,7 +2162,8 @@ async function commandUpload() {
   const channel = getOutput();
 
   // Require port selection before proceeding (fail fast)
-  const currentPort = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  const storedPortInfo = getStoredPortInfo();
+  const currentPort = storedPortInfo.cliPort;
   if (!currentPort) {
     vscode.window.showErrorMessage(t('portUnsetWarn'));
     return;
@@ -2081,10 +2200,12 @@ async function commandUpload() {
     if (!profile) return;
     uploadArgs.push('--profile', profile);
     // If a port is already selected, pass it explicitly even when using profile
-    const selectedPort = extContext?.workspaceState.get(STATE_PORT, '') || '';
+    const selectedPortInfo = getStoredPortInfo();
+    const selectedPort = selectedPortInfo.cliPort;
     if (selectedPort) uploadArgs.push('-p', selectedPort);
   } else {
-    let port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+    let portInfo = getStoredPortInfo();
+    let port = portInfo.cliPort;
     if (!resolvedFqbn) {
       const set = await commandSetFqbn(true);
       if (!set) return;
@@ -2093,7 +2214,6 @@ async function commandUpload() {
     if (resolvedFqbn) uploadArgs.push('--fqbn', resolvedFqbn);
     if (port) uploadArgs.push('-p', port);
   }
-  uploadArgs.push(sketchDir);
   try {
     // Update IntelliSense during compile
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
@@ -2108,7 +2228,15 @@ async function commandUpload() {
       reopenMonitorAfter = true;
     }
 
-    await runCli(uploadArgs, { cwd: sketchDir, forceSpawn: true });
+    await performUploadWithPortStrategy({
+      sketchDir,
+      baseArgs: uploadArgs,
+      compileArgs,
+      buildProfile: selectedProfile,
+      buildFqbn: resolvedFqbn,
+      yamlInfo,
+      cfg
+    });
 
     if (reopenMonitorAfter) {
       // After upload, wait a bit for the port to settle before reopening monitor
@@ -2161,11 +2289,13 @@ async function commandDebug(sketchDir, profileFromTree) {
       }
     }
 
-    let port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+    let portInfo = getStoredPortInfo();
+    let port = portInfo.cliPort;
     if (!port) {
       const set = await commandSetPort(true);
       if (!set) return;
-      port = extContext.workspaceState.get(STATE_PORT, '') || '';
+      portInfo = getStoredPortInfo();
+      port = portInfo.cliPort;
     }
 
     const sketchName = path.basename(targetDir) || 'sketch';
@@ -2803,11 +2933,13 @@ async function commandUploadData() {
     vscode.window.showErrorMessage(`Executable not found: esptool under ${esptoolBase}`);
     return;
   }
-  let port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  let portInfo = getStoredPortInfo();
+  let port = portInfo.cliPort;
   if (!port) {
     const set = await commandSetPort(true);
     if (!set) return;
-    port = extContext.workspaceState.get(STATE_PORT, '') || '';
+    portInfo = getStoredPortInfo();
+    port = portInfo.cliPort;
   }
   const speed = props['upload.speed'] || '115200';
 
@@ -2821,10 +2953,11 @@ async function commandUploadData() {
   // Wait a bit to ensure the serial port is fully released (Windows needs time)
   await new Promise((res) => setTimeout(res, 1200));
 
-  channel.appendLine(`${ANSI.cyan}[upload-data] Flashing at ${offset} over ${port} (${speed} baud)${ANSI.reset}`);
+  const portDisplay = portInfo.display || port;
+  channel.appendLine(`${ANSI.cyan}[upload-data] Flashing at ${offset} over ${portDisplay} (${speed} baud)${ANSI.reset}`);
   try {
     await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, outBin], { cwd: sketchDir });
-    vscode.window.showInformationMessage(`Uploaded ${fsType} image to ${port} at ${offset}`);
+    vscode.window.showInformationMessage(`Uploaded ${fsType} image to ${portDisplay} at ${offset}`);
     if (reopenMonitorAfter) {
       await new Promise((res) => setTimeout(res, 1500));
       await commandMonitor();
@@ -3085,6 +3218,48 @@ async function ensureCompileCommandsSetting(sketchDir) {
     channel.appendLine(`[warn] Failed to update settings: ${err.message}`);
     return false;
   }
+}
+
+async function performUploadWithPortStrategy(params) {
+  const { sketchDir } = params;
+  if (!sketchDir) throw new Error('Sketch directory is required for upload');
+  const cfg = params.cfg || getConfig();
+  const baseArgs = Array.isArray(params.baseArgs) ? params.baseArgs.slice() : ['upload'];
+  if (baseArgs.length === 0 || baseArgs[0] !== 'upload') baseArgs.unshift('upload');
+  const compileArgs = Array.isArray(params.compileArgs) ? params.compileArgs.slice() : ['compile', sketchDir];
+
+  let buildPath = '';
+  try {
+    buildPath = await detectBuildPathForCompile(cfg.exe || 'arduino-cli', Array.isArray(cfg.extra) ? cfg.extra : [], compileArgs, sketchDir);
+  } catch (_) {
+    buildPath = '';
+  }
+
+  const portInfo = getStoredPortInfo();
+  const windowsCandidate = shouldUseWindowsSerial(portInfo);
+
+  if (windowsCandidate) {
+    const sketchWinPath = await convertPathForWindowsCli(sketchDir);
+    const buildWinPath = buildPath ? await convertPathForWindowsCli(buildPath) : '';
+    if (sketchWinPath && buildWinPath) {
+      const options = baseArgs.slice(1);
+      const windowsArgs = ['upload', sketchWinPath, ...options];
+      if (!hasBuildPathFlag(windowsArgs) && buildWinPath) {
+        windowsArgs.push('--build-path', buildWinPath);
+      }
+      try {
+        await runWindowsCli(windowsArgs, {});
+        return;
+      } catch (err) {
+        const msg = err && err.message ? err.message : String(err || 'unknown');
+        getOutput().appendLine(t('cliWindowsUploadFallback', { msg }));
+      }
+    }
+  }
+
+  const linuxArgs = baseArgs.slice();
+  linuxArgs.push(sketchDir);
+  await runCli(linuxArgs, { cwd: sketchDir, forceSpawn: true });
 }
 
 function updateCompileDiagnosticsFromStderr(stderrText, options = {}) {
@@ -4083,34 +4258,42 @@ async function runCleanCompileFor(sketchDir, profile) {
 async function runUploadFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
   const cfg = getConfig();
-  const channel = getOutput();
   // Require port
-  const currentPort = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  const portInfoInitial = getStoredPortInfo();
+  const currentPort = portInfoInitial.cliPort;
   if (!currentPort) { vscode.window.showErrorMessage(t('portUnsetWarn')); return; }
   // Build args
   const cArgs = ['compile']; if (cfg.verbose) cArgs.push('--verbose');
   const uArgs = ['upload']; if (cfg.verbose) uArgs.push('--verbose');
+  let yamlInfo;
+  try { yamlInfo = await readSketchYamlInfo(sketchDir); } catch { yamlInfo = null; }
   let wokwiEnabled = false;
   let resolvedFqbn = '';
   if (profile) {
     cArgs.push('--profile', profile); uArgs.push('--profile', profile);
-    try {
-      const yamlInfo = await readSketchYamlInfo(sketchDir);
-      wokwiEnabled = isProfileWokwiEnabled(yamlInfo, profile);
-    } catch { }
+    try { if (yamlInfo) wokwiEnabled = isProfileWokwiEnabled(yamlInfo, profile); } catch { }
   } else {
     resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
     if (!resolvedFqbn) { const set = await commandSetFqbn(true); if (!set) return; resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || ''; }
     cArgs.push('--fqbn', resolvedFqbn); uArgs.push('--fqbn', resolvedFqbn);
   }
-  const port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  const portInfo = getStoredPortInfo();
+  const port = portInfo.cliPort;
   if (port) uArgs.push('-p', port);
-  cArgs.push(sketchDir); uArgs.push(sketchDir);
+  cArgs.push(sketchDir);
   const opts = profile ? { profileName: profile, wokwiEnabled } : { fqbn: resolvedFqbn };
   await compileWithIntelliSense(sketchDir, cArgs, opts);
   let reopenMonitorAfter = false;
   if (monitorTerminal) { try { monitorTerminal.dispose(); } catch (_) { } monitorTerminal = undefined; reopenMonitorAfter = true; }
-  await runCli(uArgs, { cwd: sketchDir, forceSpawn: true });
+  await performUploadWithPortStrategy({
+    sketchDir,
+    baseArgs: uArgs,
+    compileArgs: cArgs,
+    buildProfile: profile,
+    buildFqbn: resolvedFqbn,
+    cfg,
+    yamlInfo
+  });
   if (reopenMonitorAfter) { await new Promise(r => setTimeout(r, 1500)); await commandMonitor(); }
 }
 
@@ -4735,7 +4918,9 @@ async function updateStatusBar() {
   const verboseEnabled = !!(cfg && cfg.verbose);
   let yamlInfo = await readSketchYamlInfo(sketchDir);
   const fqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
-  const port = extContext?.workspaceState.get(STATE_PORT, '') || '';
+  let portInfo = getStoredPortInfo();
+  let portDisplay = portInfo.display;
+  let portCliValue = portInfo.cliPort;
   const baud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
 
   if (yamlInfo && yamlInfo.profiles.length > 0) {
@@ -4747,10 +4932,17 @@ async function updateStatusBar() {
     try {
       if (label) {
         await extContext.workspaceState.update(STATE_LAST_PROFILE, label);
-        const curPort = extContext?.workspaceState.get(STATE_PORT, '') || '';
+        const curInfo = getStoredPortInfo();
+        const curPort = curInfo.cliPort;
         const curBaud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
         const p = await getPortFromSketchYaml(sketchDir, label);
-        if (p && p !== curPort) await extContext.workspaceState.update(STATE_PORT, p);
+        if (p && p !== curPort) {
+          const hostHint = (_isWslEnv && /^com\d+/i.test(p)) ? 'windows' : (_isWslEnv ? 'wsl' : 'local');
+          await extContext.workspaceState.update(STATE_PORT, formatStoredPortValue(p, hostHint));
+          portInfo = getStoredPortInfo();
+          portDisplay = portInfo.display;
+          portCliValue = portInfo.cliPort;
+        }
         const b = await getPortConfigBaudFromSketchYaml(sketchDir, label);
         if (b && String(b) !== String(curBaud)) await extContext.workspaceState.update(STATE_BAUD, String(b));
       }
@@ -4761,7 +4953,7 @@ async function updateStatusBar() {
     statusFqbn.command = 'arduino-cli.setFqbn';
   }
 
-  statusPort.text = port ? `$(plug) ${port}` : (_isJa ? '$(plug) Port: 未選択' : '$(plug) Port: Not set');
+  statusPort.text = portDisplay ? `$(plug) ${portDisplay}` : (_isJa ? '$(plug) Port: 未選択' : '$(plug) Port: Not set');
   statusPort.tooltip = _isJa ? '現在のポート（クリックで変更）' : 'Current serial port (click to change)';
   statusBaud.text = `$(watch) ${baud}`;
   statusBaud.tooltip = _isJa ? '現在のボーレート（クリックで変更）' : 'Current baudrate (click to change)';
@@ -4802,7 +4994,10 @@ async function commandSetProfile(required) {
   try {
     const profName = pick.value;
     const portFromText = getPortFromSketchYamlText(text, profName);
-    if (portFromText) await extContext.workspaceState.update(STATE_PORT, portFromText);
+    if (portFromText) {
+      const hostHint = (_isWslEnv && /^com\d+/i.test(portFromText)) ? 'windows' : (_isWslEnv ? 'wsl' : 'local');
+      await extContext.workspaceState.update(STATE_PORT, formatStoredPortValue(portFromText, hostHint));
+    }
     const baudFromText = getPortConfigBaudFromSketchYamlText(text, profName);
     if (baudFromText) await extContext.workspaceState.update(STATE_BAUD, String(baudFromText));
     await extContext.workspaceState.update(STATE_LAST_PROFILE, profName);
@@ -4956,11 +5151,13 @@ async function commandMonitor() {
     monitorTerminal = undefined;
   }
   // Ensure a serial port is selected
-  let port = extContext?.workspaceState.get(STATE_PORT, '');
+  let portInfo = getStoredPortInfo();
+  let port = portInfo.cliPort;
   if (!port) {
     const set = await commandSetPort(true);
     if (!set) return;
-    port = extContext.workspaceState.get(STATE_PORT, '');
+    portInfo = getStoredPortInfo();
+    port = portInfo.cliPort;
   }
   // Use saved baudrate (default 115200) without prompting
   let baud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
@@ -4990,6 +5187,7 @@ async function commandSetPort(required) {
     description: b.boardName || 'Unknown board',
     detail: buildBoardDetail(b),
     value: b.port || '',
+    storedValue: b.storageValue || formatStoredPortValue(b.port || '', b.host),
     fqbn: b.fqbn || ''
   }));
   items.push({ label: t('setPortManual'), value: '__manual__' });
@@ -4999,6 +5197,7 @@ async function commandSetPort(required) {
     return false;
   }
   let port = pick.value;
+  let storedValue = pick.storedValue ?? (typeof port === 'string' ? port : '');
   if (port === '__manual__') {
     const input = await vscode.window.showInputBox({ prompt: t('enterPort') });
     if (!input) {
@@ -5006,14 +5205,17 @@ async function commandSetPort(required) {
       return false;
     }
     port = input.trim();
+    const hostHint = (_isWslEnv && /^com\d+/i.test(port)) ? 'windows' : (_isWslEnv ? 'wsl' : 'local');
+    storedValue = formatStoredPortValue(port, hostHint);
   }
-  await extContext.workspaceState.update(STATE_PORT, port);
+  await extContext.workspaceState.update(STATE_PORT, storedValue);
   if (pick.fqbn) {
     await extContext.workspaceState.update(STATE_FQBN, pick.fqbn);
   }
   updateStatusBar();
   const withFqbn = pick.fqbn ? (_isJa ? `（FQBN: ${pick.fqbn} も設定）` : ` (FQBN: ${pick.fqbn})`) : '';
-  vscode.window.setStatusBarMessage(t('statusSetPort', { port, withFqbn }), 2000);
+  const displayPort = storedValue || port;
+  vscode.window.setStatusBarMessage(t('statusSetPort', { port: displayPort, withFqbn }), 2000);
   return true;
 }
 
