@@ -8,6 +8,8 @@
 - (JA) WSL 環境のシリアルポート選択で Windows 側 `arduino-cli.exe board list` の結果も統合し、Windows ホストであることが判別できる表示にしました。
 - (EN) Upload commands on WSL automatically switch to `arduino-cli.exe` when a COM* port is selected, converting sketch and build paths with `wslpath` before invoking the Windows CLI.
 - (JA) WSL 環境で COM* ポートを選択した場合、自動的に `arduino-cli.exe` を用いたアップロードへ切り替え、`wslpath` でスケッチ／ビルドパスを Windows 形式に変換して実行します。
+- (EN) Serial Monitor on WSL now detects COM* ports and launches `arduino-cli.exe monitor` directly so Windows-side devices stream correctly.
+- (JA) WSL 環境のシリアルモニターは COM* ポート検出時に `arduino-cli.exe monitor` を実行し、Windows 側デバイスへそのまま接続できるようにしました。
 
 ## 1.4.3
 - (EN) Debug command now mirrors Arduino IDE `debug_config` data (request type, OpenOCD server args, GDB command overrides, objdump/nm paths) so Cortex-Debug attaches cleanly without endless resets or missing tool errors.

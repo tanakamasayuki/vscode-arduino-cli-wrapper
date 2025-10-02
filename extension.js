@@ -742,6 +742,33 @@ function shouldUseWindowsSerial(portInfo) {
   return /^com\d+/i.test(portInfo.cliPort || '');
 }
 
+async function convertArgsForWindowsCli(args) {
+  if (!_isWslEnv) return args;
+  const result = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--config-file' || arg === '--log-file') {
+      const next = args[i + 1];
+      if (typeof next === 'string') {
+        const converted = await convertPathForWindowsCli(next);
+        result.push(arg);
+        result.push(converted || next);
+        i += 1;
+        continue;
+      }
+    } else if (typeof arg === 'string' && (/^--config-file=/.test(arg) || /^--log-file=/.test(arg))) {
+      const idx = arg.indexOf('=');
+      const key = arg.slice(0, idx + 1);
+      const value = arg.slice(idx + 1);
+      const converted = await convertPathForWindowsCli(value);
+      result.push(`${key}${converted || value}`);
+      continue;
+    }
+    result.push(arg);
+  }
+  return result;
+}
+
 const DEFAULT_M5GFX_HEADERS = [
   'M5Atom.h',
   'M5AtomDisplay.h',
@@ -5163,9 +5190,14 @@ async function commandMonitor() {
   let baud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
 
   const cfg = getConfig();
-  const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-  const args = [...baseArgs, 'monitor', '-p', port, '--config', `baudrate=${baud}`];
+  let args = [...baseArgs, 'monitor', '-p', port, '--config', `baudrate=${baud}`];
+
+  const useWindowsCli = shouldUseWindowsSerial(portInfo);
+  const exe = useWindowsCli ? 'arduino-cli.exe' : (cfg.exe || 'arduino-cli');
+  if (useWindowsCli) {
+    args = await convertArgsForWindowsCli(args);
+  }
 
   // Run in integrated terminal for interactive monitoring
   monitorTerminal = vscode.window.createTerminal({ name: `${OUTPUT_NAME} Monitor` });
