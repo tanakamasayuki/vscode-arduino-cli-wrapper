@@ -4,6 +4,8 @@
 
 - (EN) On WSL, the CLI version check now probes `arduino-cli.exe` on Windows and reports its version when available.
 - (JA) WSL 環境では CLI バージョン確認時に Windows 側の `arduino-cli.exe` も検出し、利用可能な場合はバージョンを表示します。
+- (EN) Serial port pickers on WSL now merge Windows-side ports discovered via `arduino-cli.exe board list` and label them as Windows hosts.
+- (JA) WSL 環境のシリアルポート選択で Windows 側 `arduino-cli.exe board list` の結果も統合し、Windows ホストであることが判別できる表示にしました。
 
 ## 1.4.3
 - (EN) Debug command now mirrors Arduino IDE `debug_config` data (request type, OpenOCD server args, GDB command overrides, objdump/nm paths) so Cortex-Debug attaches cleanly without endless resets or missing tool errors.
@@ -100,4 +102,3 @@
 - (JA) ステータスバーから警告レベルと verbose の組み合わせを切り替えられるトグルを追加しました（`all+V` などの短い表示）。
 - (EN) Status bar tweaks: renamed Build to Compile, removed Boards/ListAll badges, and placed the warnings badge next to baud.
 - (JA) ステータスバーを調整し、Build を Compile に改名・Boards/ListAll バッジを削除・警告バッジをボーレートの右隣に配置しました。
-

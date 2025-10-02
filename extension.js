@@ -256,6 +256,9 @@ const MSG = {
     cliCheckWindowsOk: '[cli][win] OK: arduino-cli.exe {version}',
     cliCheckWindowsNoVersion: '[cli][win] arduino-cli.exe returned no version information.',
     cliCheckWindowsFail: '[cli][win] Failed to run arduino-cli.exe: {msg}',
+    cliWindowsBoardListFail: '[cli][win] Failed to list serial ports via arduino-cli.exe: {msg}',
+    windowsSerialPortLabel: 'Windows host: {port}',
+    windowsSerialPortDetail: 'Detected via Windows arduino-cli.exe',
     buildCheckStart: '[build-check] Scanning sketch.yaml files…',
     buildCheckNoWorkspace: '[build-check] No workspace folder is open. Open a folder in VS Code and re-run Build Check from the Arduino CLI view.',
     buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found. Use the Sketch.yaml Helper to create profiles, then run Build Check again.',
@@ -572,6 +575,9 @@ const MSG = {
     cliCheckWindowsOk: '[cli][win] OK: arduino-cli.exe {version}',
     cliCheckWindowsNoVersion: '[cli][win] arduino-cli.exe からバージョン情報が得られませんでした。',
     cliCheckWindowsFail: '[cli][win] arduino-cli.exe の実行に失敗しました: {msg}',
+    cliWindowsBoardListFail: '[cli][win] Windows 側の arduino-cli.exe でシリアルポート一覧取得に失敗しました: {msg}',
+    windowsSerialPortLabel: 'Windows ホスト: {port}',
+    windowsSerialPortDetail: 'Windows 側の arduino-cli.exe で検出',
     buildCheckStart: '[build-check] sketch.yaml を走査しています…',
     buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。VS Code でフォルダーを開き、Arduino CLI ビューからビルドチェックを再実行してください。',
     buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。Sketch.yaml ヘルパーでプロファイルを作成してからビルドチェックを再実行してください。',
@@ -1601,72 +1607,119 @@ async function pickInoFromWorkspace() {
  * Supports multiple JSON formats emitted by different CLI versions.
  */
 async function listConnectedBoards() {
-  // Use JSON output for structured parsing (supports modern and legacy formats)
   const channel = getOutput();
-  let jsonText = '';
+  let jsonText;
   try {
-    await new Promise((resolve, reject) => {
-      const cfg = getConfig();
-      const exe = cfg.exe || 'arduino-cli';
-      const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-      const args = [...baseArgs, 'board', 'list', '--format', 'json'];
-      const child = cp.spawn(exe, args, { shell: false });
-      child.stdout.on('data', (d) => { jsonText += d.toString(); });
-      child.stderr.on('data', (d) => channel.append(d.toString()));
-      child.on('error', (e) => reject(e));
-      child.on('close', (code) => code === 0 ? resolve() : reject(new Error(`board list exit ${code}`)));
-    });
+    const cfg = getConfig();
+    const exe = cfg.exe || 'arduino-cli';
+    const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+    const args = [...baseArgs, 'board', 'list', '--format', 'json'];
+    jsonText = await runCliForJson(exe, args, channel);
   } catch (e) {
     showError(e);
     return [];
   }
+
+  let boards;
   try {
     const parsed = JSON.parse(jsonText);
-    const boards = [];
-    const addBoard = (obj) => {
-      const item = {
-        port: obj.port || 'unknown',
-        boardName: obj.boardName || obj.name || '',
-        fqbn: obj.fqbn || '',
-        protocol: obj.protocol || '',
-      };
-      boards.push(item);
-    };
-
-    // Modern format: detected_ports[] with port + matching_boards[]
-    if (Array.isArray(parsed.detected_ports)) {
-      for (const dp of parsed.detected_ports) {
-        const portAddr = dp?.port?.address || dp?.port?.label || dp?.port || 'unknown';
-        const protocol = dp?.port?.protocol_label || dp?.port?.protocol || '';
-        const matches = Array.isArray(dp?.matching_boards) ? dp.matching_boards : [];
-        if (matches.length > 0) {
-          for (const m of matches) {
-            addBoard({ port: portAddr, boardName: m.name, fqbn: m.fqbn, protocol });
-          }
-        } else {
-          // No matching board, still list the port
-          addBoard({ port: portAddr, boardName: '', fqbn: '', protocol });
-        }
-      }
-    }
-
-    // Legacy fallback: serialBoards[] (older CLI versions)
-    if (boards.length === 0 && Array.isArray(parsed.serialBoards)) {
-      for (const b of parsed.serialBoards) {
-        addBoard({
-          port: b.port?.address || b.port || 'unknown',
-          boardName: b.boardName || b.name || '',
-          fqbn: b.fqbn || '',
-          protocol: b.protocol || '',
-        });
-      }
-    }
-
-    return boards;
-  } catch (e) {
+    boards = extractBoardsFromParsedList(parsed);
+  } catch (err) {
     showError(new Error('Failed to parse board list JSON'));
     return [];
   }
+
+  if (_isWslEnv) {
+    try {
+      const winJson = await runCliForJson('arduino-cli.exe', ['board', 'list', '--format', 'json'], channel);
+      const winParsed = JSON.parse(winJson);
+      const winBoards = extractBoardsFromParsedList(winParsed, (item) => {
+        const rawPort = item.port || 'unknown';
+        return {
+          ...item,
+          displayPort: t('windowsSerialPortLabel', { port: rawPort }),
+          sourceLabel: t('windowsSerialPortDetail'),
+          host: 'windows'
+        };
+      });
+      boards.push(...winBoards);
+    } catch (err) {
+      const msg = ((err && err.message) ? err.message : String(err || 'unknown')).trim();
+      channel.appendLine(t('cliWindowsBoardListFail', { msg }));
+    }
+  }
+
+  return boards;
+}
+
+async function runCliForJson(exe, args, channel) {
+  let stdout = '';
+  await new Promise((resolve, reject) => {
+    const child = cp.spawn(exe, args, { shell: false, windowsHide: true });
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    if (channel && typeof channel.append === 'function') {
+      child.stderr.on('data', (d) => channel.append(d.toString()));
+    } else {
+      child.stderr.on('data', () => { });
+    }
+    child.on('error', reject);
+    child.on('close', (code) => code === 0 ? resolve() : reject(new Error(`board list exit ${code}`)));
+  });
+  return stdout;
+}
+
+function extractBoardsFromParsedList(parsed, transform) {
+  const boards = [];
+  const applyTransform = typeof transform === 'function' ? transform : undefined;
+  const addBoard = (obj) => {
+    let item = {
+      port: obj.port || 'unknown',
+      boardName: obj.boardName || obj.name || '',
+      fqbn: obj.fqbn || '',
+      protocol: obj.protocol || '',
+    };
+    if (applyTransform) {
+      const transformed = applyTransform(item, obj);
+      if (transformed) item = transformed;
+    }
+    boards.push(item);
+  };
+
+  if (Array.isArray(parsed.detected_ports)) {
+    for (const dp of parsed.detected_ports) {
+      const portAddr = dp?.port?.address || dp?.port?.label || dp?.port || 'unknown';
+      const protocol = dp?.port?.protocol_label || dp?.port?.protocol || '';
+      const matches = Array.isArray(dp?.matching_boards) ? dp.matching_boards : [];
+      if (matches.length > 0) {
+        for (const m of matches) {
+          addBoard({ port: portAddr, boardName: m.name, fqbn: m.fqbn, protocol });
+        }
+      } else {
+        addBoard({ port: portAddr, boardName: '', fqbn: '', protocol });
+      }
+    }
+  }
+
+  if (boards.length === 0 && Array.isArray(parsed.serialBoards)) {
+    for (const b of parsed.serialBoards) {
+      addBoard({
+        port: b.port?.address || b.port || 'unknown',
+        boardName: b.boardName || b.name || '',
+        fqbn: b.fqbn || '',
+        protocol: b.protocol || '',
+      });
+    }
+  }
+
+  return boards;
+}
+
+function buildBoardDetail(board) {
+  const parts = [];
+  if (board.fqbn) parts.push(`FQBN: ${board.fqbn}`);
+  if (board.protocol) parts.push(`Protocol: ${board.protocol}`);
+  if (board.sourceLabel) parts.push(board.sourceLabel);
+  return parts.length ? parts.join(' | ') : undefined;
 }
 
 /**
@@ -1677,8 +1730,8 @@ async function pickBoardOrFqbn(requirePort) {
   const boards = await listConnectedBoards();
   const items = boards.map(b => ({
     label: b.boardName || '(Unknown Board)',
-    description: `${b.port}${b.fqbn ? '  •  ' + b.fqbn : ''}`,
-    detail: b.protocol ? `Protocol: ${b.protocol}` : undefined,
+    description: `${(b.displayPort || b.port || '(unknown)')}${b.fqbn ? '  •  ' + b.fqbn : ''}`,
+    detail: buildBoardDetail(b),
     fqbn: b.fqbn,
     port: b.port,
     picked: false,
@@ -4933,9 +4986,9 @@ async function commandMonitor() {
 async function commandSetPort(required) {
   const boards = await listConnectedBoards();
   const items = boards.map(b => ({
-    label: b.port || '(unknown)',
+    label: b.displayPort || b.port || '(unknown)',
     description: b.boardName || 'Unknown board',
-    detail: b.fqbn ? `FQBN: ${b.fqbn}` : undefined,
+    detail: buildBoardDetail(b),
     value: b.port || '',
     fqbn: b.fqbn || ''
   }));
