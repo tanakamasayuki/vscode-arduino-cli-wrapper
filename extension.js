@@ -249,6 +249,7 @@ const MSG = {
     assistUpdateAll: 'Update all (FQBN/Port/Baud)',
     updatedYaml: 'Updated sketch.yaml.',
     noChanges: 'No changes.',
+    compileDurationGeneric: '[{label}] Completed in {seconds}s.',
     cliCheckStart: '[cli] Checking arduino-cli…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] Failed to run arduino-cli. Please configure arduino-cli-wrapper.path or install arduino-cli.',
@@ -270,6 +271,7 @@ const MSG = {
     buildCheckStatusSuccess: 'SUCCESS',
     buildCheckStatusFailed: 'FAILED',
     buildCheckCompileResult: '[build-check] {sketch} ({profile}) {status} warnings:{warnings} errors:{errors}',
+    buildCheckProfileDuration: '[build-check] {sketch} ({profile}) completed in {seconds}s.',
     buildCheckParseError: '[build-check] Failed to parse JSON output for {sketch} ({profile}): {msg}',
     buildCheckCliError: '[build-check] Compile failed to run for {sketch} ({profile}): exit {code}',
     buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
@@ -571,6 +573,7 @@ const MSG = {
     assistUpdateAll: 'すべて更新（FQBN/Port/Baud）',
     updatedYaml: 'sketch.yaml を更新しました。',
     noChanges: '変更はありませんでした。',
+    compileDurationGeneric: '[{label}] {seconds}秒で完了しました。',
     cliCheckStart: '[cli] arduino-cli を確認中…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] arduino-cli の実行に失敗しました。arduino-cli のインストールまたは設定 (arduino-cli-wrapper.path) を行ってください。',
@@ -592,6 +595,7 @@ const MSG = {
     buildCheckStatusSuccess: '成功',
     buildCheckStatusFailed: '失敗',
     buildCheckCompileResult: '[build-check] {sketch} ({profile}) {status} 警告:{warnings}件 エラー:{errors}件',
+    buildCheckProfileDuration: '[build-check] {sketch} ({profile}) のコンパイル完了: {seconds}秒',
     buildCheckParseError: '[build-check] {sketch} ({profile}) の JSON 出力解析に失敗しました: {msg}',
     buildCheckCliError: '[build-check] {sketch} ({profile}) のコンパイル実行に失敗しました (終了コード {code})。',
     buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
@@ -742,6 +746,14 @@ function shouldUseWindowsSerial(portInfo) {
   if (!portInfo) return false;
   if (portInfo.host === 'windows') return true;
   return /^com\d+/i.test(portInfo.cliPort || '');
+}
+
+function formatDurationSeconds(ms) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return '0.0';
+  const seconds = ms / 1000;
+  if (seconds >= 100) return seconds.toFixed(0);
+  if (seconds >= 10) return seconds.toFixed(1);
+  return seconds.toFixed(2);
 }
 
 async function convertArgsForWindowsCli(args) {
@@ -2132,9 +2144,20 @@ async function commandCompile() {
     const opts = selectedProfile
       ? { profileName: selectedProfile, wokwiEnabled }
       : { fqbn: resolvedFqbn };
-    // Always use the output channel and update IntelliSense during the build
-    await compileWithIntelliSense(sketchDir, args, opts);
+    const result = await compileWithIntelliSense(sketchDir, args, opts);
+    if (result && typeof result.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'compile',
+        seconds: formatDurationSeconds(result.durationMs)
+      }));
+    }
   } catch (e) {
+    if (e && typeof e.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'compile',
+        seconds: formatDurationSeconds(e.durationMs)
+      }));
+    }
     showError(e);
   }
 }
@@ -2247,7 +2270,13 @@ async function commandUpload() {
     // Update IntelliSense during compile
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
     const compileOpts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : { fqbn: resolvedFqbn };
-    await compileWithIntelliSense(sketchDir, compileArgs, compileOpts);
+    const compileResult = await compileWithIntelliSense(sketchDir, compileArgs, compileOpts);
+    if (compileResult && typeof compileResult.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'upload',
+        seconds: formatDurationSeconds(compileResult.durationMs)
+      }));
+    }
 
     // If a serial monitor is open, close it before upload to avoid port conflicts
     let reopenMonitorAfter = false;
@@ -2273,6 +2302,12 @@ async function commandUpload() {
       await commandMonitor();
     }
   } catch (e) {
+    if (e && typeof e.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'upload',
+        seconds: formatDurationSeconds(e.durationMs)
+      }));
+    }
     showError(e);
   }
 }
@@ -2372,7 +2407,19 @@ async function commandDebug(sketchDir, profileFromTree) {
         fqbn: usedFqbn,
         skipLocalBuildPath: true,
       });
+      if (compileResult && typeof compileResult.durationMs === 'number') {
+        channel.appendLine(t('compileDurationGeneric', {
+          label: 'debug',
+          seconds: formatDurationSeconds(compileResult.durationMs)
+        }));
+      }
     } catch (err) {
+      if (err && typeof err.durationMs === 'number') {
+        channel.appendLine(t('compileDurationGeneric', {
+          label: 'debug',
+          seconds: formatDurationSeconds(err.durationMs)
+        }));
+      }
       channel.appendLine(t('debugCompileFailed', { msg: err.message }));
       showError(err);
       return;
@@ -3051,6 +3098,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
   const originalArgs = Array.isArray(args) ? args.slice() : [];
+  const startTime = Date.now();
   if (originalArgs.length === 0 || originalArgs[0] !== 'compile') {
     originalArgs.unshift('compile');
   }
@@ -3130,10 +3178,14 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
       writeToTerminal(raw);
     });
     child.on('error', (err) => {
+      if (err && typeof err === 'object') {
+        err.durationMs = Date.now() - startTime;
+      }
       channel.appendLine(`[error] ${err.message}`);
       reject(err);
     });
     child.on('close', async (code) => {
+      const durationMs = Date.now() - startTime;
       term.write(`\r\n${ANSI.bold}${(code === 0 ? ANSI.green : ANSI.red)}[exit ${code}]${ANSI.reset}\r\n`);
       let diagSummary = { files: 0, diagnostics: 0 };
       try {
@@ -3154,7 +3206,12 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
         } catch (_) { }
       }
       if (code !== 0) {
-        reject(new Error(`arduino-cli exited with code ${code}`));
+        const err = new Error(`arduino-cli exited with code ${code}`);
+        err.code = code;
+        err.stdout = stdoutBuffer;
+        err.stderr = stderrBuffer;
+        err.durationMs = durationMs;
+        reject(err);
         return;
       }
       try {
@@ -3183,7 +3240,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
       } catch (err) {
         channel.appendLine(`[warn] ${err.message}`);
       }
-      resolve({ code, stdout: stdoutBuffer, stderr: stderrBuffer });
+      resolve({ code, stdout: stdoutBuffer, stderr: stderrBuffer, durationMs });
     });
   });
 }
@@ -4255,6 +4312,7 @@ async function findSketchYamlEntries() {
 async function runCompileFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
   const cfg = getConfig();
+  const channel = getOutput();
   const args = ['compile'];
   if (cfg.verbose) args.push('--verbose');
   let wokwiEnabled = false;
@@ -4273,11 +4331,28 @@ async function runCompileFor(sketchDir, profile) {
   }
   args.push(sketchDir);
   const opts = profile ? { profileName: profile, wokwiEnabled } : { fqbn: resolvedFqbn };
-  await compileWithIntelliSense(sketchDir, args, opts);
+  try {
+    const result = await compileWithIntelliSense(sketchDir, args, opts);
+    if (result && typeof result.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'compile',
+        seconds: formatDurationSeconds(result.durationMs)
+      }));
+    }
+  } catch (e) {
+    if (e && typeof e.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'compile',
+        seconds: formatDurationSeconds(e.durationMs)
+      }));
+    }
+    throw e;
+  }
 }
 async function runCleanCompileFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
   const cfg = getConfig();
+  const channel = getOutput();
   const args = ['compile', '--clean'];
   if (cfg.verbose) args.push('--verbose');
   let wokwiEnabled = false;
@@ -4297,11 +4372,28 @@ async function runCleanCompileFor(sketchDir, profile) {
   const opts = profile
     ? { emptyIncludePath: true, profileName: profile, wokwiEnabled }
     : { emptyIncludePath: true, fqbn: resolvedFqbn };
-  await compileWithIntelliSense(sketchDir, args, opts);
+  try {
+    const result = await compileWithIntelliSense(sketchDir, args, opts);
+    if (result && typeof result.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'clean-compile',
+        seconds: formatDurationSeconds(result.durationMs)
+      }));
+    }
+  } catch (e) {
+    if (e && typeof e.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'clean-compile',
+        seconds: formatDurationSeconds(e.durationMs)
+      }));
+    }
+    throw e;
+  }
 }
 async function runUploadFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
   const cfg = getConfig();
+  const channel = getOutput();
   // Require port
   const portInfoInitial = getStoredPortInfo();
   const currentPort = portInfoInitial.cliPort;
@@ -4326,7 +4418,23 @@ async function runUploadFor(sketchDir, profile) {
   if (port) uArgs.push('-p', port);
   cArgs.push(sketchDir);
   const opts = profile ? { profileName: profile, wokwiEnabled } : { fqbn: resolvedFqbn };
-  await compileWithIntelliSense(sketchDir, cArgs, opts);
+  try {
+    const result = await compileWithIntelliSense(sketchDir, cArgs, opts);
+    if (result && typeof result.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'upload',
+        seconds: formatDurationSeconds(result.durationMs)
+      }));
+    }
+  } catch (e) {
+    if (e && typeof e.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'upload',
+        seconds: formatDurationSeconds(e.durationMs)
+      }));
+    }
+    throw e;
+  }
   let reopenMonitorAfter = false;
   if (monitorTerminal) { try { monitorTerminal.dispose(); } catch (_) { } monitorTerminal = undefined; reopenMonitorAfter = true; }
   await performUploadWithPortStrategy({
@@ -4510,7 +4618,8 @@ async function commandBuildCheck() {
         diagnostics: [],
         exitCode: null,
         compilerOut: '',
-        compilerErr: ''
+        compilerErr: '',
+        compileDurationMs: 0
       };
       let detailPushed = false;
       let runResult;
@@ -4518,6 +4627,11 @@ async function commandBuildCheck() {
         runResult = await runBuildCheckCompile(exe, sketchDir, profile);
       } catch (err) {
         totals.failed += 1;
+        if (err && typeof err.durationMs === 'number') {
+          const seconds = formatDurationSeconds(err.durationMs);
+          channel.appendLine(t('buildCheckProfileDuration', { sketch: sketchLabel, profile, seconds }));
+          detail.compileDurationMs = err.durationMs;
+        }
         const codeText = err && typeof err.code !== 'undefined' ? String(err.code) : err && err.message ? err.message : 'spawn error';
         const errorMsg = t('buildCheckCliError', { sketch: sketchLabel, profile, code: codeText });
         channel.appendLine(errorMsg);
@@ -4526,6 +4640,12 @@ async function commandBuildCheck() {
         report.results.push(detail);
         detailPushed = true;
         continue;
+      }
+
+      if (runResult && typeof runResult.durationMs === 'number') {
+        const seconds = formatDurationSeconds(runResult.durationMs);
+        channel.appendLine(t('buildCheckProfileDuration', { sketch: sketchLabel, profile, seconds }));
+        detail.compileDurationMs = runResult.durationMs;
       }
 
       const { code, stdout, stderr } = runResult;
@@ -4738,15 +4858,22 @@ async function runBuildCheckCompile(exe, sketchDir, profile) {
   const displayExe = needsPwshCallOperator() ? '& ' + quoteArg(exe) : quoteArg(exe);
   channel.appendLine(ANSI.cyan + '$ ' + displayExe + ' ' + args.map(quoteArg).join(' ') + ANSI.reset);
   channel.appendLine(ANSI.dim + '(cwd: ' + sketchDir + ')' + ANSI.reset);
+  const startTime = Date.now();
   return new Promise((resolve, reject) => {
     const child = cp.spawn(exe, args, { cwd: sketchDir, shell: false });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
-    child.on('error', reject);
+    child.on('error', (err) => {
+      if (err && typeof err === 'object') {
+        err.durationMs = Date.now() - startTime;
+      }
+      reject(err);
+    });
     child.on('close', (code) => {
-      resolve({ code, stdout, stderr });
+      const durationMs = Date.now() - startTime;
+      resolve({ code, stdout, stderr, durationMs });
     });
   });
 }
@@ -4774,8 +4901,20 @@ async function commandCleanCompile() {
     const opts = { emptyIncludePath: true, profileName: profile };
     args.push(sketchDir);
     try {
-      await compileWithIntelliSense(sketchDir, args, opts);
+      const result = await compileWithIntelliSense(sketchDir, args, opts);
+      if (result && typeof result.durationMs === 'number') {
+        channel.appendLine(t('compileDurationGeneric', {
+          label: 'clean-compile',
+          seconds: formatDurationSeconds(result.durationMs)
+        }));
+      }
     } catch (e) {
+      if (e && typeof e.durationMs === 'number') {
+        channel.appendLine(t('compileDurationGeneric', {
+          label: 'clean-compile',
+          seconds: formatDurationSeconds(e.durationMs)
+        }));
+      }
       showError(e);
     }
     return;
@@ -4790,8 +4929,20 @@ async function commandCleanCompile() {
   args.push('--fqbn', resolvedFqbn);
   args.push(sketchDir);
   try {
-    await compileWithIntelliSense(sketchDir, args, { emptyIncludePath: true, fqbn: resolvedFqbn });
+    const result = await compileWithIntelliSense(sketchDir, args, { emptyIncludePath: true, fqbn: resolvedFqbn });
+    if (result && typeof result.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'clean-compile',
+        seconds: formatDurationSeconds(result.durationMs)
+      }));
+    }
   } catch (e) {
+    if (e && typeof e.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: 'clean-compile',
+        seconds: formatDurationSeconds(e.durationMs)
+      }));
+    }
     showError(e);
   }
 }
