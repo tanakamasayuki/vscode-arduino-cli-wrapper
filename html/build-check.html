@@ -75,6 +75,12 @@
       text-align: left;
     }
 
+    th.numeric,
+    td.numeric {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
     th {
       background: rgba(128, 128, 128, 0.15);
       font-weight: 600;
@@ -155,6 +161,7 @@
           <th id="colErrors">Errors</th>
           <th id="colPlatform">Platform</th>
           <th id="colLibraries">Libraries</th>
+          <th id="colDuration" class="numeric">Duration (s)</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -232,6 +239,7 @@
         document.getElementById('colErrors').textContent = state.strings.buildReportTableErrors || 'Errors';
         document.getElementById('colPlatform').textContent = state.strings.buildReportTablePlatform || 'Platform';
         document.getElementById('colLibraries').textContent = state.strings.buildReportTableLibraries || 'Libraries';
+        document.getElementById('colDuration').textContent = state.strings.buildReportTableDuration || 'Duration (s)';
         document.getElementById('labelTotal').textContent = state.strings.buildReportTotalsHeading || 'Total';
         document.getElementById('labelSuccess').textContent = state.strings.buildCheckStatusSuccess || 'Success';
         document.getElementById('labelFailed').textContent = state.strings.buildCheckStatusFailed || 'Failed';
@@ -264,7 +272,7 @@
         if (results.length === 0) {
           const row = document.createElement('tr');
           const cell = document.createElement('td');
-          cell.colSpan = 7;
+          cell.colSpan = 8;
           cell.className = 'no-data';
           cell.textContent = state.strings.buildReportNoData || 'No build results.';
           row.appendChild(cell);
@@ -274,22 +282,27 @@
         for (const res of results) {
           const row = document.createElement('tr');
           row.className = res.success ? 'success' : 'failure';
-          row.innerHTML = [
-            escapeHtml(res.sketchLabel || ''),
-            escapeHtml(res.profile || ''),
-            escapeHtml(res.success ? (state.strings.buildReportResultSuccess || 'Success') : (state.strings.buildReportResultFailure || 'Failed')),
-            String(res.warnings ?? 0),
-            String(res.errors ?? 0),
-            escapeHtml(res.platformLabel || ''),
-            formatLibrariesCell(res.libraries)
-          ].map((value) => `<td>${value}</td>`).join('');
+          const durationCell = formatDurationCell(res.compileDurationMs);
+          const cells = [
+            { value: escapeHtml(res.sketchLabel || '') },
+            { value: escapeHtml(res.profile || '') },
+            { value: escapeHtml(res.success ? (state.strings.buildReportResultSuccess || 'Success') : (state.strings.buildReportResultFailure || 'Failed')) },
+            { value: String(res.warnings ?? 0), className: 'numeric' },
+            { value: String(res.errors ?? 0), className: 'numeric' },
+            { value: escapeHtml(res.platformLabel || '') },
+            { value: formatLibrariesCell(res.libraries) },
+            { value: durationCell, className: 'numeric' }
+          ];
+          row.innerHTML = cells
+            .map(({ value, className }) => `<td${className ? ` class="${className}"` : ''}>${value}</td>`)
+            .join('');
           resultsTableBody.appendChild(row);
 
           if (res.message) {
             const messageRow = document.createElement('tr');
             messageRow.className = 'message-row';
             const cell = document.createElement('td');
-            cell.colSpan = 7;
+            cell.colSpan = 8;
             cell.textContent = res.message;
             messageRow.appendChild(cell);
             resultsTableBody.appendChild(messageRow);
@@ -306,6 +319,18 @@
           return escapeHtml(`${name}${version}`);
         }).filter(Boolean);
         return parts.length ? parts.join('<br/>') : '—';
+      }
+
+      function formatDurationCell(ms) {
+        if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return '—';
+        return formatDurationSeconds(ms);
+      }
+
+      function formatDurationSeconds(ms) {
+        const seconds = ms / 1000;
+        if (seconds >= 100) return seconds.toFixed(0);
+        if (seconds >= 10) return seconds.toFixed(1);
+        return seconds.toFixed(2);
       }
 
       function renderPlatforms() {
