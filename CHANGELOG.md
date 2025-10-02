@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.5.1
 - (EN) Compile commands and Build Check now report elapsed time (per profile) so you can spot slow configurations at a glance.
 - (JA) コンパイル実行とビルドチェックで経過時間を表示し、各プロファイルの所要時間を確認できるようになりました。
 
