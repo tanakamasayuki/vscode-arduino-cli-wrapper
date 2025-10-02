@@ -261,6 +261,7 @@ const MSG = {
     windowsSerialPortDetail: 'Detected via Windows arduino-cli.exe',
     cliWindowsPathConvertFail: '[cli][win] Failed to convert path for Windows upload: {msg}',
     cliWindowsUploadFallback: '[cli][win] Upload via arduino-cli.exe failed ({msg}). Falling back to WSL arduino-cli.',
+    cliWindowsOnlyOperation: '[cli][win] This command does not support Windows-hosted serial ports from WSL. Use a port recognized inside WSL or run this command from Windows.',
     buildCheckStart: '[build-check] Scanning sketch.yaml files…',
     buildCheckNoWorkspace: '[build-check] No workspace folder is open. Open a folder in VS Code and re-run Build Check from the Arduino CLI view.',
     buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found. Use the Sketch.yaml Helper to create profiles, then run Build Check again.',
@@ -582,6 +583,7 @@ const MSG = {
     windowsSerialPortDetail: 'Windows 側の arduino-cli.exe で検出',
     cliWindowsPathConvertFail: '[cli][win] Windows 側アップロード用のパス変換に失敗しました: {msg}',
     cliWindowsUploadFallback: '[cli][win] arduino-cli.exe でのアップロードに失敗したため WSL 側の arduino-cli へフォールバックします ({msg})。',
+    cliWindowsOnlyOperation: '[cli][win] このコマンドは WSL から Windows ホストのシリアルポートへは接続できません。WSL で認識されるポートを利用するか、Windows 側でコマンドを実行してください。',
     buildCheckStart: '[build-check] sketch.yaml を走査しています…',
     buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。VS Code でフォルダーを開き、Arduino CLI ビューからビルドチェックを再実行してください。',
     buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。Sketch.yaml ヘルパーでプロファイルを作成してからビルドチェックを再実行してください。',
@@ -2285,6 +2287,13 @@ async function commandDebug(sketchDir, profileFromTree) {
       targetDir = path.dirname(ino);
     }
     const channel = getOutput();
+    const portInfoInitial = getStoredPortInfo();
+    if (shouldUseWindowsSerial(portInfoInitial)) {
+      const message = t('cliWindowsOnlyOperation');
+      vscode.window.showErrorMessage(message);
+      channel.appendLine(message);
+      return;
+    }
     const targetUri = vscode.Uri.file(targetDir);
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri)
       || (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
@@ -2793,6 +2802,14 @@ async function commandUploadData() {
   if (!ino) return;
   const sketchDir = path.dirname(ino);
   const channel = getOutput();
+
+  const portInfoInitial = getStoredPortInfo();
+  if (shouldUseWindowsSerial(portInfoInitial)) {
+    const message = t('cliWindowsOnlyOperation');
+    vscode.window.showErrorMessage(message);
+    channel.appendLine(message);
+    return;
+  }
 
   // Ensure data folder exists
   const dataDirUri = vscode.Uri.file(path.join(sketchDir, 'data'));
