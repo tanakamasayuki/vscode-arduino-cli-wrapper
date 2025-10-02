@@ -43,6 +43,58 @@ Tips:
 - If multiple `.ino` files exist, a picker appears to choose one. If an `.ino` editor is active, it is preferred.
 - If the FQBN cannot be inferred, you can enter one manually.
 
+## Speeding up builds with WSL
+
+If Arduino CLI builds feel slow on Windows, you can offload compilation to a Linux environment by using WSL (Windows Subsystem for Linux). This extension automatically detects that you are running inside WSL, uses the Linux `arduino-cli` for compile tasks, and still relies on `arduino-cli.exe` on Windows for upload/monitor so you do not have to configure serial ports twice. Follow the steps below.
+
+1. **Install WSL and a Linux distribution**
+   ```powershell
+   # PowerShell (Admin)
+   wsl --install -d Ubuntu-24.04
+   wsl --set-default-version 2
+   ```
+   Complete the first boot prompt by setting your Linux username and password. Skip this step if you already have WSL installed.
+
+2. **Set up Arduino CLI inside WSL**
+   ```bash
+   # Inside your WSL terminal (Ubuntu)
+   sudo apt update
+   curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+   sudo mv bin/arduino-cli /usr/local/bin/
+   arduino-cli config init
+   arduino-cli core update-index
+   ```
+   Verify with `arduino-cli version`.
+
+3. **Connect VS Code to WSL**
+   - From the command palette select **Remote-WSL: New Window**, choose Ubuntu, and let VS Code reopen in WSL mode.
+   - Install this extension in the WSL environment when prompted.
+   - Leave `arduino-cli-wrapper.path` empty to auto-detect `/usr/local/bin/arduino-cli`, or set the full path explicitly if you prefer.
+
+4. **Compile on Linux**
+   - Open your sketch folder while connected to WSL and run **Arduino CLI: Compile Sketch**. Linux-side build outputs (e.g. under `/home/<user>/.arduino15/`) are created automatically.
+
+5. **Upload / Monitor stay on Windows**
+   - When you trigger Upload or Monitor, the extension switches to `arduino-cli.exe` on Windows, connecting to `COM` ports directly. No extra serial configuration inside WSL is required.
+
+6. **Limitations for Upload Data and Debug**
+   - `Arduino CLI: Upload Data` and `Arduino CLI: Debug` cannot access Windows-hosted serial ports from WSL. Choose one of these workarounds:
+     1. Forward the USB device into WSL with `usbipd-win` so the port appears under `/dev/tty*`.
+        ```powershell
+        usbipd wsl list
+        usbipd wsl attach --busid <BUSID>
+        ```
+        ```bash
+        ls /dev/tty*
+        ```
+     2. Run those commands from Windows instead of WSL.
+
+7. **Troubleshooting tips**
+   - Seeing `Latest arduino-cli: (unknown)` usually means the GitHub API rate limit was exceeded. Set `GITHUB_TOKEN` in your environment or retry later.
+   - If a `COM` port does not appear, confirm that Windows detects the board in Device Manager and reinstall drivers when necessary.
+
+With this hybrid setup you get the best of both worlds: fast Linux-based builds and seamless serial access through Windows.
+
 ## Everyday operations and UI
 
 ### Getting started with commands (Command Palette)
@@ -227,5 +279,4 @@ Point clangd or other tools to `<workspace>/.vscode/compile_commands.json` and t
 ## License
 
 CC0 1.0 Universal (Public Domain Dedication). See `LICENSE`.
-
 

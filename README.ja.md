@@ -43,6 +43,62 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - `.ino` が複数あるときは選択ダイアログが出ます。アクティブな `.ino` エディターがあれば優先されます。
 - FQBN を自動取得できない場合は手入力できます。
 
+## WSL を使ったビルド高速化ガイド
+
+Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows Subsystem for Linux) に Linux 環境を作り、ビルドだけを高速な Linux 上で行う構成が便利です。この拡張機能はコンパイル時に WSL 側の `arduino-cli` を利用しつつ、Upload / Monitor だけを Windows ネイティブの `arduino-cli.exe` に自動で切り替えるため、シリアルポート設定を二重管理する必要がありません。手順は次のとおりです。
+
+1. **WSL と Linux ディストリビューションをインストール**
+   ```powershell
+   # PowerShell (管理者) で実行
+   wsl --install -d Ubuntu-24.04
+   wsl --set-default-version 2
+   ```
+   インストール後、初回起動でユーザー名とパスワードを設定します。既に WSL を利用している場合はこのステップをスキップできます。
+
+2. **WSL 内に Arduino CLI をセットアップ**
+   ```bash
+   # WSL (Ubuntu) ターミナル内
+   sudo apt update
+   curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+   sudo mv bin/arduino-cli /usr/local/bin/
+   arduino-cli config init
+   arduino-cli core update-index
+   ```
+   `arduino-cli version` コマンドでインストールが完了しているか確認してください。
+
+3. **VS Code から WSL リモートへ接続**
+   - VS Code のコマンドパレットから “Remote-WSL: 新しいウィンドウで開く” を選び、Ubuntu 環境を開きます。
+   - この拡張機能を WSL 側にもインストールします (初回起動時に VS Code から確認ダイアログが出ます)。
+   - 設定 `arduino-cli-wrapper.path` が空の場合は、WSL の `arduino-cli` を自動検出して利用します。明示的に指定したい場合は `arduino-cli` のフルパス (`/usr/local/bin/arduino-cli` など) を入力してください。
+
+4. **WSL 上でビルドする**
+   - WSL 上のワークスペースで `.ino` を含むフォルダーを開きます。
+   - 「Arduino CLI: Compile Sketch」を実行すると、WSL の `arduino-cli` が使用されます。ビルド成果物は Linux のファイルシステム上 (例: `/home/<user>/.arduino15/...`) に作成されます。
+
+5. **アップロード / モニタは Windows 側を自動利用**
+   - この拡張機能は WSL 環境でも、Upload / Monitor コマンドを実行すると自動的に Windows 側の `arduino-cli.exe` を起動し、`COM` ポートへ直接接続します。WSL でシリアルポートを設定する必要はありません。
+
+6. **Update Data / Debug の制限と対処**
+   - `Arduino CLI: Upload Data` と `Arduino CLI: Debug` は、WSL から Windows ホストのシリアルポートへ直接アクセスできないため利用できません。
+   - 対処方法は以下のいずれかです。
+     1. `usbipd-win` などを用いて Windows の USB デバイスを WSL 側に転送し、WSL 内でポートを認識させてから実行する。
+        ```powershell
+        # PowerShell (管理者) でホスト側デバイスをエクスポート
+        usbipd wsl list
+        usbipd wsl attach --busid <BUSID>
+        ```
+        ```bash
+        # WSL 内で接続を確認
+        ls /dev/tty*
+        ```
+     2. もしくは Windows 側の VS Code / Arduino CLI で `Upload Data` や `Debug` を実行する。
+
+7. **トラブルシューティング**
+   - `Latest arduino-cli: (unknown)` と表示された場合、GitHub API のレート制限に引っかかっています。`GITHUB_TOKEN` を VS Code の環境変数に設定するか、しばらく時間を空けて再試行してください。
+   - COM ポートが表示されないときは、Windows 側でボードが正しく認識されているか (デバイスマネージャー) を確認し、必要であればドライバーを再インストールしてください。
+
+これらの手順を踏むことで、コンパイルは WSL の高速な Linux 環境で実行しつつ、アップロードとシリアルモニターは Windows から直接行うハイブリッド運用が可能になります。
+
 ## 日常操作と UI
 
 ### コマンドパレットから始める（初心者ガイド）
@@ -229,6 +285,5 @@ clangd などの設定で `<ワークスペース>/.vscode/compile_commands.json
 ## ライセンス
 
 CC0 1.0 Universal (Public Domain Dedication)。詳細は `LICENSE` を参照してください。
-
 
 
