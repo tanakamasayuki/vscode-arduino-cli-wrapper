@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+## 1.5.0
 - (EN) On WSL, the CLI version check now probes `arduino-cli.exe` on Windows and reports its version when available.
 - (JA) WSL 環境では CLI バージョン確認時に Windows 側の `arduino-cli.exe` も検出し、利用可能な場合はバージョンを表示します。
 - (EN) Serial port pickers on WSL now merge Windows-side ports discovered via `arduino-cli.exe board list` and label them as Windows hosts.
