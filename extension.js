@@ -171,6 +171,17 @@ let logTermWriteEmitter;
 // extension host sandbox.
 const _locale = (vscode.env.language || 'en').toLowerCase();
 const _isJa = _locale.startsWith('ja');
+const _remoteName = (vscode.env.remoteName || '').toLowerCase();
+const _isWslEnv = (() => {
+  if (_remoteName === 'wsl') return true;
+  if (_remoteName.startsWith('wsl+')) return true;
+  if (process.platform !== 'linux') return false;
+  if (process.env.WSL_DISTRO_NAME) return true;
+  const rel = typeof os.release === 'function' ? os.release() : '';
+  if (!rel) return false;
+  const lower = String(rel).toLowerCase();
+  return lower.includes('microsoft') || lower.includes('wsl');
+})();
 const MSG = {
   en: {
     missingCli: 'Arduino CLI not found: {exe}',
@@ -241,6 +252,10 @@ const MSG = {
     cliCheckStart: '[cli] Checking arduino-cli…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] Failed to run arduino-cli. Please configure arduino-cli-wrapper.path or install arduino-cli.',
+    cliCheckWindowsStart: '[cli][win] Checking arduino-cli.exe…',
+    cliCheckWindowsOk: '[cli][win] OK: arduino-cli.exe {version}',
+    cliCheckWindowsNoVersion: '[cli][win] arduino-cli.exe returned no version information.',
+    cliCheckWindowsFail: '[cli][win] Failed to run arduino-cli.exe: {msg}',
     buildCheckStart: '[build-check] Scanning sketch.yaml files…',
     buildCheckNoWorkspace: '[build-check] No workspace folder is open. Open a folder in VS Code and re-run Build Check from the Arduino CLI view.',
     buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found. Use the Sketch.yaml Helper to create profiles, then run Build Check again.',
@@ -553,6 +568,10 @@ const MSG = {
     cliCheckStart: '[cli] arduino-cli を確認中…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] arduino-cli の実行に失敗しました。arduino-cli のインストールまたは設定 (arduino-cli-wrapper.path) を行ってください。',
+    cliCheckWindowsStart: '[cli][win] arduino-cli.exe を確認しています…',
+    cliCheckWindowsOk: '[cli][win] OK: arduino-cli.exe {version}',
+    cliCheckWindowsNoVersion: '[cli][win] arduino-cli.exe からバージョン情報が得られませんでした。',
+    cliCheckWindowsFail: '[cli][win] arduino-cli.exe の実行に失敗しました: {msg}',
     buildCheckStart: '[build-check] sketch.yaml を走査しています…',
     buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。VS Code でフォルダーを開き、Arduino CLI ビューからビルドチェックを再実行してください。',
     buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。Sketch.yaml ヘルパーでプロファイルを作成してからビルドチェックを再実行してください。',
@@ -1696,6 +1715,20 @@ async function commandVersion() {
   } else {
     channel.appendLine('[info] arduino-cli not detected. Showing latest release info…');
   }
+  if (_isWslEnv) {
+    channel.appendLine(t('cliCheckWindowsStart'));
+    try {
+      const winVersion = await getWindowsArduinoCliVersionString();
+      if (winVersion) {
+        channel.appendLine(t('cliCheckWindowsOk', { version: winVersion }));
+      } else {
+        channel.appendLine(t('cliCheckWindowsNoVersion'));
+      }
+    } catch (err) {
+      const msg = ((err && err.message) ? err.message : String(err || 'unknown')).trim();
+      channel.appendLine(t('cliCheckWindowsFail', { msg }));
+    }
+  }
   try {
     const latest = await fetchLatestArduinoCliTag();
     const latestNorm = normalizeVersion(latest);
@@ -1743,14 +1776,35 @@ async function getArduinoCliVersionString() {
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-  const args = [...baseArgs, 'version', '--format', 'json'];
+  return getCliVersionStringForExecutable(exe, { baseArgs });
+}
+
+async function getWindowsArduinoCliVersionString() {
+  return getCliVersionStringForExecutable('arduino-cli.exe', { useJsonFlag: true });
+}
+
+async function getCliVersionStringForExecutable(exe, options = {}) {
+  const baseArgs = Array.isArray(options.baseArgs) ? [...options.baseArgs] : [];
+  const versionArgs = options.useJsonFlag ? ['version', '--json'] : ['version', '--format', 'json'];
+  const args = [...baseArgs, ...versionArgs];
   let stdout = '';
+  let stderr = '';
   await new Promise((resolve, reject) => {
-    const child = cp.spawn(exe, args, { shell: false });
+    const child = cp.spawn(exe, args, { shell: false, windowsHide: true });
     child.stdout.on('data', d => { stdout += d.toString(); });
-    child.stderr.on('data', () => { });
+    child.stderr.on('data', d => { stderr += d.toString(); });
     child.on('error', reject);
-    child.on('close', code => code === 0 ? resolve() : reject(new Error(`version exit ${code}`)));
+    child.on('close', code => {
+      if (code === 0) {
+        resolve();
+      } else {
+        const msg = stderr.trim() || `version exit ${code}`;
+        const err = new Error(msg);
+        err.code = code;
+        err.stderr = stderr;
+        reject(err);
+      }
+    });
   });
   try {
     const json = JSON.parse(stdout || '{}');
