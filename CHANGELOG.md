@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+## 1.5.3
 - (EN) Examples browser now recognises library include paths that end with "src" and scans from the parent directory so bundled examples appear.
 - (JA) サンプルブラウザーが "src" で終わるライブラリの include パスを親ディレクトリから探索し、同梱のサンプルを拾えるようにしました。
 
