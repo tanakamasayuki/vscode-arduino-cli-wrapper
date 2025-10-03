@@ -3421,10 +3421,14 @@ function parseCompilerDiagnostics(stderrText, options = {}) {
     const isWarning = severity === vscode.DiagnosticSeverity.Warning;
     const isWorkspace = isWorkspaceFile(resolvedPath);
     if (!isWorkspace) {
-      if (isWarning && skipWarningsOutsideWorkspace) {
-        continue;
-      }
-      if (!allowOutsideDiagnostics) {
+      if (isWarning) {
+        if (skipWarningsOutsideWorkspace) {
+          continue;
+        }
+        if (!allowOutsideDiagnostics) {
+          continue;
+        }
+      } else if (!allowOutsideDiagnostics && severity !== vscode.DiagnosticSeverity.Error) {
         continue;
       }
     }
@@ -4639,6 +4643,43 @@ async function commandBuildCheck() {
         channel.appendLine(errorMsg);
         detail.message = errorMsg;
         detail.exitCode = typeof err?.code === 'number' ? err.code : null;
+        try {
+          const diagMap = parseCompilerDiagnostics(stderrNormalized, {
+            cwd: sketchDir,
+            skipWarningsOutsideWorkspace: true,
+            allowOutsideDiagnostics: true,
+          });
+          const fallbackDiagnostics = [];
+          let fallbackWarnings = 0;
+          let fallbackErrors = 0;
+          for (const [fsPath, entries] of diagMap.entries()) {
+            if (!entries || entries.length === 0) continue;
+            for (const diagEntry of entries) {
+              const isError = diagEntry.severity === vscode.DiagnosticSeverity.Error;
+              if (isError) fallbackErrors += 1;
+              else fallbackWarnings += 1;
+              const range = diagEntry.range;
+              const startPos = range && range.start ? range.start : null;
+              const lineNumber = startPos ? startPos.line + 1 : undefined;
+              const columnNumber = startPos ? startPos.character + 1 : undefined;
+              fallbackDiagnostics.push({
+                severity: isError ? 'ERROR' : 'WARNING',
+                message: diagEntry.message,
+                file: fsPath,
+                relative: workspaceRelativePath(fsPath),
+                line: lineNumber,
+                column: columnNumber,
+              });
+            }
+          }
+          if (fallbackDiagnostics.length > 0) {
+            detail.diagnostics = fallbackDiagnostics;
+            detail.warnings = fallbackWarnings;
+            detail.errors = fallbackErrors;
+            totals.warnings += fallbackWarnings;
+            totals.errors += fallbackErrors;
+          }
+        } catch (_) { /* ignore fallback parse errors */ }
         report.results.push(detail);
         detailPushed = true;
         continue;
@@ -4684,11 +4725,47 @@ async function commandBuildCheck() {
         : [];
       const diagRecords = diagnostics.map(formatInspectorDiagnostic);
       const visibleDiagnostics = diagRecords.filter((d) => d.severity !== 'WARNING' || isWorkspaceFile(d.file));
-      const warnCount = visibleDiagnostics.filter((d) => d.severity === 'WARNING').length;
-      const errCount = visibleDiagnostics.filter((d) => d.severity === 'ERROR').length;
+      let warnCount = visibleDiagnostics.filter((d) => d.severity === 'WARNING').length;
+      let errCount = visibleDiagnostics.filter((d) => d.severity === 'ERROR').length;
+      const aggregatedDiagnostics = visibleDiagnostics.slice();
+
+      if (!success && errCount === 0 && stderrNormalized) {
+        try {
+          const diagMap = parseCompilerDiagnostics(stderrNormalized, {
+            cwd: sketchDir,
+            skipWarningsOutsideWorkspace: true,
+            allowOutsideDiagnostics: true,
+          });
+          let extraWarnings = 0;
+          let extraErrors = 0;
+          for (const [fsPath, entries] of diagMap.entries()) {
+            if (!entries || entries.length === 0) continue;
+            for (const diagEntry of entries) {
+              const isError = diagEntry.severity === vscode.DiagnosticSeverity.Error;
+              if (isError) extraErrors += 1;
+              else extraWarnings += 1;
+              const range = diagEntry.range;
+              const startPos = range && range.start ? range.start : null;
+              const lineNumber = startPos ? startPos.line + 1 : undefined;
+              const columnNumber = startPos ? startPos.character + 1 : undefined;
+              aggregatedDiagnostics.push({
+                severity: isError ? 'ERROR' : 'WARNING',
+                message: diagEntry.message,
+                file: fsPath,
+                relative: workspaceRelativePath(fsPath),
+                line: lineNumber,
+                column: columnNumber,
+              });
+            }
+          }
+          warnCount += extraWarnings;
+          errCount += extraErrors;
+        } catch (_) { /* ignore fallback parse errors */ }
+      }
+
       detail.warnings = warnCount;
       detail.errors = errCount;
-      detail.diagnostics = visibleDiagnostics;
+      detail.diagnostics = aggregatedDiagnostics;
       totals.warnings += warnCount;
       totals.errors += errCount;
 
@@ -7430,7 +7507,10 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
 }
 
 function formatInspectorDiagnostic(diag) {
-  const severity = String(diag?.severity || '').toUpperCase();
+  let severity = String(diag?.severity || '').trim().toUpperCase();
+  if (severity.includes('ERROR') || severity.includes('FATAL')) severity = 'ERROR';
+  else if (severity.includes('WARN')) severity = 'WARNING';
+  else if (severity.includes('NOTE')) severity = 'NOTE';
   const message = String(diag?.message || '').trim();
   const location = diag?.location || {};
   const file = typeof location.file === 'string'

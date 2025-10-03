@@ -1,6 +1,10 @@
-# Changelog / 変更履歴
+﻿# Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Build Check now backfills diagnostics from stderr so fatal errors outside the workspace still count toward totals.
+- (JA) ビルドチェックで JSON に診断が含まれない場合でも標準エラーを再解析し、ワークスペース外の致命的なエラーも件数に反映されるようにしました。
+- (EN) Inspector diagnostics normalise "FATAL" severities to errors so missing headers and similar failures surface correctly.
+- (JA) インスペクター診断で "FATAL" をエラーとして扱い、ヘッダー欠如などの致命的な失敗が正しくエラー表示されるようにしました。
 
 ## 1.5.1
 - (EN) Compile commands and Build Check now report elapsed time (per profile) so you can spot slow configurations at a glance.
@@ -113,3 +117,4 @@
 - (JA) ステータスバーから警告レベルと verbose の組み合わせを切り替えられるトグルを追加しました（`all+V` などの短い表示）。
 - (EN) Status bar tweaks: renamed Build to Compile, removed Boards/ListAll badges, and placed the warnings badge next to baud.
 - (JA) ステータスバーを調整し、Build を Compile に改名・Boards/ListAll バッジを削除・警告バッジをボーレートの右隣に配置しました。
+
