@@ -8072,6 +8072,7 @@ async function detectLibraryRootsFromCompileCommands(sketchDir) {
       if (!path.isAbsolute(absolute)) {
         try { absolute = path.resolve(baseDir, absolute); } catch { absolute = includePath; }
       }
+      const preferForwardSlash = absolute.includes('/') && !absolute.includes('\\');
       absolute = path.normalize(absolute).replace(/[\\/]+$/, '');
       if (!absolute) continue;
       const segments = absolute.split(/[\\/]+/);
@@ -8079,11 +8080,20 @@ async function detectLibraryRootsFromCompileCommands(sketchDir) {
       for (const nameLower of libNamesLower) {
         if (segmentsLower.includes(nameLower)) {
           let rootCandidate = absolute;
-          const idxSrc = segmentsLower.lastIndexOf('src');
-          if (idxSrc >= 0) {
-            rootCandidate = segments.slice(0, idxSrc).join(path.sep);
+          const withoutSrcSuffix = absolute.replace(/([\\/]+src)+$/i, '');
+          if (withoutSrcSuffix && withoutSrcSuffix !== absolute) {
+            rootCandidate = withoutSrcSuffix;
+          } else {
+            const idxSrc = segmentsLower.lastIndexOf('src');
+            if (idxSrc >= 0) {
+              const joiner = preferForwardSlash ? '/' : path.sep;
+              const trimmedSegments = segments.slice(0, idxSrc);
+              const rebuilt = trimmedSegments.join(joiner);
+              if (rebuilt) rootCandidate = rebuilt;
+            }
           }
-          roots.add(path.normalize(rootCandidate));
+          const normalizedRoot = path.normalize(rootCandidate);
+          if (normalizedRoot) roots.add(normalizedRoot);
         }
       }
     }

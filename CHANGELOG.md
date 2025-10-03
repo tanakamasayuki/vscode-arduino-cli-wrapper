@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) Examples browser now recognises library include paths that end with "src" and scans from the parent directory so bundled examples appear.
+- (JA) サンプルブラウザーが "src" で終わるライブラリの include パスを親ディレクトリから探索し、同梱のサンプルを拾えるようにしました。
+
 ## 1.5.2
 - (EN) Sketch.yaml helper now auto-selects dependent libraries whenever a library is explicitly added from the UI.
 - (JA) スケッチ.yaml ヘルパーで UI からライブラリを明示的に追加した際に、依存ライブラリも自動で選択されるようにしました。
