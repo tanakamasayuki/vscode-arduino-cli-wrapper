@@ -1,6 +1,8 @@
 ﻿# Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Sketch.yaml helper now auto-selects dependent libraries whenever a library is explicitly added from the UI.
+- (JA) スケッチ.yaml ヘルパーで UI からライブラリを明示的に追加した際に、依存ライブラリも自動で選択されるようにしました。
 - (EN) Build Check now backfills diagnostics from stderr so fatal errors outside the workspace still count toward totals.
 - (JA) ビルドチェックで JSON に診断が含まれない場合でも標準エラーを再解析し、ワークスペース外の致命的なエラーも件数に反映されるようにしました。
 - (EN) Inspector diagnostics normalise "FATAL" severities to errors so missing headers and similar failures surface correctly.

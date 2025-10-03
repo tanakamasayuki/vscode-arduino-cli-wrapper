@@ -784,6 +784,58 @@
           }
           return mismatches;
         }
+        function findLibraryRowByName(targetName) {
+          if (!Array.isArray(libsCache)) return null;
+          const wanted = String(targetName || '');
+          for (const row of libsCache) {
+            if (libName(row) === wanted) return row;
+          }
+          return null;
+        }
+        function extractDependencyNames(row) {
+          if (!row || typeof row !== 'object') return [];
+          const deps = Array.isArray(row.dependencies) ? row.dependencies : [];
+          const names = [];
+          for (const entry of deps) {
+            let depName = '';
+            if (typeof entry === 'string') {
+              depName = entry;
+            } else if (entry && typeof entry === 'object') {
+              if (typeof entry.name === 'string') depName = entry.name;
+              else if (typeof entry.library === 'string') depName = entry.library;
+              else if (typeof entry.id === 'string') depName = entry.id;
+            }
+            depName = typeof depName === 'string' ? depName.trim() : '';
+            if (depName) names.push(depName);
+          }
+          return names;
+        }
+        function addDependenciesForSelection(rootName) {
+          const root = String(rootName || '').trim();
+          if (!root) return false;
+          const visited = new Set();
+          const stack = [root];
+          let added = false;
+          while (stack.length > 0) {
+            const current = stack.pop();
+            if (visited.has(current)) continue;
+            visited.add(current);
+            const row = findLibraryRowByName(current);
+            if (!row) continue;
+            const depNames = extractDependencyNames(row);
+            for (const depName of depNames) {
+              if (!depName || depName === current) continue;
+              if (!visited.has(depName)) stack.push(depName);
+              if (!selectedLibs.has(depName)) {
+                const depRow = findLibraryRowByName(depName);
+                const depVer = depRow ? libVersion(depRow) : '';
+                selectedLibs.set(depName, depVer ? depVer : '');
+                added = true;
+              }
+            }
+          }
+          return added;
+        }
         function renderLibs() {
           libsList.innerHTML = '';
           if (!Array.isArray(libsCache)) { libsStatus.textContent = 'Load error'; return; }
@@ -803,11 +855,24 @@
             cb.id = id;
             cb.checked = selectedLibs.has(name);
             cb.addEventListener('change', () => {
-              if (cb.checked) { selectedLibs.set(name, ver ? ver : ''); } else { selectedLibs.delete(name); }
+              let needsRefresh = false;
+              if (cb.checked) {
+                if (!selectedLibs.has(name)) selectedLibs.set(name, ver ? ver : '');
+                const added = addDependenciesForSelection(name);
+                if (added) needsRefresh = true;
+              } else {
+                selectedLibs.delete(name);
+              }
               // User interacted with libraries; allow YAML libraries patching from now on
               try { window.__ALLOW_LIB_PATCH__ = true; } catch (_) { }
               updateSummary();
               try { updateMismatches(); } catch (_) { }
+              if (needsRefresh) {
+                setTimeout(() => {
+                  renderLibs();
+                  updateSummary();
+                }, 0);
+              }
             });
             const lab = document.createElement('label');
             lab.htmlFor = id;
