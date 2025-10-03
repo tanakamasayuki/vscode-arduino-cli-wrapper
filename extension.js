@@ -985,7 +985,8 @@ function filterUrisOutsideBuild(uris) {
   return uris.filter((uri) => {
     if (!uri) return false;
     const fsPath = typeof uri === 'string' ? uri : uri.fsPath;
-    return !isPathInsideBuildDir(fsPath);
+    if (!fsPath) return false;
+    return !isPathInsideBuildDir(fsPath) && !containsHiddenDirectory(fsPath);
   });
 }
 
@@ -5119,8 +5120,7 @@ async function detectSketchDirForStatus() {
     const files = filterUrisOutsideBuild(
       await vscode.workspace.findFiles(
         new vscode.RelativePattern(wf, '**/*.ino'),
-        new vscode.RelativePattern(wf, '**/{node_modules,.git,build,out,dist,.vscode,.build}/**'),
-        1
+        new vscode.RelativePattern(wf, '**/{node_modules,.git,build,out,dist,.vscode,.build}/**')
       )
     );
     if (files && files.length > 0) return path.dirname(files[0].fsPath);
