@@ -220,6 +220,8 @@ const MSG = {
     setFqbnUnsetWarn: 'FQBN is not selected',
     statusSetFqbn: 'FQBN set: {fqbn}',
     monitorPickPortTitle: 'Select port from board list',
+    portScanProgressTitle: 'Detecting serial ports…',
+    portScanProgressMessage: 'Querying connected boards via arduino-cli',
     setPortManual: 'Enter port manually…',
     portUnsetWarn: 'Port is not selected',
     statusSetPort: 'Port set: {port}{withFqbn}',
@@ -546,6 +548,8 @@ const MSG = {
     setFqbnUnsetWarn: 'FQBN が未選択です',
     statusSetFqbn: 'FQBN を設定: {fqbn}',
     monitorPickPortTitle: 'arduino-cli board list の結果からポートを選択してください',
+    portScanProgressTitle: 'シリアルポートを検出しています…',
+    portScanProgressMessage: 'arduino-cli で接続中のボードを取得しています',
     setPortManual: 'ポートを手入力…',
     portUnsetWarn: 'ポートが未選択です',
     statusSetPort: 'ポートを設定: {port}{withFqbn}',
@@ -1918,7 +1922,8 @@ function hasBuildPathFlag(args) {
  */
 async function pickBoardOrFqbn(requirePort) {
   const boards = await listConnectedBoards();
-  const items = boards.map(b => ({
+  const boardItems = Array.isArray(boards) ? boards : [];
+  const items = boardItems.map(b => ({
     label: b.boardName || '(Unknown Board)',
     description: `${(b.displayPort || b.port || '(unknown)')}${b.fqbn ? '  •  ' + b.fqbn : ''}`,
     detail: buildBoardDetail(b),
@@ -5504,7 +5509,20 @@ async function commandMonitor() {
  * @param {boolean} required If true, shows warning when cancelled.
  */
 async function commandSetPort(required) {
-  const boards = await listConnectedBoards();
+  let boards;
+  try {
+    boards = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: t('portScanProgressTitle')
+    }, async (progress) => {
+      progress.report({ message: t('portScanProgressMessage') });
+      return await listConnectedBoards();
+    });
+  } catch (err) {
+    showError(err);
+    if (required) vscode.window.showWarningMessage(t('portUnsetWarn'));
+    return false;
+  }
   const items = boards.map(b => ({
     label: b.displayPort || b.port || '(unknown)',
     description: b.boardName || 'Unknown board',
