@@ -6,6 +6,8 @@
 - (JA) ポートに IP アドレスが含まれる OTA アップロード時に `ARDUINO_CLI_OTA_PASSWORD` 環境変数から取得した値で `--upload-field password` を付与し、Arduino Logs の出力では展開前の文字列を表示するようにしました。
 - (EN) Selecting the serial port now shows a progress spinner (“Detecting serial ports…”) while Arduino CLI gathers connected boards, so you know the command is still working.
 - (JA) シリアルポート選択時に「シリアルポートを検出しています…」の進捗表示を追加し、arduino-cli が接続中のボードを取得している最中であることが分かるようにしました。
+- (EN) Added an “External programmer (JTAG/SWD/ISP)” option to the port picker so uploads can skip passing `-p` when you use non-serial programmers.
+- (JA) ポート選択に「外部書き込み装置を使用 (JTAG/SWD/ISP など)」を追加し、シリアル以外の書き込み装置を使う場合に `-p` なしでアップロードできるようにしました。
 
 ## 1.5.3
 - (EN) Examples browser now recognises library include paths that end with "src" and scans from the parent directory so bundled examples appear.

@@ -154,6 +154,8 @@ const STATE_FQBN = 'arduino-cli.selectedFqbn';
 const STATE_PORT = 'arduino-cli.selectedPort';
 const STATE_BAUD = 'arduino-cli.selectedBaud';
 const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
+const PORT_NONE_SENTINEL = '__arduino-cli-port-none__';
+const PICK_NO_PORT = '__arduino-cli-pick-no-port__';
 const VALID_WARNING_LEVELS = new Set(['workspace', 'none', 'default', 'more', 'all']);
 const BUILD_DIR_NAME = '.build';
 let output;
@@ -223,8 +225,15 @@ const MSG = {
     portScanProgressTitle: 'Detecting serial ports…',
     portScanProgressMessage: 'Querying connected boards via arduino-cli',
     setPortManual: 'Enter port manually…',
+    setPortNoSerial: 'External programmer (JTAG/SWD/ISP)',
+    setPortNoSerialDescription: 'Choose this when uploading with a dedicated programmer instead of a serial port',
+    setPortNoSerialDetail: 'Skips passing -p so external programmers like JTAG, SWD, or ISP can handle the upload.',
     portUnsetWarn: 'Port is not selected',
     statusSetPort: 'Port set: {port}{withFqbn}',
+    portNoSerialStatus: 'Programmer mode (no serial port)',
+    portNoSerialTooltip: 'Serial port intentionally unset for programmer-based uploads (JTAG/SWD/ISP). Click to change.',
+    portNoSerialMonitorWarn: 'Serial monitor needs a serial port. Select one before starting or exit programmer mode.',
+    uploadNoSerialInfo: '[upload] Serial port omitted: continuing without -p for programmer-based workflow (JTAG/SWD/ISP).',
     setBaudTitle: 'Select baudrate (current: {current})',
     setBaudCustom: 'Custom…',
     setBaudPrompt: 'Enter baudrate (e.g., 115200)',
@@ -551,8 +560,15 @@ const MSG = {
     portScanProgressTitle: 'シリアルポートを検出しています…',
     portScanProgressMessage: 'arduino-cli で接続中のボードを取得しています',
     setPortManual: 'ポートを手入力…',
+    setPortNoSerial: '外部書き込み装置を使用 (JTAG/SWD/ISP など)',
+    setPortNoSerialDescription: 'シリアルポートではなく書き込み装置（プログラマ）で書き込む場合に選択',
+    setPortNoSerialDetail: 'arduino-cli のアップロードから -p を外し、JTAG/SWD/ISP などの書き込み装置を想定します。',
     portUnsetWarn: 'ポートが未選択です',
     statusSetPort: 'ポートを設定: {port}{withFqbn}',
+    portNoSerialStatus: '書き込み装置モード (ポート未使用)',
+    portNoSerialTooltip: 'シリアルポートを使わずプログラマでアップロードする設定です (JTAG/SWD/ISP など)。クリックで変更できます。',
+    portNoSerialMonitorWarn: 'シリアルモニターを開くにはポートが必要です。ポートを選択するか書き込み装置モードを解除してください。',
+    uploadNoSerialInfo: '[upload] シリアルポートを指定せずに書き込み装置モードで続行します (-p なし、JTAG/SWD/ISP 等)。',
     setBaudTitle: 'ボーレートを選択（現在: {current})',
     setBaudCustom: 'カスタム入力…',
     setBaudPrompt: 'ボーレートを入力（例: 115200）',
@@ -703,6 +719,9 @@ function formatStoredPortValue(port, host) {
 
 function parseStoredPortValue(value) {
   const raw = typeof value === 'string' ? value.trim() : '';
+  if (raw === PORT_NONE_SENTINEL) {
+    return { raw, display: t('portNoSerialStatus'), host: 'none', cliPort: '' };
+  }
   if (!raw) return { raw: '', display: '', host: '', cliPort: '' };
   const lower = raw.toLowerCase();
   if (lower.includes('windows')) {
@@ -717,6 +736,10 @@ function getStoredPortInfo() {
   if (!extContext) return { raw: '', display: '', host: '', cliPort: '' };
   const raw = extContext.workspaceState.get(STATE_PORT, '') || '';
   return parseStoredPortValue(raw);
+}
+
+function isNoPortSelected(portInfo) {
+  return !!(portInfo && portInfo.raw === PORT_NONE_SENTINEL);
 }
 
 async function convertPathForWindowsCli(p) {
@@ -2251,8 +2274,9 @@ async function commandUpload() {
 
   // Require port selection before proceeding (fail fast)
   const storedPortInfo = getStoredPortInfo();
+  const noPortSelected = isNoPortSelected(storedPortInfo);
   const currentPort = storedPortInfo.cliPort;
-  if (!currentPort) {
+  if (!currentPort && !noPortSelected) {
     vscode.window.showErrorMessage(t('portUnsetWarn'));
     return;
   }
@@ -2303,6 +2327,9 @@ async function commandUpload() {
     if (port) uploadArgs.push('-p', port);
   }
   try {
+    if (noPortSelected) {
+      channel.appendLine(t('uploadNoSerialInfo'));
+    }
     // Update IntelliSense during compile
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
     const compileOpts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : { fqbn: resolvedFqbn };
@@ -2398,11 +2425,20 @@ async function commandDebug(sketchDir, profileFromTree) {
 
     let portInfo = getStoredPortInfo();
     let port = portInfo.cliPort;
-    if (!port) {
+    let debugNoPortSelected = isNoPortSelected(portInfo);
+    if (!port && !debugNoPortSelected) {
       const set = await commandSetPort(true);
       if (!set) return;
       portInfo = getStoredPortInfo();
       port = portInfo.cliPort;
+      debugNoPortSelected = isNoPortSelected(portInfo);
+    }
+    if (!port && debugNoPortSelected) {
+      // Allow the debug workflow to continue without a serial port (programmer mode).
+      port = '';
+    } else if (!port) {
+      vscode.window.showErrorMessage(t('portUnsetWarn'));
+      return;
     }
 
     const sketchName = path.basename(targetDir) || 'sketch';
@@ -3067,6 +3103,10 @@ async function commandUploadData() {
     if (!set) return;
     portInfo = getStoredPortInfo();
     port = portInfo.cliPort;
+    if (!port) {
+      vscode.window.showWarningMessage(t('portNoSerialMonitorWarn'));
+      return;
+    }
   }
   const speed = props['upload.speed'] || '115200';
 
@@ -4452,8 +4492,9 @@ async function runUploadFor(sketchDir, profile) {
   const channel = getOutput();
   // Require port
   const portInfoInitial = getStoredPortInfo();
+  const noPortSelected = isNoPortSelected(portInfoInitial);
   const currentPort = portInfoInitial.cliPort;
-  if (!currentPort) { vscode.window.showErrorMessage(t('portUnsetWarn')); return; }
+  if (!currentPort && !noPortSelected) { vscode.window.showErrorMessage(t('portUnsetWarn')); return; }
   // Build args
   const cArgs = ['compile']; if (cfg.verbose) cArgs.push('--verbose');
   const uArgs = ['upload']; if (cfg.verbose) uArgs.push('--verbose');
@@ -4475,6 +4516,9 @@ async function runUploadFor(sketchDir, profile) {
   cArgs.push(sketchDir);
   const opts = profile ? { profileName: profile, wokwiEnabled } : { fqbn: resolvedFqbn };
   try {
+    if (noPortSelected) {
+      channel.appendLine(t('uploadNoSerialInfo'));
+    }
     const result = await compileWithIntelliSense(sketchDir, cArgs, opts);
     if (result && typeof result.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
@@ -5259,7 +5303,7 @@ async function updateStatusBar() {
         const curPort = curInfo.cliPort;
         const curBaud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
         const p = await getPortFromSketchYaml(sketchDir, label);
-        if (p && p !== curPort) {
+        if (p && p !== curPort && !isNoPortSelected(curInfo)) {
           const hostHint = (_isWslEnv && /^com\d+/i.test(p)) ? 'windows' : (_isWslEnv ? 'wsl' : 'local');
           await extContext.workspaceState.update(STATE_PORT, formatStoredPortValue(p, hostHint));
           portInfo = getStoredPortInfo();
@@ -5276,8 +5320,11 @@ async function updateStatusBar() {
     statusFqbn.command = 'arduino-cli.setFqbn';
   }
 
+  const portSkipped = isNoPortSelected(portInfo);
   statusPort.text = portDisplay ? `$(plug) ${portDisplay}` : (_isJa ? '$(plug) Port: 未選択' : '$(plug) Port: Not set');
-  statusPort.tooltip = _isJa ? '現在のポート（クリックで変更）' : 'Current serial port (click to change)';
+  statusPort.tooltip = portSkipped
+    ? t('portNoSerialTooltip')
+    : (_isJa ? '現在のポート（クリックで変更）' : 'Current serial port (click to change)');
   statusBaud.text = `$(watch) ${baud}`;
   statusBaud.tooltip = _isJa ? '現在のボーレート（クリックで変更）' : 'Current baudrate (click to change)';
   statusWarnings.text = `$(megaphone) ${formatWarningsBadge(warningsLevel, verboseEnabled)}`;
@@ -5317,7 +5364,7 @@ async function commandSetProfile(required) {
   try {
     const profName = pick.value;
     const portFromText = getPortFromSketchYamlText(text, profName);
-    if (portFromText) {
+    if (portFromText && !isNoPortSelected(getStoredPortInfo())) {
       const hostHint = (_isWslEnv && /^com\d+/i.test(portFromText)) ? 'windows' : (_isWslEnv ? 'wsl' : 'local');
       await extContext.workspaceState.update(STATE_PORT, formatStoredPortValue(portFromText, hostHint));
     }
@@ -5477,6 +5524,10 @@ async function commandMonitor() {
   let portInfo = getStoredPortInfo();
   let port = portInfo.cliPort;
   if (!port) {
+    if (isNoPortSelected(portInfo)) {
+      vscode.window.showWarningMessage(t('portNoSerialMonitorWarn'));
+      return;
+    }
     const set = await commandSetPort(true);
     if (!set) return;
     portInfo = getStoredPortInfo();
@@ -5531,6 +5582,13 @@ async function commandSetPort(required) {
     storedValue: b.storageValue || formatStoredPortValue(b.port || '', b.host),
     fqbn: b.fqbn || ''
   }));
+  items.push({
+    label: t('setPortNoSerial'),
+    description: t('setPortNoSerialDescription'),
+    detail: t('setPortNoSerialDetail'),
+    value: PICK_NO_PORT,
+    storedValue: PORT_NONE_SENTINEL
+  });
   items.push({ label: t('setPortManual'), value: '__manual__' });
   const pick = await vscode.window.showQuickPick(items, { placeHolder: t('monitorPickPortTitle') });
   if (!pick) {
@@ -5539,7 +5597,10 @@ async function commandSetPort(required) {
   }
   let port = pick.value;
   let storedValue = pick.storedValue ?? (typeof port === 'string' ? port : '');
-  if (port === '__manual__') {
+  if (port === PICK_NO_PORT) {
+    storedValue = PORT_NONE_SENTINEL;
+    port = '';
+  } else if (port === '__manual__') {
     const input = await vscode.window.showInputBox({ prompt: t('enterPort') });
     if (!input) {
       if (required) vscode.window.showWarningMessage(t('portUnsetWarn'));
@@ -5555,7 +5616,8 @@ async function commandSetPort(required) {
   }
   updateStatusBar();
   const withFqbn = pick.fqbn ? (_isJa ? `（FQBN: ${pick.fqbn} も設定）` : ` (FQBN: ${pick.fqbn})`) : '';
-  const displayPort = storedValue || port;
+  const info = getStoredPortInfo();
+  const displayPort = info.display || info.cliPort || port;
   vscode.window.setStatusBarMessage(t('statusSetPort', { port: displayPort, withFqbn }), 2000);
   return true;
 }

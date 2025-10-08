@@ -123,7 +123,7 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 - `$(circuit-board) <FQBN/Profile>`:
   - `sketch.yaml` がある場合は既定または先頭のプロファイル名を表示し、「Arduino CLI: Set Profile」で切替可能。
   - ない場合は FQBN を表示し、「Arduino CLI: Set FQBN」で変更可能。
-- `$(plug) <Port>`: 現在のシリアルポート（クリックで変更）
+- `$(plug) <Port>`: 現在のシリアルポート（クリックで変更）。JTAG/SWD/ISP などの書き込み装置で書き込む場合は **外部書き込み装置を使用 (JTAG/SWD/ISP など)** を選ぶと、`-p` を付けずにアップロードできます。
 - `$(watch) <Baud>`: 現在のボーレート（クリックで変更）
 - `$(megaphone) <Warnings>`: 警告レベル/verbose のバッジ（クリックで組み合わせを選択）
 

@@ -119,7 +119,7 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - `$(circuit-board) <FQBN/Profile>`:
   - If `sketch.yaml` exists, shows the default or first profile and lets you switch via "Arduino CLI: Set Profile".
   - Otherwise shows FQBN and lets you change via "Arduino CLI: Set FQBN".
-- `$(plug) <Port>`: shows current serial port (click to change)
+- `$(plug) <Port>`: shows current serial port (click to change). Pick **External programmer (JTAG/SWD/ISP)** when you flash through a dedicated programmer so uploads skip passing `-p`.
 - `$(watch) <Baud>`: shows current baudrate (click to change)
 - `$(megaphone) <Warnings>`: shows compile warnings/verbose badge (click to pick combinations)
 
