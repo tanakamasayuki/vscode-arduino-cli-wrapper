@@ -140,6 +140,7 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 - **Clean Compile** – Runs the same build with `--clean`, resets IntelliSense include paths, and is handy when switching libraries or boards.
 - **Local Build Path (setting)** – Turn on **Arduino CLI Wrapper › Local Build Path** to pass `--build-path` automatically and store build outputs in `.build/<profile>` under each sketch, keeping artifacts local for Compile, Upload, Inspector, and more.
 - **Upload Sketch** – Compiles and uploads in one go. You will be prompted for a serial port if one is not already selected, and the monitor is closed/reopened as needed so the port stays free.
+- **OTA uploads (network ports)** – If the selected port looks like an IP address, the extension assumes an OTA transfer and injects `--upload-field password=$ARDUINO_CLI_OTA_PASSWORD`. The actual CLI call expands the environment variable (leave it empty when no password is required) while the Arduino Logs channel keeps the literal `$ARDUINO_CLI_OTA_PASSWORD` string so credentials never appear in clear text.
 - **Build Check** – Compiles every profile defined in `sketch.yaml` with full warnings (`--warnings all`), then shows a summary of warnings and errors so you can spot regressions quickly.
 - **Run in Wokwi** – When a `sketch.yaml` profile sets `wokwi: true`, compiling that profile exports `.wokwi/<profile>/wokwi.elf`, scaffolds board-aware defaults for `diagram.json` / `wokwi.toml`, and adds a "Run in Wokwi" action that opens the diagram in the official simulator extension.
 

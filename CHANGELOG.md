@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) OTA uploads now add `--upload-field password` from the `ARDUINO_CLI_OTA_PASSWORD` environment variable whenever the selected port includes an IP address, masking the password in the Arduino Logs output.
+- (JA) ポートに IP アドレスが含まれる OTA アップロード時に `ARDUINO_CLI_OTA_PASSWORD` 環境変数から取得した値で `--upload-field password` を付与し、Arduino Logs の出力では展開前の文字列を表示するようにしました。
+
 ## 1.5.3
 - (EN) Examples browser now recognises library include paths that end with "src" and scans from the parent directory so bundled examples appear.
 - (JA) サンプルブラウザーが "src" で終わるライブラリの include パスを親ディレクトリから探索し、同梱のサンプルを拾えるようにしました。

@@ -750,6 +750,28 @@ function shouldUseWindowsSerial(portInfo) {
   return /^com\d+/i.test(portInfo.cliPort || '');
 }
 
+function portContainsIpAddress(port) {
+  if (!port) return false;
+  const value = String(port).trim();
+  if (!value) return false;
+  const ipPattern = /\b\d{1,3}(?:\.\d{1,3}){3}\b/;
+  return ipPattern.test(value);
+}
+
+function hasUploadPasswordField(args) {
+  if (!Array.isArray(args) || args.length === 0) return false;
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (token === '--upload-field') {
+      const next = args[i + 1];
+      if (typeof next === 'string' && next.startsWith('password=')) return true;
+    } else if (typeof token === 'string' && token.startsWith('--upload-field=')) {
+      if (token.includes('password=')) return true;
+    }
+  }
+  return false;
+}
+
 function formatDurationSeconds(ms) {
   if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return '0.0';
   const seconds = ms / 1000;
@@ -1614,7 +1636,10 @@ function runCli(args, opts = {}) {
   const channel = getOutput();
   const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
   channel.show();
-  channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
+  const displayArgs = Array.isArray(opts.logArgs)
+    ? [...baseArgs, ...opts.logArgs]
+    : finalArgs;
+  channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${displayArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
   if (opts.cwd) channel.appendLine(`${ANSI.dim}(cwd: ${opts.cwd})${ANSI.reset}`);
 
   return new Promise((resolve, reject) => {
@@ -1651,7 +1676,10 @@ function runWindowsCli(args, opts = {}) {
   const channel = getOutput();
   const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
   channel.show();
-  channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
+  const displayArgs = Array.isArray(opts.logArgs)
+    ? [...baseArgs, ...opts.logArgs]
+    : finalArgs;
+  channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${displayArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
   if (opts.cwd) channel.appendLine(`${ANSI.dim}(cwd: ${opts.cwd})${ANSI.reset}`);
 
   return new Promise((resolve, reject) => {
@@ -3330,6 +3358,7 @@ async function performUploadWithPortStrategy(params) {
   const cfg = params.cfg || getConfig();
   const baseArgs = Array.isArray(params.baseArgs) ? params.baseArgs.slice() : ['upload'];
   if (baseArgs.length === 0 || baseArgs[0] !== 'upload') baseArgs.unshift('upload');
+  const displayBaseArgs = baseArgs.slice();
   const compileArgs = Array.isArray(params.compileArgs) ? params.compileArgs.slice() : ['compile', sketchDir];
 
   let buildPath = '';
@@ -3340,6 +3369,16 @@ async function performUploadWithPortStrategy(params) {
   }
 
   const portInfo = getStoredPortInfo();
+  const otaPortCandidate = portInfo?.cliPort || '';
+  if (portContainsIpAddress(otaPortCandidate) && !hasUploadPasswordField(baseArgs)) {
+    const otaPasswordValue = Object.prototype.hasOwnProperty.call(process.env, 'ARDUINO_CLI_OTA_PASSWORD')
+      ? String(process.env.ARDUINO_CLI_OTA_PASSWORD || '')
+      : '';
+    baseArgs.push('--upload-field');
+    baseArgs.push(`password=${otaPasswordValue}`);
+    displayBaseArgs.push('--upload-field');
+    displayBaseArgs.push('password=$ARDUINO_CLI_OTA_PASSWORD');
+  }
   const windowsCandidate = shouldUseWindowsSerial(portInfo);
 
   if (windowsCandidate) {
@@ -3347,12 +3386,15 @@ async function performUploadWithPortStrategy(params) {
     const buildWinPath = buildPath ? await convertPathForWindowsCli(buildPath) : '';
     if (sketchWinPath && buildWinPath) {
       const options = baseArgs.slice(1);
+      const displayOptions = displayBaseArgs.slice(1);
       const windowsArgs = ['upload', sketchWinPath, ...options];
+      const windowsDisplayArgs = ['upload', sketchWinPath, ...displayOptions];
       if (!hasBuildPathFlag(windowsArgs) && buildWinPath) {
         windowsArgs.push('--build-path', buildWinPath);
+        windowsDisplayArgs.push('--build-path', buildWinPath);
       }
       try {
-        await runWindowsCli(windowsArgs, {});
+        await runWindowsCli(windowsArgs, { logArgs: windowsDisplayArgs });
         return;
       } catch (err) {
         const msg = err && err.message ? err.message : String(err || 'unknown');
@@ -3363,7 +3405,9 @@ async function performUploadWithPortStrategy(params) {
 
   const linuxArgs = baseArgs.slice();
   linuxArgs.push(sketchDir);
-  await runCli(linuxArgs, { cwd: sketchDir, forceSpawn: true });
+  const displayLinuxArgs = displayBaseArgs.slice();
+  displayLinuxArgs.push(sketchDir);
+  await runCli(linuxArgs, { cwd: sketchDir, forceSpawn: true, logArgs: displayLinuxArgs });
 }
 
 function updateCompileDiagnosticsFromStderr(stderrText, options = {}) {

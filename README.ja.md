@@ -144,6 +144,7 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 - **Clean Compile** – `--clean` オプション付きでクリーンビルドを実行し、IntelliSense の includePath も初期化した上で再計算します。ライブラリを入れ替えた後に便利です。
 - **ローカルビルドパス（設定）** – 設定「Arduino CLI Wrapper › Local Build Path」を有効にすると `--build-path` を自動付与し、`.build/<プロファイル>` 配下にビルド成果物を保存します。Compile / Upload / Inspector などの出力をスケッチ内にまとめて管理できます。
 - **Upload Sketch** – コンパイルしてそのまま書き込みます。ポートが未設定ならその場で選択でき、必要に応じてシリアルモニタを自動で閉じたり再オープンしたりします。
+- **OTA 書き込み（ネットワーク経由）** – 選択したポートに IP アドレスが含まれる場合は OTA 転送とみなし、`--upload-field password=$ARDUINO_CLI_OTA_PASSWORD` を自動付与します。CLI 実行時に環境変数を展開します（パスワード不要なら未設定のままで問題ありません）。Arduino Logs には展開前の `$ARDUINO_CLI_OTA_PASSWORD` をそのまま表示し、平文のパスワードは残りません。
 - **Build Check** – `sketch.yaml` に定義したすべてのプロファイルを `--warnings all` でビルドし、警告とエラーの集計結果を表示します。リグレッションチェックに最適です。
 - **wokwi で実行** – プロファイルに `wokwi: true` を設定すると、ビルド時に `.wokwi/<profile>/wokwi.elf` を出力し、ボードに合わせた初期値で `diagram.json` / `wokwi.toml` を補完したうえで、エクスプローラーに「wokwiで実行」アクションが現れ、公式 Wokwi 拡張機能で図面を開けます。
 
