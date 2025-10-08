@@ -3415,14 +3415,21 @@ async function performUploadWithPortStrategy(params) {
 
   const portInfo = getStoredPortInfo();
   const otaPortCandidate = portInfo?.cliPort || '';
-  if (portContainsIpAddress(otaPortCandidate) && !hasUploadPasswordField(baseArgs)) {
+  let otaPasswordDisplayToken = '';
+  let otaPasswordDisplayTokenLinux = '';
+  let otaPasswordDisplayTokenWindows = '';
+  const otaDisplayFieldInjected = portContainsIpAddress(otaPortCandidate) && !hasUploadPasswordField(baseArgs);
+  if (otaDisplayFieldInjected) {
     const otaPasswordValue = Object.prototype.hasOwnProperty.call(process.env, 'ARDUINO_CLI_OTA_PASSWORD')
       ? String(process.env.ARDUINO_CLI_OTA_PASSWORD || '')
       : '';
     baseArgs.push('--upload-field');
     baseArgs.push(`password=${otaPasswordValue}`);
     displayBaseArgs.push('--upload-field');
-    displayBaseArgs.push('password=$ARDUINO_CLI_OTA_PASSWORD');
+    otaPasswordDisplayTokenLinux = 'password=$ARDUINO_CLI_OTA_PASSWORD';
+    otaPasswordDisplayTokenWindows = 'password=%ARDUINO_CLI_OTA_PASSWORD%';
+    otaPasswordDisplayToken = process.platform === 'win32' ? otaPasswordDisplayTokenWindows : otaPasswordDisplayTokenLinux;
+    displayBaseArgs.push(otaPasswordDisplayToken);
   }
   const windowsCandidate = shouldUseWindowsSerial(portInfo);
 
@@ -3431,7 +3438,13 @@ async function performUploadWithPortStrategy(params) {
     const buildWinPath = buildPath ? await convertPathForWindowsCli(buildPath) : '';
     if (sketchWinPath && buildWinPath) {
       const options = baseArgs.slice(1);
-      const displayOptions = displayBaseArgs.slice(1);
+      const displayOptions = displayBaseArgs.slice(1).map((arg) => {
+        if (!otaDisplayFieldInjected) return arg;
+        if (arg === otaPasswordDisplayToken || arg === otaPasswordDisplayTokenLinux) {
+          return otaPasswordDisplayTokenWindows || 'password=%ARDUINO_CLI_OTA_PASSWORD%';
+        }
+        return arg;
+      });
       const windowsArgs = ['upload', sketchWinPath, ...options];
       const windowsDisplayArgs = ['upload', sketchWinPath, ...displayOptions];
       if (!hasBuildPathFlag(windowsArgs) && buildWinPath) {
@@ -3450,7 +3463,13 @@ async function performUploadWithPortStrategy(params) {
 
   const linuxArgs = baseArgs.slice();
   linuxArgs.push(sketchDir);
-  const displayLinuxArgs = displayBaseArgs.slice();
+  const displayLinuxArgs = displayBaseArgs.slice().map((arg) => {
+    if (!otaDisplayFieldInjected) return arg;
+    if (arg === otaPasswordDisplayTokenWindows && process.platform !== 'win32') {
+      return otaPasswordDisplayTokenLinux || 'password=$ARDUINO_CLI_OTA_PASSWORD';
+    }
+    return arg;
+  });
   displayLinuxArgs.push(sketchDir);
   await runCli(linuxArgs, { cwd: sketchDir, forceSpawn: true, logArgs: displayLinuxArgs });
 }
