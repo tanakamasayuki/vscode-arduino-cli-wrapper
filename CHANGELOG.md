@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+## 1.5.4
 - (EN) OTA uploads now add `--upload-field password` from the `ARDUINO_CLI_OTA_PASSWORD` environment variable whenever the selected port includes an IP address, masking the password in the Arduino Logs output.
 - (JA) ポートに IP アドレスが含まれる OTA アップロード時に `ARDUINO_CLI_OTA_PASSWORD` 環境変数から取得した値で `--upload-field password` を付与し、Arduino Logs の出力では展開前の文字列を表示するようにしました。
 - (EN) Selecting the serial port now shows a progress spinner (“Detecting serial ports…”) while Arduino CLI gathers connected boards, so you know the command is still working.
