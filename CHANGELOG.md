@@ -1,8 +1,10 @@
-﻿# Changelog / 変更履歴
+# Changelog / 変更履歴
 
 ## Unreleased
 - (EN) Upload and Upload Data now show the same notification spinner while arduino-cli runs, making it clear that flashing is still in progress.
 - (JA) Upload と Upload Data でも arduino-cli 実行中に通知プログレスを表示し、書き込み処理の継続が分かりやすくなりました。
+- (EN) Commands launched while a progress notification is active now abort with a warning so concurrent operations cannot overlap.
+- (JA) 進捗通知が表示されている間に別コマンドを起動すると警告して中断し、処理が重ならないようにしました。
 
 ## 1.5.5
 - (EN) Compile commands that stream diagnostics now display a notification progress spinner (matching the port scan UI) so you can tell long-running builds are still working.

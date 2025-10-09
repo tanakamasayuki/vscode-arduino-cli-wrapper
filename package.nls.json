@@ -57,5 +57,6 @@
   "msg.uploadDataProgressTitle": "Uploading data image…",
   "msg.uploadDataProgressMessageResolve": "Collecting filesystem metadata…",
   "msg.uploadDataProgressMessageBuild": "Building {fsType} image…",
-  "msg.uploadDataProgressMessageFlash": "Flashing filesystem image via esptool…"
+  "msg.uploadDataProgressMessageFlash": "Flashing filesystem image via esptool…",
+  "msg.progressBusyWarn": "Another command is already running. Please wait for it to finish."
 }

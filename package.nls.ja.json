@@ -57,5 +57,6 @@
   "msg.uploadDataProgressTitle": "データイメージを書き込み中です…",
   "msg.uploadDataProgressMessageResolve": "ファイルシステムのメタデータを収集中です…",
   "msg.uploadDataProgressMessageBuild": "{fsType} イメージを生成しています…",
-  "msg.uploadDataProgressMessageFlash": "esptool でファイルシステムイメージを書き込み中です…"
+  "msg.uploadDataProgressMessageFlash": "esptool でファイルシステムイメージを書き込み中です…",
+  "msg.progressBusyWarn": "別のコマンドが実行中です。完了するまでお待ちください。"
 }

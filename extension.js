@@ -163,6 +163,8 @@ let output;
 let extContext;
 let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings;
 let compileDiagnostics;
+const PROGRESS_BUSY = Symbol('progressBusyNotification');
+let notificationProgressActive = false;
 let monitorTerminal;
 // Log terminal (ANSI capable, no command execution)
 let logTerminal;
@@ -241,6 +243,7 @@ const MSG = {
     uploadDataProgressMessageResolve: 'Collecting filesystem metadata…',
     uploadDataProgressMessageBuild: 'Building {fsType} image…',
     uploadDataProgressMessageFlash: 'Flashing filesystem image via esptool…',
+    progressBusyWarn: 'Another command is already running. Please wait for it to finish.',
     setPortManual: 'Enter port manually…',
     setPortNoSerial: 'External programmer (JTAG/SWD/ISP)',
     setPortNoSerialDescription: 'Choose this when uploading with a dedicated programmer instead of a serial port',
@@ -592,6 +595,7 @@ const MSG = {
     uploadDataProgressMessageResolve: 'ファイルシステムのメタデータを収集中です…',
     uploadDataProgressMessageBuild: '{fsType} イメージを生成しています…',
     uploadDataProgressMessageFlash: 'esptool でファイルシステムイメージを書き込み中です…',
+    progressBusyWarn: '別のコマンドが実行中です。完了するまでお待ちください。',
     setPortManual: 'ポートを手入力…',
     setPortNoSerial: '外部書き込み装置を使用 (JTAG/SWD/ISP など)',
     setPortNoSerialDescription: 'シリアルポートではなく書き込み装置（プログラマ）で書き込む場合に選択',
@@ -2367,6 +2371,7 @@ async function commandUpload() {
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
     const compileOpts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : { fqbn: resolvedFqbn };
     const compileResult = await compileWithIntelliSense(sketchDir, compileArgs, compileOpts);
+    if (compileResult === PROGRESS_BUSY) return;
     if (compileResult && typeof compileResult.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: 'upload',
@@ -2397,13 +2402,19 @@ async function commandUpload() {
       yamlInfo,
       cfg
     };
-    await vscode.window.withProgress({
+    const uploadOutcome = await runWithNotificationProgress({
       location: vscode.ProgressLocation.Notification,
       title: uploadProgressTitle
     }, async (progress) => {
       if (uploadProgressMessage) progress.report({ message: uploadProgressMessage });
       await performUploadWithPortStrategy(uploadParams);
     });
+    if (uploadOutcome === PROGRESS_BUSY) {
+      if (reopenMonitorAfter) {
+        try { await commandMonitor(); } catch (_) { }
+      }
+      return;
+    }
 
     if (reopenMonitorAfter) {
       // After upload, wait a bit for the port to settle before reopening monitor
@@ -3009,7 +3020,7 @@ async function commandUploadData() {
 
   let uploadDataCompleted = false;
   const uploadDataProgressTitle = t('uploadDataProgressTitle');
-  await vscode.window.withProgress({
+  const progressOutcome = await runWithNotificationProgress({
     location: vscode.ProgressLocation.Notification,
     title: uploadDataProgressTitle
   }, async (progress) => {
@@ -3179,6 +3190,7 @@ async function commandUploadData() {
       showError(new Error(`esptool failed: ${e.message}`));
     }
   });
+  if (progressOutcome === PROGRESS_BUSY) return;
   if (!uploadDataCompleted) return;
 }
 
@@ -3213,6 +3225,21 @@ async function runExternal(exe, args, opts = {}) {
     child.on('error', reject);
     child.on('close', code => code === 0 ? resolve() : reject(new Error(`exit ${code}`)));
   });
+}
+
+async function runWithNotificationProgress(options, task) {
+  if (notificationProgressActive) {
+    vscode.window.showWarningMessage(t('progressBusyWarn'));
+    return PROGRESS_BUSY;
+  }
+  notificationProgressActive = true;
+  try {
+    return await vscode.window.withProgress(options, async (progress, token) => {
+      return await task(progress, token);
+    });
+  } finally {
+    notificationProgressActive = false;
+  }
 }
 
 function hasBuildExtraFlagsArg(args) {
@@ -3455,13 +3482,14 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
     : (fqbn
       ? t('compileProgressMessageFqbn', { fqbn })
       : t('compileProgressMessage'));
-  return vscode.window.withProgress({
+  const progressResult = await runWithNotificationProgress({
     location: vscode.ProgressLocation.Notification,
     title: progressTitle
   }, async (progress) => {
     if (progressMessage) progress.report({ message: progressMessage });
     return runCompile();
   });
+  return progressResult;
 }
 
 async function detectBuildPathForCompile(exe, baseArgs, args, sketchDir) {
@@ -4682,6 +4710,7 @@ async function runUploadFor(sketchDir, profile) {
       channel.appendLine(t('uploadNoSerialInfo'));
     }
     const result = await compileWithIntelliSense(sketchDir, cArgs, opts);
+    if (result === PROGRESS_BUSY) return;
     if (result && typeof result.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: 'upload',
@@ -4714,13 +4743,19 @@ async function runUploadFor(sketchDir, profile) {
     cfg,
     yamlInfo
   };
-  await vscode.window.withProgress({
+  const uploadOutcome = await runWithNotificationProgress({
     location: vscode.ProgressLocation.Notification,
     title: uploadProgressTitle
   }, async (progress) => {
     if (uploadProgressMessage) progress.report({ message: uploadProgressMessage });
     await performUploadWithPortStrategy(uploadParams);
   });
+  if (uploadOutcome === PROGRESS_BUSY) {
+    if (reopenMonitorAfter) {
+      try { await commandMonitor(); } catch (_) { }
+    }
+    return;
+  }
   if (reopenMonitorAfter) { await new Promise(r => setTimeout(r, 1500)); await commandMonitor(); }
 }
 
@@ -5737,13 +5772,14 @@ async function commandMonitor() {
 async function commandSetPort(required) {
   let boards;
   try {
-    boards = await vscode.window.withProgress({
+    boards = await runWithNotificationProgress({
       location: vscode.ProgressLocation.Notification,
       title: t('portScanProgressTitle')
     }, async (progress) => {
       progress.report({ message: t('portScanProgressMessage') });
       return await listConnectedBoards();
     });
+    if (boards === PROGRESS_BUSY) return false;
   } catch (err) {
     showError(err);
     if (required) vscode.window.showWarningMessage(t('portUnsetWarn'));
