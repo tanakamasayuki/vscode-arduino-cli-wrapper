@@ -41,5 +41,9 @@
   "config.lint.fsIncludes.description": "Headers treated as filesystem-related for include-order linting.",
   "view.arduinoCli": "Arduino CLI",
   "cmd.buildCheck": "Arduino CLI: Build Check",
-  "cmd.inspect": "Open Sketch Inspector"
+  "cmd.inspect": "Open Sketch Inspector",
+  "msg.compileProgressTitle": "Compiling sketch…",
+  "msg.compileProgressMessage": "Running arduino-cli compile…",
+  "msg.compileProgressMessageProfile": "Running arduino-cli compile for profile {profile}",
+  "msg.compileProgressMessageFqbn": "Running arduino-cli compile for {fqbn}"
 }

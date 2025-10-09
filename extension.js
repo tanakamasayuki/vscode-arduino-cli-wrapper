@@ -224,6 +224,10 @@ const MSG = {
     monitorPickPortTitle: 'Select port from board list',
     portScanProgressTitle: 'Detecting serial ports…',
     portScanProgressMessage: 'Querying connected boards via arduino-cli',
+    compileProgressTitle: 'Compiling sketch…',
+    compileProgressMessage: 'Running arduino-cli compile…',
+    compileProgressMessageProfile: 'Running arduino-cli compile for profile {profile}',
+    compileProgressMessageFqbn: 'Running arduino-cli compile for {fqbn}',
     setPortManual: 'Enter port manually…',
     setPortNoSerial: 'External programmer (JTAG/SWD/ISP)',
     setPortNoSerialDescription: 'Choose this when uploading with a dedicated programmer instead of a serial port',
@@ -559,6 +563,10 @@ const MSG = {
     monitorPickPortTitle: 'arduino-cli board list の結果からポートを選択してください',
     portScanProgressTitle: 'シリアルポートを検出しています…',
     portScanProgressMessage: 'arduino-cli で接続中のボードを取得しています',
+    compileProgressTitle: 'スケッチをコンパイルしています…',
+    compileProgressMessage: 'arduino-cli compile を実行中です…',
+    compileProgressMessageProfile: 'プロファイル {profile} 向けに arduino-cli compile を実行中です',
+    compileProgressMessageFqbn: '{fqbn} 向けに arduino-cli compile を実行中です',
     setPortManual: 'ポートを手入力…',
     setPortNoSerial: '外部書き込み装置を使用 (JTAG/SWD/ISP など)',
     setPortNoSerialDescription: 'シリアルポートではなく書き込み装置（プログラマ）で書き込む場合に選択',
@@ -3236,7 +3244,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   term.write(`${ANSI.dim}(cwd: ${sketchDir})${ANSI.reset}\r\n`);
 
   const channel = getOutput();
-  return new Promise((resolve, reject) => {
+  const runCompile = () => new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
     let stderrBuffer = '';
     let stdoutBuffer = '';
@@ -3318,6 +3326,23 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
       }
       resolve({ code, stdout: stdoutBuffer, stderr: stderrBuffer, durationMs });
     });
+  });
+
+  if (opts && opts.skipProgress === true) {
+    return runCompile();
+  }
+  const progressTitle = t('compileProgressTitle');
+  const progressMessage = profileName
+    ? t('compileProgressMessageProfile', { profile: profileName })
+    : (fqbn
+      ? t('compileProgressMessageFqbn', { fqbn })
+      : t('compileProgressMessage'));
+  return vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: progressTitle
+  }, async (progress) => {
+    if (progressMessage) progress.report({ message: progressMessage });
+    return runCompile();
   });
 }
 

@@ -1,6 +1,8 @@
 ﻿# Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Compile commands that stream diagnostics now display a notification progress spinner (matching the port scan UI) so you can tell long-running builds are still working.
+- (JA) 診断をストリームするコンパイル処理でポート検索と同じ通知プログレスを表示し、長時間のビルドが継続中であることを把握しやすくしました。
 
 ## 1.5.4
 - (EN) OTA uploads now add `--upload-field password` from the `ARDUINO_CLI_OTA_PASSWORD` environment variable whenever the selected port includes an IP address, masking the password in the Arduino Logs output.
@@ -133,4 +135,3 @@
 - (JA) ステータスバーから警告レベルと verbose の組み合わせを切り替えられるトグルを追加しました（`all+V` などの短い表示）。
 - (EN) Status bar tweaks: renamed Build to Compile, removed Boards/ListAll badges, and placed the warnings badge next to baud.
 - (JA) ステータスバーを調整し、Build を Compile に改名・Boards/ListAll バッジを削除・警告バッジをボーレートの右隣に配置しました。
-

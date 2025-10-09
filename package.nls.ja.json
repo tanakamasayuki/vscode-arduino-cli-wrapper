@@ -41,5 +41,9 @@
   "config.lint.fsIncludes.description": "include 順チェックで FS 系として扱うヘッダーファイル一覧",
   "view.arduinoCli": "Arduino CLI",
   "cmd.buildCheck": "Arduino CLI: ビルドチェック",
-  "cmd.inspect": "スケッチインスペクターを開く"
+  "cmd.inspect": "スケッチインスペクターを開く",
+  "msg.compileProgressTitle": "スケッチをコンパイルしています…",
+  "msg.compileProgressMessage": "arduino-cli compile を実行中です…",
+  "msg.compileProgressMessageProfile": "プロファイル {profile} 向けに arduino-cli compile を実行中です",
+  "msg.compileProgressMessageFqbn": "{fqbn} 向けに arduino-cli compile を実行中です"
 }
