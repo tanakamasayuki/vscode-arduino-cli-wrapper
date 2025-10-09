@@ -1,6 +1,8 @@
 ﻿# Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.5.5
 - (EN) Compile commands that stream diagnostics now display a notification progress spinner (matching the port scan UI) so you can tell long-running builds are still working.
 - (JA) 診断をストリームするコンパイル処理でポート検索と同じ通知プログレスを表示し、長時間のビルドが継続中であることを把握しやすくしました。
 - (EN) Sketch folders can now include a `.arduino-cli-flags` file with one flag per line, automatically merged into `build.extra_flags` during compile so secrets like Wi-Fi credentials stay outside the source.
