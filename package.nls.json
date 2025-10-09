@@ -45,5 +45,9 @@
   "msg.compileProgressTitle": "Compiling sketch…",
   "msg.compileProgressMessage": "Running arduino-cli compile…",
   "msg.compileProgressMessageProfile": "Running arduino-cli compile for profile {profile}",
-  "msg.compileProgressMessageFqbn": "Running arduino-cli compile for {fqbn}"
+  "msg.compileProgressMessageFqbn": "Running arduino-cli compile for {fqbn}",
+  "msg.compileExtraFlagsApplied": "Added build.extra_flags from {file}",
+  "msg.compileExtraFlagsReadError": "Failed to read extra flags file {file}: {msg}",
+  "msg.compileExtraFlagsEmpty": "Extra flags file {file} is empty; skipping.",
+  "msg.compileExtraFlagsSkipExisting": "Skipped {file} because build.extra_flags is already provided."
 }

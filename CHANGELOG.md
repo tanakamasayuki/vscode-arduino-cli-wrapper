@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Compile commands that stream diagnostics now display a notification progress spinner (matching the port scan UI) so you can tell long-running builds are still working.
 - (JA) 診断をストリームするコンパイル処理でポート検索と同じ通知プログレスを表示し、長時間のビルドが継続中であることを把握しやすくしました。
+- (EN) Sketch folders can now include a `.arduino-cli-flags` file with one flag per line, automatically merged into `build.extra_flags` during compile so secrets like Wi-Fi credentials stay outside the source.
+- (JA) スケッチフォルダーに 1 行 1 フラグで記述した `.arduino-cli-flags` を置くと、コンパイル時に `build.extra_flags` へ自動で連結されるため Wi-Fi 認証情報などをソースから分離できます。
 
 ## 1.5.4
 - (EN) OTA uploads now add `--upload-field password` from the `ARDUINO_CLI_OTA_PASSWORD` environment variable whenever the selected port includes an IP address, masking the password in the Arduino Logs output.

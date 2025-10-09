@@ -43,6 +43,16 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - `.ino` が複数あるときは選択ダイアログが出ます。アクティブな `.ino` エディターがあれば優先されます。
 - FQBN を自動取得できない場合は手入力できます。
 
+### スケッチ固有のビルドフラグ（`.arduino-cli-flags`）
+
+`.ino` と同じフォルダーに `.arduino-cli-flags` を配置すると、コンパイル時にファイル内容を `build.extra_flags` として自動で追加できます。SSID やトークンなどソースに残したくない情報を手元に保持したいときに便利です。
+
+- 1 行につき 1 個のフラグを書きます（例: `-DWIFI_SSID="MySSID"`）。
+- `#` または `//` で始まる行と空行は無視されます。
+- 有効な行はスペース区切りで連結され、`--build-property build.extra_flags=...` として渡されます。
+- すでに設定やタスクなどで `build.extra_flags` を指定している場合はその設定が優先され、ファイルは読み込まれません。
+
+ドットで始まるファイル名なので既定では隠しファイルとして扱われます。認証情報がコミットに含まれないよう、必要に応じて `.gitignore` に追加してください（この拡張の `.gitignore` には既にエントリを用意しています）。
 ## WSL を使ったビルド高速化ガイド
 
 Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows Subsystem for Linux) に Linux 環境を作り、ビルドだけを高速な Linux 上で行う構成が便利です。この拡張機能はコンパイル時に WSL 側の `arduino-cli` を利用しつつ、Upload / Monitor だけを Windows ネイティブの `arduino-cli.exe` に自動で切り替えるため、シリアルポート設定を二重管理する必要がありません。手順は次のとおりです。
@@ -286,5 +296,6 @@ clangd などの設定で `<ワークスペース>/.vscode/compile_commands.json
 ## ライセンス
 
 CC0 1.0 Universal (Public Domain Dedication)。詳細は `LICENSE` を参照してください。
+
 
 

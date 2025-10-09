@@ -43,6 +43,17 @@ Tips:
 - If multiple `.ino` files exist, a picker appears to choose one. If an `.ino` editor is active, it is preferred.
 - If the FQBN cannot be inferred, you can enter one manually.
 
+### Per-sketch build flags (`.arduino-cli-flags`)
+
+Keep secrets and board-specific tweaks outside your repository by placing an `.arduino-cli-flags` file beside the sketch. The extension reads the file each time it compiles and injects the contents as `build.extra_flags`.
+
+- Write one flag per line, for example `-DWIFI_SSID="MySSID"`.
+- Lines starting with `#` or `//`, as well as blank lines, are ignored.
+- The remaining flags are joined with spaces and passed as a single `--build-property build.extra_flags=...` argument.
+- If you already provide `build.extra_flags` via settings, tasks, or the command palette, that configuration takes precedence and the file is skipped.
+
+Because the filename starts with a dot it stays hidden by default. Add it to source control ignore lists (the extension’s `.gitignore` already contains an entry) so credentials never leak into commits.
+
 ## Speeding up builds with WSL
 
 If Arduino CLI builds feel slow on Windows, you can offload compilation to a Linux environment by using WSL (Windows Subsystem for Linux). This extension automatically detects that you are running inside WSL, uses the Linux `arduino-cli` for compile tasks, and still relies on `arduino-cli.exe` on Windows for upload/monitor so you do not have to configure serial ports twice. Follow the steps below.
@@ -280,4 +291,3 @@ Point clangd or other tools to `<workspace>/.vscode/compile_commands.json` and t
 ## License
 
 CC0 1.0 Universal (Public Domain Dedication). See `LICENSE`.
-

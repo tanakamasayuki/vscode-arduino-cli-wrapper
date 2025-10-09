@@ -3,3 +3,4 @@
 *.bat
 temp
 .vscode
+.arduino-cli-flags

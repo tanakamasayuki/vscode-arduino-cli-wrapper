@@ -8,6 +8,7 @@ const path = require('path');
 const https = require('https');
 
 const DEFAULT_WOKWI_TOML = '[wokwi]\nversion = 1\nfirmware = "wokwi.elf"\n';
+const EXTRA_FLAGS_FILENAME = '.arduino-cli-flags';
 const DEFAULT_WOKWI_DIAGRAM_BASE = Object.freeze({
   version: 1,
   author: 'wokwi',
@@ -228,6 +229,10 @@ const MSG = {
     compileProgressMessage: 'Running arduino-cli compile…',
     compileProgressMessageProfile: 'Running arduino-cli compile for profile {profile}',
     compileProgressMessageFqbn: 'Running arduino-cli compile for {fqbn}',
+    compileExtraFlagsApplied: 'Added build.extra_flags from {file}',
+    compileExtraFlagsReadError: 'Failed to read extra flags file {file}: {msg}',
+    compileExtraFlagsEmpty: 'Extra flags file {file} is empty; skipping.',
+    compileExtraFlagsSkipExisting: 'Skipped {file} because build.extra_flags is already provided.',
     setPortManual: 'Enter port manually…',
     setPortNoSerial: 'External programmer (JTAG/SWD/ISP)',
     setPortNoSerialDescription: 'Choose this when uploading with a dedicated programmer instead of a serial port',
@@ -567,6 +572,10 @@ const MSG = {
     compileProgressMessage: 'arduino-cli compile を実行中です…',
     compileProgressMessageProfile: 'プロファイル {profile} 向けに arduino-cli compile を実行中です',
     compileProgressMessageFqbn: '{fqbn} 向けに arduino-cli compile を実行中です',
+    compileExtraFlagsApplied: '{file} から build.extra_flags を追加しました',
+    compileExtraFlagsReadError: '{file} の読み込みに失敗したため、追加できませんでした: {msg}',
+    compileExtraFlagsEmpty: '{file} が空または有効な行がないためスキップしました',
+    compileExtraFlagsSkipExisting: '既に build.extra_flags が指定されているため {file} をスキップしました',
     setPortManual: 'ポートを手入力…',
     setPortNoSerial: '外部書き込み装置を使用 (JTAG/SWD/ISP など)',
     setPortNoSerialDescription: 'シリアルポートではなく書き込み装置（プログラマ）で書き込む場合に選択',
@@ -3175,6 +3184,82 @@ async function runExternal(exe, args, opts = {}) {
   });
 }
 
+function hasBuildExtraFlagsArg(args) {
+  if (!Array.isArray(args)) return false;
+  for (let i = 0; i < args.length; i += 1) {
+    const value = args[i];
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed === '--build-property') {
+      const next = args[i + 1];
+      if (typeof next === 'string' && /^build\.extra_flags=/.test(next.trim())) {
+        return true;
+      }
+      continue;
+    }
+    if (trimmed.startsWith('--build-property=')) {
+      if (trimmed.includes('build.extra_flags=')) {
+        return true;
+      }
+      continue;
+    }
+    if (/^build\.extra_flags=/.test(trimmed)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, channel) {
+  if (!sketchDir) return;
+  const extraPath = path.join(sketchDir, EXTRA_FLAGS_FILENAME);
+  const extraUri = vscode.Uri.file(extraPath);
+  let exists = false;
+  try {
+    exists = await pathExists(extraUri);
+  } catch {
+    exists = false;
+  }
+  if (!exists) return;
+
+  let raw = '';
+  try {
+    raw = await readTextFile(extraUri);
+  } catch (err) {
+    if (channel) {
+      channel.appendLine(t('compileExtraFlagsReadError', {
+        file: EXTRA_FLAGS_FILENAME,
+        msg: err && err.message ? err.message : String(err || 'unknown')
+      }));
+    }
+    return;
+  }
+  const flags = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('//'))
+    .join(' ')
+    .trim();
+  if (!flags) {
+    if (channel) {
+      channel.appendLine(t('compileExtraFlagsEmpty', { file: EXTRA_FLAGS_FILENAME }));
+    }
+    return;
+  }
+  if (hasBuildExtraFlagsArg(baseArgs) || hasBuildExtraFlagsArg(originalArgs)) {
+    if (channel) {
+      channel.appendLine(t('compileExtraFlagsSkipExisting', { file: EXTRA_FLAGS_FILENAME }));
+    }
+    return;
+  }
+  const sketchIdx = originalArgs.lastIndexOf(sketchDir);
+  const insertIdx = sketchIdx >= 0 ? sketchIdx : originalArgs.length;
+  originalArgs.splice(insertIdx, 0, '--build-property', `build.extra_flags=${flags}`);
+  if (channel) {
+    channel.appendLine(t('compileExtraFlagsApplied', { file: EXTRA_FLAGS_FILENAME }));
+  }
+}
+
 // Run compile and update IntelliSense by exporting compile_commands.json.
 async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   const { profileName = '', wokwiEnabled = false, fqbn = '', skipLocalBuildPath = false } = opts || {};
@@ -3199,6 +3284,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
     originalArgs.splice(insertIdx, 0, '--warnings', warningsArg);
   }
 
+  const channel = getOutput();
   let localBuildPath = '';
   if (cfg.localBuildPath && !skipLocalBuildPath) {
     try {
@@ -3231,6 +3317,8 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
     }
   }
 
+  await appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, channel);
+
   const compileArgs = originalArgs.slice();
 
   const finalArgs = [...baseArgs, ...compileArgs];
@@ -3243,7 +3331,6 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   term.write(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}\r\n`);
   term.write(`${ANSI.dim}(cwd: ${sketchDir})${ANSI.reset}\r\n`);
 
-  const channel = getOutput();
   const runCompile = () => new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
     let stderrBuffer = '';
