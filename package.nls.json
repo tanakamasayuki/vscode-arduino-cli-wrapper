@@ -49,5 +49,13 @@
   "msg.compileExtraFlagsApplied": "Added build.extra_flags from {file}",
   "msg.compileExtraFlagsReadError": "Failed to read extra flags file {file}: {msg}",
   "msg.compileExtraFlagsEmpty": "Extra flags file {file} is empty; skipping.",
-  "msg.compileExtraFlagsSkipExisting": "Skipped {file} because build.extra_flags is already provided."
+  "msg.compileExtraFlagsSkipExisting": "Skipped {file} because build.extra_flags is already provided.",
+  "msg.uploadProgressTitle": "Uploading sketch…",
+  "msg.uploadProgressMessage": "Running arduino-cli upload…",
+  "msg.uploadProgressMessageProfile": "Running arduino-cli upload for profile {profile}",
+  "msg.uploadProgressMessageFqbn": "Running arduino-cli upload for {fqbn}",
+  "msg.uploadDataProgressTitle": "Uploading data image…",
+  "msg.uploadDataProgressMessageResolve": "Collecting filesystem metadata…",
+  "msg.uploadDataProgressMessageBuild": "Building {fsType} image…",
+  "msg.uploadDataProgressMessageFlash": "Flashing filesystem image via esptool…"
 }

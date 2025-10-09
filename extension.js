@@ -233,6 +233,14 @@ const MSG = {
     compileExtraFlagsReadError: 'Failed to read extra flags file {file}: {msg}',
     compileExtraFlagsEmpty: 'Extra flags file {file} is empty; skipping.',
     compileExtraFlagsSkipExisting: 'Skipped {file} because build.extra_flags is already provided.',
+    uploadProgressTitle: 'Uploading sketch…',
+    uploadProgressMessage: 'Running arduino-cli upload…',
+    uploadProgressMessageProfile: 'Running arduino-cli upload for profile {profile}',
+    uploadProgressMessageFqbn: 'Running arduino-cli upload for {fqbn}',
+    uploadDataProgressTitle: 'Uploading data image…',
+    uploadDataProgressMessageResolve: 'Collecting filesystem metadata…',
+    uploadDataProgressMessageBuild: 'Building {fsType} image…',
+    uploadDataProgressMessageFlash: 'Flashing filesystem image via esptool…',
     setPortManual: 'Enter port manually…',
     setPortNoSerial: 'External programmer (JTAG/SWD/ISP)',
     setPortNoSerialDescription: 'Choose this when uploading with a dedicated programmer instead of a serial port',
@@ -576,6 +584,14 @@ const MSG = {
     compileExtraFlagsReadError: '{file} の読み込みに失敗したため、追加できませんでした: {msg}',
     compileExtraFlagsEmpty: '{file} が空または有効な行がないためスキップしました',
     compileExtraFlagsSkipExisting: '既に build.extra_flags が指定されているため {file} をスキップしました',
+    uploadProgressTitle: 'スケッチを書き込み中です…',
+    uploadProgressMessage: 'arduino-cli upload を実行中です…',
+    uploadProgressMessageProfile: 'プロファイル {profile} 向けに arduino-cli upload を実行中です',
+    uploadProgressMessageFqbn: '{fqbn} 向けに arduino-cli upload を実行中です',
+    uploadDataProgressTitle: 'データイメージを書き込み中です…',
+    uploadDataProgressMessageResolve: 'ファイルシステムのメタデータを収集中です…',
+    uploadDataProgressMessageBuild: '{fsType} イメージを生成しています…',
+    uploadDataProgressMessageFlash: 'esptool でファイルシステムイメージを書き込み中です…',
     setPortManual: 'ポートを手入力…',
     setPortNoSerial: '外部書き込み装置を使用 (JTAG/SWD/ISP など)',
     setPortNoSerialDescription: 'シリアルポートではなく書き込み装置（プログラマ）で書き込む場合に選択',
@@ -2366,7 +2382,13 @@ async function commandUpload() {
       reopenMonitorAfter = true;
     }
 
-    await performUploadWithPortStrategy({
+    const uploadProgressTitle = t('uploadProgressTitle');
+    const uploadProgressMessage = selectedProfile
+      ? t('uploadProgressMessageProfile', { profile: selectedProfile })
+      : (resolvedFqbn
+        ? t('uploadProgressMessageFqbn', { fqbn: resolvedFqbn })
+        : t('uploadProgressMessage'));
+    const uploadParams = {
       sketchDir,
       baseArgs: uploadArgs,
       compileArgs,
@@ -2374,6 +2396,13 @@ async function commandUpload() {
       buildFqbn: resolvedFqbn,
       yamlInfo,
       cfg
+    };
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: uploadProgressTitle
+    }, async (progress) => {
+      if (uploadProgressMessage) progress.report({ message: uploadProgressMessage });
+      await performUploadWithPortStrategy(uploadParams);
     });
 
     if (reopenMonitorAfter) {
@@ -2978,177 +3007,179 @@ async function commandUploadData() {
     return;
   }
 
-  // Build arduino-cli compile --show-properties
-  const cfg = getConfig();
-  const exe = cfg.exe || 'arduino-cli';
-  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-  const propsArgs = [...baseArgs, 'compile'];
-  if (cfg.verbose) propsArgs.push('--verbose');
+  let uploadDataCompleted = false;
+  const uploadDataProgressTitle = t('uploadDataProgressTitle');
+  await vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: uploadDataProgressTitle
+  }, async (progress) => {
+    progress.report({ message: t('uploadDataProgressMessageResolve') });
+    const cfg = getConfig();
+    const exe = cfg.exe || 'arduino-cli';
+    const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+    const propsArgs = [...baseArgs, 'compile'];
+    if (cfg.verbose) propsArgs.push('--verbose');
 
-  let usingProfile = false;
-  let selectedProfile = '';
-  let resolvedFqbn = '';
-  const yamlInfo = await readSketchYamlInfo(sketchDir);
-  if (yamlInfo && yamlInfo.profiles.length > 0) {
-    selectedProfile = await resolveProfileName(yamlInfo);
-    if (!selectedProfile) return;
-    usingProfile = true;
-    propsArgs.push('--profile', selectedProfile);
-  } else {
-    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
-    if (!resolvedFqbn) {
-      const set = await commandSetFqbn(true);
-      if (!set) return;
-      resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
+    let usingProfile = false;
+    let selectedProfile = '';
+    let resolvedFqbn = '';
+    const yamlInfo = await readSketchYamlInfo(sketchDir);
+    if (yamlInfo && yamlInfo.profiles.length > 0) {
+      selectedProfile = await resolveProfileName(yamlInfo);
+      if (!selectedProfile) return;
+      usingProfile = true;
+      propsArgs.push('--profile', selectedProfile);
+    } else {
+      resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+      if (!resolvedFqbn) {
+        const set = await commandSetFqbn(true);
+        if (!set) return;
+        resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
+      }
+      propsArgs.push('--fqbn', resolvedFqbn);
     }
-    propsArgs.push('--fqbn', resolvedFqbn);
-  }
-  propsArgs.push('--show-properties');
-  if (cfg.localBuildPath) {
-    const buildDir = await ensureLocalBuildPath(sketchDir, usingProfile ? selectedProfile : '', usingProfile ? '' : resolvedFqbn);
-    if (buildDir) {
-      propsArgs.push('--build-path', buildDir);
-    }
-  }
-  propsArgs.push(sketchDir);
-
-  channel.show();
-  channel.appendLine(`${ANSI.cyan}[upload-data] Detecting tool paths via --show-properties${ANSI.reset}`);
-
-  // Run and capture stdout only
-  let propsText = '';
-  try {
-    await new Promise((resolve, reject) => {
-      const child = cp.spawn(exe, propsArgs, { shell: false, cwd: sketchDir });
-      child.stdout.on('data', d => { propsText += d.toString(); });
-      child.stderr.on('data', d => channel.append(d.toString()));
-      child.on('error', reject);
-      child.on('close', code => code === 0 ? resolve() : reject(new Error(`show-properties exit ${code}`)));
-    });
-  } catch (e) {
-    showError(e);
-    return;
-  }
-
-  // Parse key=value lines
-  const props = {};
-  for (const line of String(propsText).split(/\r?\n/)) {
-    const idx = line.indexOf('=');
-    if (idx > 0) {
-      const k = line.slice(0, idx).trim();
-      const v = line.slice(idx + 1).trim();
-      if (k) props[k] = v;
-    }
-  }
-
-  const buildPath = props['build.path'] || '';
-  if (!buildPath) {
-    vscode.window.showErrorMessage('build.path not found in show-properties output.');
-    return;
-  }
-  const partPath = path.join(buildPath, 'partitions.csv');
-  let offset = '';
-  let size = '';
-  try {
-    const csv = await readTextFile(vscode.Uri.file(partPath));
-    for (const raw of csv.split(/\r?\n/)) {
-      const line = raw.trim();
-      if (!line || line.startsWith('#')) continue;
-      // Expect a line like: spiffs,   data, spiffs,  0x310000,0xE0000,
-      const cols = line.split(',').map(s => s.trim());
-      if (cols.length >= 5 && /^spiffs$/i.test(cols[0])) {
-        // cols[3] offset, cols[4] size
-        offset = cols[3];
-        size = cols[4];
-        break;
+    propsArgs.push('--show-properties');
+    if (cfg.localBuildPath) {
+      const buildDir = await ensureLocalBuildPath(sketchDir, usingProfile ? selectedProfile : '', usingProfile ? '' : resolvedFqbn);
+      if (buildDir) {
+        propsArgs.push('--build-path', buildDir);
       }
     }
-  } catch (e) {
-    showError(new Error(`Failed to read partitions.csv: ${e.message}`));
-    return;
-  }
-  if (!offset || !size) {
-    vscode.window.showErrorMessage('SPIFFS partition not found in partitions.csv');
-    return;
-  }
+    propsArgs.push(sketchDir);
 
-  // Locate FS builder tool
-  let toolBase = '';
-  let toolName = '';
-  if (fsType === 'SPIFFS') {
-    toolBase = props['runtime.tools.mkspiffs.path'] || '';
-    toolName = 'mkspiffs';
-  } else {
-    toolBase = props['runtime.tools.mklittlefs.path'] || '';
-    toolName = 'mklittlefs';
-  }
-  if (!toolBase) {
-    vscode.window.showErrorMessage(`Tool path not found for ${fsType} (runtime.tools.*.path)`);
-    return;
-  }
-  const fsExe = await resolveExecutable(toolBase, toolName);
-  if (!fsExe) {
-    vscode.window.showErrorMessage(`Executable not found: ${toolName} under ${toolBase}`);
-    return;
-  }
+    channel.show();
+    channel.appendLine(`${ANSI.cyan}[upload-data] Detecting tool paths via --show-properties${ANSI.reset}`);
 
-  // Build image
-  const outBin = path.join(buildPath, fsType.toLowerCase() + '.bin');
-  channel.appendLine(`${ANSI.cyan}[upload-data] Building ${fsType} image (${size}) -> ${outBin}${ANSI.reset}`);
-  try {
-    await runExternal(fsExe, ['-s', size, '-c', 'data', outBin], { cwd: sketchDir });
-  } catch (e) {
-    showError(new Error(`Failed to build ${fsType} image: ${e.message}`));
-    return;
-  }
-
-  // Locate esptool and port/speed
-  const esptoolBase = props['runtime.tools.esptool_py.path'] || '';
-  if (!esptoolBase) {
-    vscode.window.showErrorMessage('esptool path not found (runtime.tools.esptool_py.path)');
-    return;
-  }
-  const esptoolExe = await resolveExecutable(esptoolBase, 'esptool');
-  if (!esptoolExe) {
-    vscode.window.showErrorMessage(`Executable not found: esptool under ${esptoolBase}`);
-    return;
-  }
-  let portInfo = getStoredPortInfo();
-  let port = portInfo.cliPort;
-  if (!port) {
-    const set = await commandSetPort(true);
-    if (!set) return;
-    portInfo = getStoredPortInfo();
-    port = portInfo.cliPort;
-    if (!port) {
-      vscode.window.showWarningMessage(t('portNoSerialMonitorWarn'));
+    let propsText = '';
+    try {
+      await new Promise((resolve, reject) => {
+        const child = cp.spawn(exe, propsArgs, { shell: false, cwd: sketchDir });
+        child.stdout.on('data', d => { propsText += d.toString(); });
+        child.stderr.on('data', d => channel.append(d.toString()));
+        child.on('error', reject);
+        child.on('close', code => code === 0 ? resolve() : reject(new Error(`show-properties exit ${code}`)));
+      });
+    } catch (e) {
+      showError(e);
       return;
     }
-  }
-  const speed = props['upload.speed'] || '115200';
 
-  // If a serial monitor is open, close it before flashing to avoid port conflicts
-  let reopenMonitorAfter = false;
-  if (monitorTerminal) {
-    try { monitorTerminal.dispose(); } catch (_) { }
-    monitorTerminal = undefined;
-    reopenMonitorAfter = true;
-  }
-  // Wait a bit to ensure the serial port is fully released (Windows needs time)
-  await new Promise((res) => setTimeout(res, 1200));
-
-  const portDisplay = portInfo.display || port;
-  channel.appendLine(`${ANSI.cyan}[upload-data] Flashing at ${offset} over ${portDisplay} (${speed} baud)${ANSI.reset}`);
-  try {
-    await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, outBin], { cwd: sketchDir });
-    vscode.window.showInformationMessage(`Uploaded ${fsType} image to ${portDisplay} at ${offset}`);
-    if (reopenMonitorAfter) {
-      await new Promise((res) => setTimeout(res, 1500));
-      await commandMonitor();
+    const props = {};
+    for (const line of String(propsText).split(/\r?\n/)) {
+      const idx = line.indexOf('=');
+      if (idx > 0) {
+        const k = line.slice(0, idx).trim();
+        const v = line.slice(idx + 1).trim();
+        if (k) props[k] = v;
+      }
     }
-  } catch (e) {
-    showError(new Error(`esptool failed: ${e.message}`));
-  }
+
+    const buildPath = props['build.path'] || '';
+    if (!buildPath) {
+      vscode.window.showErrorMessage('build.path not found in show-properties output.');
+      return;
+    }
+    const partPath = path.join(buildPath, 'partitions.csv');
+    let offset = '';
+    let size = '';
+    try {
+      const csv = await readTextFile(vscode.Uri.file(partPath));
+      for (const raw of csv.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line || line.startsWith('#')) continue;
+        const cols = line.split(',').map(s => s.trim());
+        if (cols.length >= 5 && /^spiffs$/i.test(cols[0])) {
+          offset = cols[3];
+          size = cols[4];
+          break;
+        }
+      }
+    } catch (e) {
+      showError(new Error(`Failed to read partitions.csv: ${e.message}`));
+      return;
+    }
+    if (!offset || !size) {
+      vscode.window.showErrorMessage('SPIFFS partition not found in partitions.csv');
+      return;
+    }
+
+    let toolBase = '';
+    let toolName = '';
+    if (fsType === 'SPIFFS') {
+      toolBase = props['runtime.tools.mkspiffs.path'] || '';
+      toolName = 'mkspiffs';
+    } else {
+      toolBase = props['runtime.tools.mklittlefs.path'] || '';
+      toolName = 'mklittlefs';
+    }
+    if (!toolBase) {
+      vscode.window.showErrorMessage(`Tool path not found for ${fsType} (runtime.tools.*.path)`);
+      return;
+    }
+    const fsExe = await resolveExecutable(toolBase, toolName);
+    if (!fsExe) {
+      vscode.window.showErrorMessage(`Executable not found: ${toolName} under ${toolBase}`);
+      return;
+    }
+
+    const outBin = path.join(buildPath, fsType.toLowerCase() + '.bin');
+    channel.appendLine(`${ANSI.cyan}[upload-data] Building ${fsType} image (${size}) -> ${outBin}${ANSI.reset}`);
+    progress.report({ message: t('uploadDataProgressMessageBuild', { fsType }) });
+    try {
+      await runExternal(fsExe, ['-s', size, '-c', 'data', outBin], { cwd: sketchDir });
+    } catch (e) {
+      showError(new Error(`Failed to build ${fsType} image: ${e.message}`));
+      return;
+    }
+
+    const esptoolBase = props['runtime.tools.esptool_py.path'] || '';
+    if (!esptoolBase) {
+      vscode.window.showErrorMessage('esptool path not found (runtime.tools.esptool_py.path)');
+      return;
+    }
+    const esptoolExe = await resolveExecutable(esptoolBase, 'esptool');
+    if (!esptoolExe) {
+      vscode.window.showErrorMessage(`Executable not found: esptool under ${esptoolBase}`);
+      return;
+    }
+    let portInfo = getStoredPortInfo();
+    let port = portInfo.cliPort;
+    if (!port) {
+      const set = await commandSetPort(true);
+      if (!set) return;
+      portInfo = getStoredPortInfo();
+      port = portInfo.cliPort;
+      if (!port) {
+        vscode.window.showWarningMessage(t('portNoSerialMonitorWarn'));
+        return;
+      }
+    }
+    const speed = props['upload.speed'] || '115200';
+
+    let reopenMonitorAfter = false;
+    if (monitorTerminal) {
+      try { monitorTerminal.dispose(); } catch (_) { }
+      monitorTerminal = undefined;
+      reopenMonitorAfter = true;
+    }
+    await new Promise((res) => setTimeout(res, 1200));
+
+    const portDisplay = portInfo.display || port;
+    channel.appendLine(`${ANSI.cyan}[upload-data] Flashing at ${offset} over ${portDisplay} (${speed} baud)${ANSI.reset}`);
+    progress.report({ message: t('uploadDataProgressMessageFlash') });
+    try {
+      await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, outBin], { cwd: sketchDir });
+      vscode.window.showInformationMessage(`Uploaded ${fsType} image to ${portDisplay} at ${offset}`);
+      if (reopenMonitorAfter) {
+        await new Promise((res) => setTimeout(res, 1500));
+        await commandMonitor();
+      }
+      uploadDataCompleted = true;
+    } catch (e) {
+      showError(new Error(`esptool failed: ${e.message}`));
+    }
+  });
+  if (!uploadDataCompleted) return;
 }
 
 /** Resolve an executable by trying plain name and platform-specific extensions under a base directory. */
@@ -4668,7 +4699,13 @@ async function runUploadFor(sketchDir, profile) {
   }
   let reopenMonitorAfter = false;
   if (monitorTerminal) { try { monitorTerminal.dispose(); } catch (_) { } monitorTerminal = undefined; reopenMonitorAfter = true; }
-  await performUploadWithPortStrategy({
+  const uploadProgressTitle = t('uploadProgressTitle');
+  const uploadProgressMessage = profile
+    ? t('uploadProgressMessageProfile', { profile })
+    : (resolvedFqbn
+      ? t('uploadProgressMessageFqbn', { fqbn: resolvedFqbn })
+      : t('uploadProgressMessage'));
+  const uploadParams = {
     sketchDir,
     baseArgs: uArgs,
     compileArgs: cArgs,
@@ -4676,6 +4713,13 @@ async function runUploadFor(sketchDir, profile) {
     buildFqbn: resolvedFqbn,
     cfg,
     yamlInfo
+  };
+  await vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: uploadProgressTitle
+  }, async (progress) => {
+    if (uploadProgressMessage) progress.report({ message: uploadProgressMessage });
+    await performUploadWithPortStrategy(uploadParams);
   });
   if (reopenMonitorAfter) { await new Promise(r => setTimeout(r, 1500)); await commandMonitor(); }
 }

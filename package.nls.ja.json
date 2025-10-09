@@ -49,5 +49,13 @@
   "msg.compileExtraFlagsApplied": "{file} から build.extra_flags を追加しました",
   "msg.compileExtraFlagsReadError": "{file} の読み込みに失敗したため、追加できませんでした: {msg}",
   "msg.compileExtraFlagsEmpty": "{file} が空または有効な行がないためスキップしました",
-  "msg.compileExtraFlagsSkipExisting": "既に build.extra_flags が指定されているため {file} をスキップしました"
+  "msg.compileExtraFlagsSkipExisting": "既に build.extra_flags が指定されているため {file} をスキップしました",
+  "msg.uploadProgressTitle": "スケッチを書き込み中です…",
+  "msg.uploadProgressMessage": "arduino-cli upload を実行中です…",
+  "msg.uploadProgressMessageProfile": "プロファイル {profile} 向けに arduino-cli upload を実行中です",
+  "msg.uploadProgressMessageFqbn": "{fqbn} 向けに arduino-cli upload を実行中です",
+  "msg.uploadDataProgressTitle": "データイメージを書き込み中です…",
+  "msg.uploadDataProgressMessageResolve": "ファイルシステムのメタデータを収集中です…",
+  "msg.uploadDataProgressMessageBuild": "{fsType} イメージを生成しています…",
+  "msg.uploadDataProgressMessageFlash": "esptool でファイルシステムイメージを書き込み中です…"
 }
