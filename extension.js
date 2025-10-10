@@ -3546,8 +3546,10 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
     originalArgs.push(sketchDir);
   }
   try {
-    await reportAssetsEmbedDiagnostics(sketchDir);
-  } catch { }
+    await embedAssetsForSketch(sketchDir, { silent: true });
+  } catch (err) {
+    throw err;
+  }
   const normalizedWarnings = typeof cfg.warnings === 'string' ? cfg.warnings.toLowerCase() : '';
   const warningsLevel = VALID_WARNING_LEVELS.has(normalizedWarnings) ? normalizedWarnings : '';
   const workspaceWarningsOnly = warningsLevel === 'workspace';
@@ -5558,23 +5560,27 @@ async function commandCleanCompile() {
 async function commandEmbedAssets() {
   const ino = await pickInoFromWorkspace();
   if (!ino) return;
-  await embedAssetsForSketch(path.dirname(ino));
+  await embedAssetsForSketch(path.dirname(ino), { silent: false });
 }
 
-async function embedAssetsForSketch(sketchDir) {
+async function embedAssetsForSketch(sketchDir, options = {}) {
+  const { silent = false } = options || {};
   try {
     const result = await writeAssetsEmbedHeader(sketchDir);
-    if (result.status === 'noAssets') {
-      vscode.window.showWarningMessage(t('embedAssetsNoAssets', { assets: result.assetsPath }));
-    } else {
-      vscode.window.showInformationMessage(t('embedAssetsDone', {
-        count: result.count,
-        header: result.headerPath
-      }));
+    if (!silent) {
+      if (result.status === 'noAssets') {
+        vscode.window.showWarningMessage(t('embedAssetsNoAssets', { assets: result.assetsPath }));
+      } else {
+        vscode.window.showInformationMessage(t('embedAssetsDone', {
+          count: result.count,
+          header: result.headerPath
+        }));
+      }
     }
     await reportAssetsEmbedDiagnostics(sketchDir);
   } catch (error) {
-    showError(error);
+    if (!silent) showError(error);
+    else throw error;
   }
 }
 

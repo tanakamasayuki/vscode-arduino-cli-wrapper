@@ -214,7 +214,7 @@ All command logs are unified in a dedicated pseudo terminal with ANSI colors so 
 
 #### Embed assets or upload a data image?
 
-**Arduino CLI: Embed Assets** is the quickest option: drop files under `assets/`, run the command, and the extension regenerates `assets_embed.h` (creating the folder if needed) with a `PROGMEM` byte array and length constant for each file. Updates are easy—re-run the command and the header refreshes automatically, and the compile step warns when assets have changed.
+**Arduino CLI: Embed Assets** is the quickest option: drop files under `assets/`, run the command, and the extension regenerates `assets_embed.h` (creating the folder if needed) with a `PROGMEM` byte array and length constant for each file. Compiles now re-run the embed step automatically whenever assets change, keeping the header in sync without extra steps.
 
 The trade-off is size: every embedded byte becomes part of the sketch binary. Large media files make the firmware heavier, so each upload or OTA update takes longer, and you can run into partition limits.
 
