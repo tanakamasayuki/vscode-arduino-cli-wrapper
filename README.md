@@ -38,6 +38,7 @@ This extension declares an `extensionPack` so you can pull in the supporting too
 - Build: run "Arduino CLI: Compile Sketch" or click Compile.
 - Upload: run "Arduino CLI: Upload Sketch" or click Upload. Select the serial port first; the extension passes `-p` explicitly even when using profiles.
 - Monitor: run "Arduino CLI: Monitor Serial" or click Monitor. Baudrate defaults to 115200 and can be changed from the status bar.
+  - Need a serial plotter? Install a VS Code extension such as [Teleplot](https://marketplace.visualstudio.com/items?itemName=teleplot.teleplot) or any preferred tool.
 
 Tips:
 - If multiple `.ino` files exist, a picker appears to choose one. If an `.ino` editor is active, it is preferred.

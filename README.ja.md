@@ -38,6 +38,7 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - コンパイル: 「Arduino CLI: Compile Sketch」または Compile をクリック。
 - 書き込み: 「Arduino CLI: Upload Sketch」または Upload をクリック。先にポートを選択してください（プロファイル使用時でも `-p` で明示指定）。
 - モニタ: 「Arduino CLI: Monitor Serial」または Monitor をクリック。ボーレートは既定 115200、ステータスバーから変更できます。
+  - シリアルプロッターが必要な場合は、VS Code の [Teleplot](https://marketplace.visualstudio.com/items?itemName=teleplot.teleplot) などお好みの拡張機能をご利用ください。
 
 ヒント:
 - `.ino` が複数あるときは選択ダイアログが出ます。アクティブな `.ino` エディターがあれば優先されます。
