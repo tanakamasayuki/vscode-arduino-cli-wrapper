@@ -107,6 +107,10 @@
         "title": "%cmd.cleanCompile%"
       },
       {
+        "command": "arduino-cli.embedAssets",
+        "title": "%cmd.embedAssets%"
+      },
+      {
         "command": "arduino-cli.upload",
         "title": "%cmd.upload%"
       },

@@ -934,6 +934,8 @@ const SECRET_HEADER_NAME = 'arduino_secrets.h';
 let includeOrderDiagnostics;
 let includeOrderConfig = { m5: new Set(), fs: new Set() };
 let secretsLensProvider;
+let assetsDiagnostics;
+const assetsDiagTargets = new Map();
 
 function setupIncludeOrderLint(context) {
   includeOrderConfig = loadIncludeOrderConfig();
@@ -3543,6 +3545,9 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   if (!originalArgs.includes(sketchDir)) {
     originalArgs.push(sketchDir);
   }
+  try {
+    await reportAssetsEmbedDiagnostics(sketchDir);
+  } catch { }
   const normalizedWarnings = typeof cfg.warnings === 'string' ? cfg.warnings.toLowerCase() : '';
   const warningsLevel = VALID_WARNING_LEVELS.has(normalizedWarnings) ? normalizedWarnings : '';
   const workspaceWarningsOnly = warningsLevel === 'workspace';
@@ -4520,6 +4525,8 @@ function activate(context) {
   setupArduinoSecretsSupport(context);
   compileDiagnostics = vscode.languages.createDiagnosticCollection('arduinoCliCompile');
   context.subscriptions.push(compileDiagnostics);
+  assetsDiagnostics = vscode.languages.createDiagnosticCollection('arduinoCliAssets');
+  context.subscriptions.push(assetsDiagnostics);
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('arduino-cli.refreshView', () => {
@@ -4539,6 +4546,10 @@ function activate(context) {
         if (action === 'version') return vscode.commands.executeCommand('arduino-cli.version');
         if (action === 'listBoards') return vscode.commands.executeCommand('arduino-cli.listBoards');
         if (action === 'listAllBoards') return vscode.commands.executeCommand('arduino-cli.listAllBoards');
+        if (action === 'embedAssets') {
+          if (sketchDir) return embedAssetsForSketch(sketchDir);
+          return vscode.commands.executeCommand('arduino-cli.embedAssets');
+        }
         if (action === 'sketchNew') return vscode.commands.executeCommand('arduino-cli.sketchNew');
         if (action === 'runArbitrary') return vscode.commands.executeCommand('arduino-cli.runArbitrary');
         if (action === 'uploadData') return commandUploadDataFor(sketchDir, profile);
@@ -4570,6 +4581,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.versionCheck', commandVersionCheck),
     vscode.commands.registerCommand('arduino-cli.buildCheck', commandBuildCheck),
     vscode.commands.registerCommand('arduino-cli.cleanCompile', commandCleanCompile),
+    vscode.commands.registerCommand('arduino-cli.embedAssets', commandEmbedAssets),
     vscode.commands.registerCommand('arduino-cli.upload', commandUpload),
     vscode.commands.registerCommand('arduino-cli.debug', () => commandDebug()),
     vscode.commands.registerCommand('arduino-cli.monitor', commandMonitor),
@@ -4741,6 +4753,7 @@ function globalCommandItems() {
     new CommandItem('Open Inspector', 'inspect', '', '', undefined, t('treeInspectorOpen')),
     new CommandItem('Sketch.yaml Versions', 'versionCheck', '', '', undefined, t('treeVersionCheck')),
     new CommandItem('Build Check', 'buildCheck', '', '', undefined, t('treeBuildCheck')),
+    new CommandItem('Embed Assets', 'embedAssets', '', '', undefined, t('treeEmbedAssets')),
     new CommandItem('Refresh View', 'refreshView', '', '', undefined, t('treeRefresh')),
     new CommandItem('New Sketch', 'sketchNew', '', '', undefined, t('treeNewSketch')),
     new CommandItem('Run Command', 'runArbitrary', '', '', undefined, t('treeRunCommand')),
@@ -5539,6 +5552,29 @@ async function commandCleanCompile() {
       }));
     }
     showError(e);
+  }
+}
+
+async function commandEmbedAssets() {
+  const ino = await pickInoFromWorkspace();
+  if (!ino) return;
+  await embedAssetsForSketch(path.dirname(ino));
+}
+
+async function embedAssetsForSketch(sketchDir) {
+  try {
+    const result = await writeAssetsEmbedHeader(sketchDir);
+    if (result.status === 'noAssets') {
+      vscode.window.showWarningMessage(t('embedAssetsNoAssets', { assets: result.assetsPath }));
+    } else {
+      vscode.window.showInformationMessage(t('embedAssetsDone', {
+        count: result.count,
+        header: result.headerPath
+      }));
+    }
+    await reportAssetsEmbedDiagnostics(sketchDir);
+  } catch (error) {
+    showError(error);
   }
 }
 
@@ -8765,6 +8801,197 @@ async function gatherExampleSiblingFiles(primaryPath) {
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
   });
   return items;
+}
+
+async function writeAssetsEmbedHeader(sketchDir) {
+  const assetsDir = path.join(sketchDir, 'assets');
+  const headerPath = path.join(sketchDir, 'assets_embed.h');
+  const assetsUri = vscode.Uri.file(assetsDir);
+  const headerUri = vscode.Uri.file(headerPath);
+  if (!(await pathExists(assetsUri))) {
+    await ensureDir(assetsUri);
+  }
+  const entries = await collectAssetFileEntries(assetsUri);
+  entries.sort((a, b) => a.relative.localeCompare(b.relative, undefined, { sensitivity: 'base' }));
+  const content = await buildAssetsHeaderContent(sketchDir, assetsDir, entries);
+  await writeTextFile(headerUri, content);
+  return {
+    status: entries.length ? 'written' : 'noAssets',
+    count: entries.length,
+    headerPath,
+    assetsPath: assetsDir
+  };
+}
+
+async function collectAssetFileEntries(baseUri, prefix = '') {
+  const results = [];
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(baseUri);
+    for (const [name, type] of entries) {
+      const rel = prefix ? `${prefix}/${name}` : name;
+      const child = vscode.Uri.joinPath(baseUri, name);
+      if (type === vscode.FileType.Directory) {
+        const nested = await collectAssetFileEntries(child, rel);
+        for (const item of nested) results.push(item);
+      } else if (type === vscode.FileType.File) {
+        let stat;
+        try { stat = await vscode.workspace.fs.stat(child); } catch { stat = undefined; }
+        results.push({
+          uri: child,
+          relative: rel.replace(/\\/g, '/'),
+          mtime: stat && typeof stat.mtime === 'number' ? stat.mtime : 0
+        });
+      }
+    }
+  } catch { }
+  return results;
+}
+
+async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
+  const lines = [];
+  lines.push('// Auto-generated by Arduino CLI Wrapper: Embed Assets');
+  const sketchName = path.basename(sketchDir || '') || sketchDir;
+  lines.push(`// Sketch: ${sketchName}`);
+  lines.push('#pragma once');
+  lines.push('#include <cstddef>');
+  lines.push('#include <cstdint>');
+  lines.push('');
+  lines.push('#if defined(PROGMEM)');
+  lines.push('#include <pgmspace.h>');
+  lines.push('#endif');
+  lines.push('');
+  if (!entries.length) {
+    lines.push('// No assets were found when this file was generated.');
+    lines.push('');
+    return lines.join('\n');
+  }
+  for (const entry of entries) {
+    const data = await vscode.workspace.fs.readFile(entry.uri);
+    const symbol = makeAssetSymbolName(entry.relative);
+    lines.push(`// assets/${entry.relative}`);
+    lines.push(`alignas(4) const uint8_t ${symbol}[] PROGMEM = {`);
+    const body = formatAssetBytes(data);
+    if (body) lines.push(body);
+    lines.push('};');
+    lines.push(`const size_t ${symbol}_len = ${data.length};`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function makeAssetSymbolName(relativePath) {
+  const lower = String(relativePath || '').toLowerCase();
+  let symbol = `assets_${lower.replace(/[^a-z0-9]+/g, '_')}`;
+  symbol = symbol.replace(/_+/g, '_').replace(/^_+/, '');
+  if (!symbol) symbol = 'assets_data';
+  if (!/^[a-z_]/.test(symbol)) symbol = `_${symbol}`;
+  return symbol;
+}
+
+function formatAssetBytes(data) {
+  if (!data || data.length === 0) return '';
+  const values = Array.from(data, (byte) => `0x${byte.toString(16).toUpperCase().padStart(2, '0')}`);
+  const chunks = [];
+  for (let i = 0; i < values.length; i += 12) {
+    const slice = values.slice(i, i + 12);
+    const suffix = (i + 12 < values.length) ? ',' : '';
+    chunks.push(`  ${slice.join(', ')}${suffix}`);
+  }
+  return chunks.join('\n');
+}
+
+async function reportAssetsEmbedDiagnostics(sketchDir) {
+  if (!assetsDiagnostics) return;
+  const key = normalizeSketchKey(sketchDir);
+  const assetsPath = path.join(sketchDir, 'assets');
+  const assetsUri = vscode.Uri.file(assetsPath);
+  const headerUri = vscode.Uri.file(path.join(sketchDir, 'assets_embed.h'));
+  const hasAssetsDir = await pathExists(assetsUri);
+  if (!hasAssetsDir) {
+    clearAssetsDiagnostic(key);
+    return;
+  }
+  const entries = await collectAssetFileEntries(assetsUri);
+  if (!entries.length) {
+    clearAssetsDiagnostic(key);
+    return;
+  }
+  let newest = 0;
+  let newestFile = entries[0]?.relative || '';
+  for (const entry of entries) {
+    const mtime = entry.mtime || 0;
+    if (mtime > newest) {
+      newest = mtime;
+      newestFile = entry.relative;
+    }
+  }
+  let headerExists = await pathExists(headerUri);
+  let headerMtime = 0;
+  if (headerExists) {
+    try {
+      const stat = await vscode.workspace.fs.stat(headerUri);
+      headerMtime = stat && typeof stat.mtime === 'number' ? stat.mtime : 0;
+    } catch {
+      headerExists = false;
+      headerMtime = 0;
+    }
+  }
+  if (!headerExists || headerMtime < newest) {
+    let targetUri = headerExists ? headerUri : await getPrimaryInoUri(sketchDir);
+    if (!targetUri) targetUri = headerUri;
+    const message = headerExists
+      ? t('embedAssetsOutdated', { file: newestFile })
+      : t('embedAssetsMissing', { file: newestFile });
+    setAssetsDiagnostic(key, targetUri, message);
+  } else {
+    clearAssetsDiagnostic(key);
+  }
+}
+
+function normalizeSketchKey(sketchDir) {
+  return path.normalize(String(sketchDir || '')).toLowerCase();
+}
+
+function setAssetsDiagnostic(key, targetUri, message) {
+  try {
+    const prevPath = assetsDiagTargets.get(key);
+    const targetPath = targetUri.fsPath;
+    if (prevPath && prevPath !== targetPath) {
+      assetsDiagnostics.delete(vscode.Uri.file(prevPath));
+    }
+    const diagnostic = new vscode.Diagnostic(
+      new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1)),
+      message,
+      vscode.DiagnosticSeverity.Warning
+    );
+    diagnostic.source = 'arduino-cli-wrapper';
+    assetsDiagnostics.set(targetUri, [diagnostic]);
+    assetsDiagTargets.set(key, targetPath);
+  } catch { }
+}
+
+function clearAssetsDiagnostic(key) {
+  try {
+    const prevPath = assetsDiagTargets.get(key);
+    if (prevPath) {
+      assetsDiagnostics.delete(vscode.Uri.file(prevPath));
+      assetsDiagTargets.delete(key);
+    }
+  } catch { }
+}
+
+async function getPrimaryInoUri(sketchDir) {
+  const preferred = vscode.Uri.file(path.join(sketchDir, `${path.basename(sketchDir)}.ino`));
+  if (await pathExists(preferred)) return preferred;
+  try {
+    const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(sketchDir));
+    for (const [name, type] of dirEntries) {
+      if (type === vscode.FileType.File && name.toLowerCase().endsWith('.ino')) {
+        return vscode.Uri.file(path.join(sketchDir, name));
+      }
+    }
+  } catch { }
+  return null;
 }
 
 /** Get `port` value from sketch.yaml under a specific profile (string or empty). */
