@@ -54,6 +54,10 @@ Keep secrets and board-specific tweaks outside your repository by placing an `.a
 
 Because the filename starts with a dot it stays hidden by default. Add it to source control ignore lists (the extension’s `.gitignore` already contains an entry) so credentials never leak into commits.
 
+### Manage `arduino_secrets.h`
+
+When an `.ino` file contains `#include "arduino_secrets.h"` the editor now shows an inline action directly above the include. Click it to open the secrets header if it already exists, or generate it on the spot when missing. The generator copies any fallback `#define` lines from the sketch's `#else` block so the new header starts with the same defaults, helping you move Wi-Fi credentials into an untracked file with a single click.
+
 ## Speeding up builds with WSL
 
 If Arduino CLI builds feel slow on Windows, you can offload compilation to a Linux environment by using WSL (Windows Subsystem for Linux). This extension automatically detects that you are running inside WSL, uses the Linux `arduino-cli` for compile tasks, and still relies on `arduino-cli.exe` on Windows for upload/monitor so you do not have to configure serial ports twice. Follow the steps below.

@@ -218,6 +218,12 @@ const MSG = {
     sketchYamlFetching: '[sketch.yaml] Getting dump-profile…',
     sketchYamlEmpty: '[sketch.yaml] dump-profile output is empty (no profiles appended)',
     sketchYamlCreated: 'Created sketch.yaml.',
+    secretsLensOpen: '🔐 Open arduino_secrets.h',
+    secretsLensCreate: '📝 Create arduino_secrets.h',
+    secretsSelectIno: 'Focus an .ino file to manage arduino_secrets.h.',
+    secretsHeaderMissing: 'arduino_secrets.h was not found at {path}. Use the Create action to generate it.',
+    secretsCreated: 'Created arduino_secrets.h at {path}.',
+    secretsCreatedNoDefaults: 'Created arduino_secrets.h at {path}. No fallback #define entries were found; update the file manually.',
     sketchYamlCreateDone: '[sketch.yaml] Create done: {path}',
     defaultProfileSet: '[sketch.yaml] Set default_profile: {name}',
     setFqbnPickTitle: 'Select FQBN',
@@ -495,6 +501,12 @@ const MSG = {
     sketchYamlFetching: '[sketch.yaml] 作成中: dump-profile を取得しています…',
     sketchYamlEmpty: '[sketch.yaml] dump-profile の取得結果が空でした（プロファイル追記はありません）',
     sketchYamlCreated: 'sketch.yaml を作成しました。',
+    secretsLensOpen: '🔐 arduino_secrets.h を開く',
+    secretsLensCreate: '📝 arduino_secrets.h を作成',
+    secretsSelectIno: '.ino ファイルをアクティブにしてから arduino_secrets.h を管理してください。',
+    secretsHeaderMissing: '指定パス ({path}) に arduino_secrets.h が見つかりません。作成アクションで生成してください。',
+    secretsCreated: '{path} に arduino_secrets.h を作成しました。',
+    secretsCreatedNoDefaults: '{path} に arduino_secrets.h を作成しました。フォールバックの #define が見つからなかったため、手動で値を追加してください。',
     sketchYamlCreateDone: '[sketch.yaml] 作成完了: {path}',
     lintFsIncludeAfterM5: 'FS系ヘッダー {fsHeader} は M5GFX系ヘッダー {m5Header} より前に記述してください。',
     inspectorPanelTitle: 'スケッチインスペクター',
@@ -917,8 +929,11 @@ const DEFAULT_FS_HEADERS = [
   'WebServer.h'
 ];
 
+const SECRET_HEADER_NAME = 'arduino_secrets.h';
+
 let includeOrderDiagnostics;
 let includeOrderConfig = { m5: new Set(), fs: new Set() };
+let secretsLensProvider;
 
 function setupIncludeOrderLint(context) {
   includeOrderConfig = loadIncludeOrderConfig();
@@ -1074,6 +1089,202 @@ function filterUrisOutsideBuild(uris) {
     if (!fsPath) return false;
     return !isPathInsideBuildDir(fsPath) && !containsHiddenDirectory(fsPath);
   });
+}
+
+class ArduinoSecretsCodeLensProvider {
+  constructor() {
+    this._em = new vscode.EventEmitter();
+    this.onDidChangeCodeLenses = this._em.event;
+  }
+  refresh() {
+    try { this._em.fire(); } catch { }
+  }
+  async provideCodeLenses(document) {
+    try {
+      if (!document || document.isClosed) return [];
+      const fileName = document.fileName || (document.uri && document.uri.fsPath) || '';
+      if (typeof fileName !== 'string' || !fileName.toLowerCase().endsWith('.ino')) return [];
+      const lines = getDocumentLines(document);
+      if (!lines.length) return [];
+      const includeLine = findSecretsIncludeLineFromLines(lines);
+      if (includeLine < 0) return [];
+      const secretsUri = getSecretsHeaderUriFromIno(document.uri);
+      if (!secretsUri) return [];
+      const exists = await pathExists(secretsUri);
+      const range = new vscode.Range(includeLine, 0, includeLine, 0);
+      const title = exists ? t('secretsLensOpen') : t('secretsLensCreate');
+      const command = exists ? 'arduino-cli.openSecretsHeader' : 'arduino-cli.createSecretsHeader';
+      return [new vscode.CodeLens(range, { title, command, arguments: [document.uri] })];
+    } catch {
+      return [];
+    }
+  }
+}
+
+function setupArduinoSecretsSupport(context) {
+  secretsLensProvider = new ArduinoSecretsCodeLensProvider();
+  const selector = { scheme: 'file', pattern: '**/*.ino' };
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider(selector, secretsLensProvider),
+    vscode.commands.registerCommand('arduino-cli.openSecretsHeader', commandOpenArduinoSecretsHeader),
+    vscode.commands.registerCommand('arduino-cli.createSecretsHeader', commandCreateArduinoSecretsHeader)
+  );
+  const watcher = vscode.workspace.createFileSystemWatcher(`**/${SECRET_HEADER_NAME}`);
+  watcher.onDidCreate(() => secretsLensProvider?.refresh());
+  watcher.onDidDelete(() => secretsLensProvider?.refresh());
+  watcher.onDidChange(() => secretsLensProvider?.refresh());
+  context.subscriptions.push(watcher);
+  secretsLensProvider.refresh();
+}
+
+async function commandOpenArduinoSecretsHeader(arg) {
+  try {
+    const ctx = await resolveSecretsContext(arg);
+    if (!ctx) {
+      vscode.window.showWarningMessage(t('secretsSelectIno'));
+      return;
+    }
+    const exists = await pathExists(ctx.secretsUri);
+    if (!exists) {
+      vscode.window.showWarningMessage(t('secretsHeaderMissing', { path: ctx.secretsUri.fsPath }));
+      return;
+    }
+    const doc = await vscode.workspace.openTextDocument(ctx.secretsUri);
+    await vscode.window.showTextDocument(doc, { preview: false });
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function commandCreateArduinoSecretsHeader(arg) {
+  try {
+    const ctx = await resolveSecretsContext(arg);
+    if (!ctx) {
+      vscode.window.showWarningMessage(t('secretsSelectIno'));
+      return;
+    }
+    if (await pathExists(ctx.secretsUri)) {
+      const doc = await vscode.workspace.openTextDocument(ctx.secretsUri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+      secretsLensProvider?.refresh();
+      return;
+    }
+    const defines = extractSecretsFallbackDefinesFromLines(ctx.lines, ctx.includeLine);
+    const content = buildSecretsHeaderContent(defines, ctx.document?.fileName);
+    await writeTextFile(ctx.secretsUri, content);
+    secretsLensProvider?.refresh();
+    const created = await vscode.workspace.openTextDocument(ctx.secretsUri);
+    await vscode.window.showTextDocument(created, { preview: false });
+    const msgKey = defines.length ? 'secretsCreated' : 'secretsCreatedNoDefaults';
+    vscode.window.showInformationMessage(t(msgKey, { path: ctx.secretsUri.fsPath }));
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function resolveSecretsContext(arg) {
+  let targetUri;
+  try {
+    if (arg) {
+      if (vscode.Uri.isUri(arg)) targetUri = arg;
+      else if (typeof arg === 'object') {
+        if (vscode.Uri.isUri(arg.uri)) targetUri = arg.uri;
+        else if (arg.document && vscode.Uri.isUri(arg.document.uri)) targetUri = arg.document.uri;
+        else if (vscode.Uri.isUri(arg.resourceUri)) targetUri = arg.resourceUri;
+      }
+    }
+  } catch { targetUri = undefined; }
+  if (!targetUri) {
+    const active = vscode.window.activeTextEditor;
+    if (active && active.document) targetUri = active.document.uri;
+  }
+  if (!targetUri) return null;
+  const fsPath = targetUri.fsPath || targetUri.path || '';
+  if (typeof fsPath !== 'string' || !fsPath.toLowerCase().endsWith('.ino')) return null;
+  const document = await vscode.workspace.openTextDocument(targetUri);
+  const lines = getDocumentLines(document);
+  const includeLine = findSecretsIncludeLineFromLines(lines);
+  const secretsUri = getSecretsHeaderUriFromIno(targetUri);
+  if (!secretsUri) return null;
+  return { document, lines, includeLine, secretsUri };
+}
+
+function getSecretsHeaderUriFromIno(inoUri) {
+  if (!inoUri) return undefined;
+  const fsPath = inoUri.fsPath || inoUri.path;
+  if (!fsPath) return undefined;
+  const dir = path.dirname(fsPath);
+  return vscode.Uri.file(path.join(dir, SECRET_HEADER_NAME));
+}
+
+function getDocumentLines(document) {
+  if (!document) return [];
+  let text = '';
+  try { text = document.getText(); } catch { text = ''; }
+  if (!text) return [];
+  return text.split(/\r?\n/);
+}
+
+function findSecretsIncludeLineFromLines(lines) {
+  if (!Array.isArray(lines)) return -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (typeof line !== 'string') continue;
+    if (/#\s*include\s*[<"]arduino_secrets\.h[>"]/i.test(line)) return i;
+  }
+  return -1;
+}
+
+function extractSecretsFallbackDefinesFromLines(lines, includeLine) {
+  if (!Array.isArray(lines) || !lines.length) return [];
+  let startIndex = typeof includeLine === 'number' ? includeLine : -1;
+  if (startIndex < 0) startIndex = findSecretsIncludeLineFromLines(lines);
+  if (startIndex < 0) return [];
+  let elseIndex = -1;
+  for (let i = startIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*#else\b/.test(line)) {
+      elseIndex = i + 1;
+      break;
+    }
+    if (/^\s*#endif\b/.test(line)) return [];
+  }
+  if (elseIndex < 0) return [];
+  const defines = [];
+  for (let i = elseIndex; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*#endif\b/.test(line)) break;
+    const match = /^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)\b(.*)$/.exec(line);
+    if (!match) continue;
+    let valuePart = match[2] || '';
+    valuePart = valuePart.replace(/\s+$/, '');
+    if (valuePart && !/^\s/.test(valuePart)) valuePart = ' ' + valuePart;
+    defines.push(`#define ${match[1]}${valuePart}`);
+  }
+  return defines;
+}
+
+function buildSecretsHeaderContent(defines, sourcePath) {
+  const lines = [];
+  const sourceName = sourcePath ? path.basename(sourcePath) : undefined;
+  lines.push('// Sensitive constants separated from the sketch.');
+  if (sourceName) lines.push(`// Source sketch: ${sourceName}`);
+  lines.push('// Do not commit this file to version control.');
+  lines.push('#pragma once');
+  lines.push('');
+  if (Array.isArray(defines) && defines.length) {
+    for (const entry of defines) {
+      if (typeof entry === 'string' && entry.trim()) {
+        lines.push(entry.trimEnd());
+      }
+    }
+  } else {
+    lines.push('// Define your secrets here, for example:');
+    lines.push('// #define WIFI_SSID "YourSSID"');
+    lines.push('// #define WIFI_PASS "YourPassword"');
+  }
+  lines.push('');
+  return lines.join('\n');
 }
 
 async function ensureLocalBuildPath(sketchDir, profileName, fqbn) {
@@ -4306,6 +4517,7 @@ async function handleWokwiArtifacts(sketchDir, profileName, buildPath) {
 function activate(context) {
   extContext = context;
   setupIncludeOrderLint(context);
+  setupArduinoSecretsSupport(context);
   compileDiagnostics = vscode.languages.createDiagnosticCollection('arduinoCliCompile');
   context.subscriptions.push(compileDiagnostics);
   // Commands

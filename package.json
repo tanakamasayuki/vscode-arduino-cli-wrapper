@@ -145,6 +145,14 @@
       {
         "command": "arduino-cli.runWokwi",
         "title": "%cmd.runWokwi%"
+      },
+      {
+        "command": "arduino-cli.openSecretsHeader",
+        "title": "%cmd.openSecretsHeader%"
+      },
+      {
+        "command": "arduino-cli.createSecretsHeader",
+        "title": "%cmd.createSecretsHeader%"
       }
     ],
     "menus": {

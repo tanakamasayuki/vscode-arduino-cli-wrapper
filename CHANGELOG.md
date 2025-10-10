@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) .ino editors that include `arduino_secrets.h` now surface an inline action to open the secrets file or create it with fallback `#define` values extracted from the sketch.
+- (JA) `arduino_secrets.h` を含む `.ino` エディターにシークレットファイルを開く / 作成するインラインアクションを追加し、スケッチのフォールバック `#define` から初期値を抽出してヘッダーを生成できるようにしました。
 - (EN) Upload and Upload Data now show the same notification spinner while arduino-cli runs, making it clear that flashing is still in progress.
 - (JA) Upload と Upload Data でも arduino-cli 実行中に通知プログレスを表示し、書き込み処理の継続が分かりやすくなりました。
 - (EN) Commands launched while a progress notification is active now abort with a warning so concurrent operations cannot overlap.
