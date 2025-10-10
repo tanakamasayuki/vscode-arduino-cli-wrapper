@@ -8871,7 +8871,10 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
     lines.push('');
     return lines.join('\n');
   }
-  for (const entry of entries) {
+  const sortedEntries = Array.isArray(entries)
+    ? entries.slice().sort((a, b) => String(a.relative || '').localeCompare(String(b.relative || ''), undefined, { sensitivity: 'base' }))
+    : [];
+  for (const entry of sortedEntries) {
     const data = await vscode.workspace.fs.readFile(entry.uri);
     const symbol = makeAssetSymbolName(entry.relative);
     lines.push(`// assets/${entry.relative}`);
