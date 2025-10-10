@@ -6481,13 +6481,13 @@ async function getCliConfigDirs() {
  * Optionally prefer a given profile name.
  */
 function parsePlatformFromProfileYaml(profileYaml, preferProfileName) {
-  // Try to find the profile block and extract vendor:arch and version
-  // platform: esp32:esp32 (3.3.0)
+  // Try to find the profile block and extract vendor:arch, version, and optional platform_index_url
   const lines = (profileYaml || '').split(/\r?\n/);
   let inProfiles = false;
   let currentKey = '';
-  let targetKey = preferProfileName || '';
-  for (const line of lines) {
+  const targetKey = preferProfileName ? String(preferProfileName).trim() : '';
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (!inProfiles) {
       if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true;
       continue;
@@ -6497,10 +6497,30 @@ function parsePlatformFromProfileYaml(profileYaml, preferProfileName) {
       currentKey = mKey[1].trim();
       continue;
     }
-    // Match either "      platform: ... (x.y.z)" or list item "      - platform: ... (x.y.z)"
     const mPlat = line.match(/^\s{6}(?:-\s*)?platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
     if (mPlat && (!targetKey || targetKey === currentKey)) {
-      return { vendorArch: mPlat[1], version: mPlat[2] ? mPlat[2] : '' };
+      const info = { vendorArch: mPlat[1], version: mPlat[2] ? mPlat[2] : '' };
+      for (let j = i + 1; j < lines.length; j++) {
+        const next = lines[j];
+        if (/^\s{6}-\s*platform\s*:/.test(next)) break;
+        if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(next)) break;
+        if (/^\s{2}[^\s:#][^:]*\s*:\s*$/.test(next)) break;
+        if (/^\s*default_profile\s*:\s*/.test(next)) break;
+        if (/^\S/.test(next)) break;
+        const trimmed = next.trim();
+        if (!trimmed) continue;
+        if (trimmed.startsWith('platform_index_url')) {
+          const parts = trimmed.split(/\s*:\s*/, 2);
+          if (parts.length === 2 && parts[1]) {
+            let url = parts[1].trim();
+            if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+              url = url.slice(1, -1);
+            }
+            info.indexUrl = url;
+          }
+        }
+      }
+      return info;
     }
   }
   return null;
@@ -6664,12 +6684,28 @@ async function commandOpenSketchYamlHelper(ctx) {
       // Parse platform id/version from sketch.yaml text
       let platformId = '';
       let platformVersion = '';
+      let platformIndexUrl = '';
       try {
         const text = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
         const parsed = parsePlatformFromProfileYaml(text, prof);
-        if (parsed) { platformId = parsed.vendorArch || ''; platformVersion = parsed.version || ''; }
+        if (parsed) {
+          platformId = parsed.vendorArch || '';
+          platformVersion = parsed.version || '';
+          platformIndexUrl = parsed.indexUrl || '';
+        }
       } catch { }
-      if (extFqbn) panel.webview.postMessage({ type: 'init', extFqbn, libraries: libs, platformId, platformVersion, profileBlock, profileName: prof });
+      if (extFqbn) {
+        panel.webview.postMessage({
+          type: 'init',
+          extFqbn,
+          libraries: libs,
+          platformId,
+          platformVersion,
+          platformIndexUrl,
+          profileBlock,
+          profileName: prof
+        });
+      }
     } catch (_) { /* ignore init errors */ }
   })();
 
