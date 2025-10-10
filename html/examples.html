@@ -144,6 +144,40 @@
       align-items: center;
     }
 
+    .tabbar {
+      display: flex;
+      gap: 4px;
+      padding: 0 8px;
+      border-bottom: 1px solid #2d2d2d;
+      background: #1e1e1e;
+      overflow-x: auto;
+    }
+
+    .tabbar.hidden {
+      display: none;
+    }
+
+    .tabbar button {
+      background: transparent;
+      color: #ccc;
+      border: 0;
+      padding: 8px 12px 6px;
+      border-radius: 4px 4px 0 0;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .tabbar button:hover:not(.active) {
+      background: #2a2a2a;
+      color: #fff;
+    }
+
+    .tabbar button.active {
+      background: #094771;
+      color: #fff;
+    }
+
     body.resizing {
       cursor: col-resize;
       user-select: none;
@@ -347,6 +381,7 @@
         <span id="sel"></span>
         <span class="count" id="count"></span>
       </div>
+      <div class="tabbar hidden" id="tabbar"></div>
       <pre id="codeView"
         class="code-view"><code id="content" class="hljs language-cpp empty" data-placeholder="スケッチを選択してください"></code></pre>
       <div class="toolbar">
@@ -2894,7 +2929,12 @@
     const vscode = acquireVsCodeApi();
     let allItems = [];
     let filtered = [];
-    let selectedPath = '';
+    let selectedExamplePath = '';
+    let activePath = '';
+    let currentTabs = [];
+    let currentContent = '';
+    let hasContent = false;
+    let isLoading = false;
     const codeEl = document.getElementById('content');
     const copyBtn = document.getElementById('copy');
     const copyClipboardBtn = document.getElementById('copyClipboard');
@@ -2908,6 +2948,7 @@
     const listEl = document.querySelector('.list');
     const divider = document.getElementById('divider');
     const itemsList = document.getElementById('items');
+    const tabBar = document.getElementById('tabbar');
     const layoutState = vscode.getState ? (vscode.getState() || {}) : {};
     const MIN_LIST_WIDTH = 220;
     const MIN_VIEWER_WIDTH = 300;
@@ -3021,7 +3062,15 @@
       updateCount();
     }
     function requestExamples() { setLoading(true); vscode.postMessage({ type: 'requestExamples' }); }
-    function readFile(path) { vscode.postMessage({ type: 'readFile', path }); }
+    function readFile(path) {
+      if (!path) return;
+      activePath = path;
+      hasContent = false;
+      currentContent = '';
+      renderTabs();
+      refreshControls();
+      vscode.postMessage({ type: 'readFile', path });
+    }
     function grep(files, pattern) { vscode.postMessage({ type: 'grep', files, pattern }); }
     function copyToProject(path) { vscode.postMessage({ type: 'copyToProject', path }); }
 
@@ -3032,7 +3081,7 @@
         const li = document.createElement('li');
         li.dataset.path = it.path;
         li.innerHTML = '<div>' + escapeHtml(it.label) + '</div><div class=\"meta\">' + escapeHtml(it.path) + '</div>';
-        if (it.path === selectedPath) li.classList.add('selected');
+        if (it.path === selectedExamplePath) li.classList.add('selected');
         li.onclick = () => selectItem(it);
         itemsList.appendChild(li);
       });
@@ -3044,24 +3093,80 @@
       return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
+    function filenameFromPath(p) {
+      const value = String(p || '');
+      const slash = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
+      return slash >= 0 ? value.slice(slash + 1) : value;
+    }
+
+    function updateTabs(list) {
+      if (!tabBar) return;
+      if (!Array.isArray(list) || list.length === 0) {
+        currentTabs = activePath ? [{ path: activePath, name: filenameFromPath(activePath) }] : [];
+        renderTabs();
+        return;
+      }
+      const seen = new Set();
+      currentTabs = [];
+      list.forEach((item) => {
+        if (!item) return;
+        const p = String(item.path || '');
+        if (!p || seen.has(p)) return;
+        seen.add(p);
+        currentTabs.push({
+          path: p,
+          name: item.name ? String(item.name) : filenameFromPath(p)
+        });
+      });
+      if (activePath && !seen.has(activePath)) {
+        currentTabs.unshift({ path: activePath, name: filenameFromPath(activePath) });
+      }
+      renderTabs();
+    }
+
+    function renderTabs() {
+      if (!tabBar) return;
+      tabBar.innerHTML = '';
+      if (!currentTabs.length) {
+        tabBar.classList.add('hidden');
+        return;
+      }
+      tabBar.classList.remove('hidden');
+      currentTabs.forEach(tab => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = tab.name;
+        btn.title = tab.path;
+        if (tab.path === activePath) btn.classList.add('active');
+        btn.addEventListener('click', () => {
+          if (tab.path === activePath) return;
+          setStatus('');
+          readFile(tab.path);
+        });
+        tabBar.appendChild(btn);
+      });
+    }
+
     function updateSelectionStyles() {
       document.querySelectorAll('#items li').forEach(li => {
-        li.classList.toggle('selected', li.dataset.path === selectedPath);
+        li.classList.toggle('selected', li.dataset.path === selectedExamplePath);
       });
     }
 
 
     function refreshControls() {
-      if (typeof copyBtn !== 'undefined' && copyBtn) copyBtn.disabled = !selectedPath || isLoading;
-      if (typeof copyClipboardBtn !== 'undefined' && copyClipboardBtn) copyClipboardBtn.disabled = !selectedPath || !hasContent || isLoading;
+      if (typeof copyBtn !== 'undefined' && copyBtn) copyBtn.disabled = !selectedExamplePath || isLoading;
+      if (typeof copyClipboardBtn !== 'undefined' && copyClipboardBtn) copyClipboardBtn.disabled = !activePath || !hasContent || isLoading;
     }
 
     function selectItem(it) {
-      selectedPath = it.path;
+      selectedExamplePath = it.path;
+      activePath = it.path;
       selectionLabel.textContent = it.label;
       hasContent = false;
       currentContent = '';
       setStatus('');
+      updateTabs([{ path: it.path, name: filenameFromPath(it.path) }]);
       refreshControls();
       updateSelectionStyles();
       readFile(it.path);
@@ -3102,7 +3207,7 @@
       currentContent = value;
       codeEl.textContent = value;
       delete codeEl.dataset.highlighted;
-      hasContent = Boolean(selectedPath);
+      hasContent = Boolean(activePath);
       if (!value) {
         codeEl.dataset.placeholder = placeholderMessage;
         codeEl.classList.add('empty');
@@ -3117,10 +3222,13 @@
     }
 
     function clearSelection() {
-      selectedPath = '';
+      selectedExamplePath = '';
+      activePath = '';
       selectionLabel.textContent = '';
       hasContent = false;
       currentContent = '';
+      currentTabs = [];
+      renderTabs();
       updateSelectionStyles();
       setStatus('');
       showContent('');
@@ -3129,8 +3237,8 @@
 
     if (filterInput) filterInput.addEventListener('input', applyFilter);
     if (grepInput) grepInput.addEventListener('change', applyGrep);
-    if (copyBtn) copyBtn.addEventListener('click', () => { if (selectedPath) { setStatus(''); copyToProject(selectedPath); } });
-    if (copyClipboardBtn) copyClipboardBtn.addEventListener('click', () => { if (selectedPath) { setStatus(''); vscode.postMessage({ type: 'copyToClipboard', path: selectedPath, content: currentContent }); } });
+    if (copyBtn) copyBtn.addEventListener('click', () => { if (selectedExamplePath) { setStatus(''); copyToProject(selectedExamplePath); } });
+    if (copyClipboardBtn) copyClipboardBtn.addEventListener('click', () => { if (activePath) { setStatus(''); vscode.postMessage({ type: 'copyToClipboard', path: activePath, content: currentContent }); } });
 
     window.addEventListener('message', event => {
       const msg = event.data || {};
@@ -3139,21 +3247,24 @@
         allItems = Array.isArray(msg.items) ? msg.items : [];
         filtered = allItems.slice();
         renderList();
-        if (!allItems.some(it => it.path === selectedPath)) {
+        if (!allItems.some(it => it.path === selectedExamplePath)) {
           clearSelection();
         } else {
           updateSelectionStyles();
         }
         refreshControls();
       } else if (msg.type === 'fileContent') {
-        if (msg.path === selectedPath) {
+        if (msg.path === activePath) {
+          if (Array.isArray(msg.siblings)) {
+            updateTabs(msg.siblings);
+          }
           showContent(msg.content || '');
         }
       } else if (msg.type === 'grepResult') {
         const matched = new Set(msg.matches || []);
         filtered = allItems.filter(it => matched.has(it.path));
         renderList();
-        if (!matched.has(selectedPath)) {
+        if (!matched.has(selectedExamplePath)) {
           clearSelection();
         }
       } else if (msg.type === 'copied') {

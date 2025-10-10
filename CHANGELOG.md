@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) .ino editors that include `arduino_secrets.h` now surface an inline action to open the secrets file or create it with fallback `#define` values extracted from the sketch.
 - (JA) `arduino_secrets.h` を含む `.ino` エディターにシークレットファイルを開く / 作成するインラインアクションを追加し、スケッチのフォールバック `#define` から初期値を抽出してヘッダーを生成できるようにしました。
+- (EN) The Examples browser preview now offers tabs for every file in the example folder (README, config headers, etc.) and the copy action pulls the entire folder into your workspace.
+- (JA) サンプルブラウザーのプレビューで README や設定ファイルなど同一フォルダー内のファイルをタブ表示し、コピー操作でフォルダー配下を丸ごとワークスペースへ取り込めるようにしました。
 - (EN) Docs now focus on `arduino_secrets.h` for credential management and relegate `.arduino-cli-flags` to an extension-only, advanced workaround that is not generally recommended.
 - (JA) ドキュメントで `arduino_secrets.h` を主軸とした機密情報管理を案内し、`.arduino-cli-flags` は本拡張専用の上級者向けワークアラウンドとして非推奨である旨を追記しました。
 - (EN) Upload and Upload Data now show the same notification spinner while arduino-cli runs, making it clear that flashing is still in progress.

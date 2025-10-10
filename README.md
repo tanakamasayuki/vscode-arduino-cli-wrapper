@@ -179,7 +179,7 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 
 ### Explore examples quickly
 
-- **Browse Examples** – Opens a tree of every example sketch exposed by your installed cores and libraries. Unlike the Arduino IDE, you can preview the source before opening it in the editor.
+- **Browse Examples** – Opens a tree of every example sketch exposed by your installed cores and libraries. Unlike the Arduino IDE, you can preview the source before opening it in the editor, switch between the `.ino`, README, and other files via tabs above the viewer, and copy the entire example folder into your project with a click.
 - **Filter by name or folder** – Use the quick filter box to narrow the list by file or directory names when you already know what you are looking for.
 - **Search inside sketches** – Switch to the built-in grep mode to filter examples by the text they contain (for instance, type `rgb` to find examples that manipulate RGB LEDs or look for a specific function call).
 - **Open with one click** – Once the preview matches what you need, open it directly in the editor and start adapting it to your project.

@@ -8368,8 +8368,14 @@ async function commandOpenExamplesBrowser(ctx) {
         case 'readFile': {
           const p = String(msg.path || '');
           if (!p) return;
-          const text = await readTextFile(vscode.Uri.file(p));
-          panel.webview.postMessage({ type: 'fileContent', path: p, content: text });
+          let text = '';
+          try {
+            text = await readTextFile(vscode.Uri.file(p));
+          } catch {
+            text = '';
+          }
+          const siblings = await gatherExampleSiblingFiles(p);
+          panel.webview.postMessage({ type: 'fileContent', path: p, content: text, siblings });
           break;
         }
         case 'grep': {
@@ -8724,6 +8730,41 @@ async function copyDirectoryRecursive(src, dst) {
       await vscode.workspace.fs.writeFile(d, data);
     }
   }
+}
+
+async function gatherExampleSiblingFiles(primaryPath) {
+  const fullPath = String(primaryPath || '').trim();
+  if (!fullPath) return [];
+  const dir = path.dirname(fullPath);
+  const primaryName = path.basename(fullPath);
+  const items = [];
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+    for (const [name, type] of entries) {
+      if (type !== vscode.FileType.File) continue;
+      const full = path.join(dir, name);
+      items.push({
+        path: full,
+        name,
+        isIno: /\.ino$/i.test(name)
+      });
+    }
+  } catch {
+    // If we cannot read the directory, fall back to the primary file only.
+  }
+  if (!items.length || !items.some((it) => it.path === fullPath)) {
+    items.unshift({
+      path: fullPath,
+      name: primaryName,
+      isIno: /\.ino$/i.test(primaryName)
+    });
+  }
+  items.sort((a, b) => {
+    if (a.isIno && !b.isIno) return -1;
+    if (!a.isIno && b.isIno) return 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+  return items;
 }
 
 /** Get `port` value from sketch.yaml under a specific profile (string or empty). */
