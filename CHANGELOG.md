@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.5.7
 - (EN) Sketch.yaml helper library entries now expose a version dropdown so you can pick historical releases and we update the embedded version accordingly, plus a repository link appears when one is available.
 - (JA) Sketch.yaml ヘルパーのライブラリ項目に過去バージョンを選べるプルダウンを追加し、選択内容を埋め込むバージョンに反映するとともに、利用可能な場合はリポジトリへのリンクも表示するようにしました。
 - (EN) Opening build_opt.h now forces a plain build-options editor and automatically escapes unescaped double quotes whenever you save the file so compiler flags stay valid.
