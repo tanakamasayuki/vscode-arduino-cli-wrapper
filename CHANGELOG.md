@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Sketch.yaml helper library entries now expose a version dropdown so you can pick historical releases and we update the embedded version accordingly, plus a repository link appears when one is available.
 - (JA) Sketch.yaml ヘルパーのライブラリ項目に過去バージョンを選べるプルダウンを追加し、選択内容を埋め込むバージョンに反映するとともに、利用可能な場合はリポジトリへのリンクも表示するようにしました。
+- (EN) Opening build_opt.h now forces a plain build-options editor and automatically escapes unescaped double quotes whenever you save the file so compiler flags stay valid.
+- (JA) build_opt.h を開くと専用のビルドオプション用エディターに切り替わり、保存時にはエスケープされていない二重引用符を自動で `\"` に変換してビルドフラグが壊れないようにしました。
 
 ## 1.5.6
 - (EN) .ino editors that include `arduino_secrets.h` now surface an inline action to open the secrets file or create it with fallback `#define` values extracted from the sketch.

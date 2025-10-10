@@ -28,6 +28,17 @@
     "workspaceContains:**/*.ino"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "arduino-build-options",
+        "aliases": [
+          "%lang.buildOpt.alias%"
+        ],
+        "filenames": [
+          "build_opt.h"
+        ]
+      }
+    ],
     "views": {
       "explorer": [
         {

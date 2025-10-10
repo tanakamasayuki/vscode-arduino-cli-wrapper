@@ -72,5 +72,6 @@
   "msg.uploadDataProgressMessageResolve": "ファイルシステムのメタデータを収集中です…",
   "msg.uploadDataProgressMessageBuild": "{fsType} イメージを生成しています…",
   "msg.uploadDataProgressMessageFlash": "esptool でファイルシステムイメージを書き込み中です…",
-  "msg.progressBusyWarn": "別のコマンドが実行中です。完了するまでお待ちください。"
+  "msg.progressBusyWarn": "別のコマンドが実行中です。完了するまでお待ちください。",
+  "lang.buildOpt.alias": "Arduino ビルドオプション"
 }

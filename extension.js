@@ -9,6 +9,8 @@ const https = require('https');
 
 const DEFAULT_WOKWI_TOML = '[wokwi]\nversion = 1\nfirmware = "wokwi.elf"\n';
 const EXTRA_FLAGS_FILENAME = '.arduino-cli-flags';
+const BUILD_OPT_FILE_NAME = 'build_opt.h';
+const BUILD_OPT_LANGUAGE_ID = 'arduino-build-options';
 const DEFAULT_WOKWI_DIAGRAM_BASE = Object.freeze({
   version: 1,
   author: 'wokwi',
@@ -1137,6 +1139,194 @@ function setupArduinoSecretsSupport(context) {
   watcher.onDidChange(() => secretsLensProvider?.refresh());
   context.subscriptions.push(watcher);
   secretsLensProvider.refresh();
+}
+
+function setupBuildOptSupport(context) {
+  const applyLanguage = (doc) => {
+    try {
+      if (!isBuildOptDocument(doc)) return;
+      if (doc.isClosed) return;
+      if (doc.languageId === BUILD_OPT_LANGUAGE_ID) return;
+      vscode.languages.setTextDocumentLanguage(doc, BUILD_OPT_LANGUAGE_ID).then(
+        () => { },
+        () => { }
+      );
+    } catch (_) { }
+  };
+
+  const handleWillSave = (event) => {
+    try {
+      const doc = event && event.document;
+      if (!isBuildOptDocument(doc)) return;
+      applyLanguage(doc);
+      let text = '';
+      try { text = doc.getText(); } catch { text = ''; }
+      if (!text || text.indexOf('"') === -1) return;
+      const normalized = normalizeBuildOptContent(text);
+      if (normalized === text) return;
+      const start = new vscode.Position(0, 0);
+      const end = doc.lineCount > 0 ? doc.lineAt(doc.lineCount - 1).range.end : start;
+      const fullRange = new vscode.Range(start, end);
+      event.waitUntil(Promise.resolve([vscode.TextEdit.replace(fullRange, normalized)]));
+    } catch (_) { }
+  };
+
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(applyLanguage),
+    vscode.workspace.onWillSaveTextDocument(handleWillSave)
+  );
+
+  try {
+    for (const doc of vscode.workspace.textDocuments) {
+      applyLanguage(doc);
+    }
+  } catch (_) { }
+}
+
+function isBuildOptDocument(document) {
+  if (!document) return false;
+  const uri = document.uri;
+  if (!uri) return false;
+  let fsPath = '';
+  try {
+    if (typeof document.fileName === 'string' && document.fileName) fsPath = document.fileName;
+    else if (typeof uri.fsPath === 'string' && uri.fsPath) fsPath = uri.fsPath;
+    else if (typeof uri.path === 'string' && uri.path) fsPath = uri.path;
+  } catch (_) { fsPath = ''; }
+  if (!fsPath) return false;
+  return path.basename(fsPath).toLowerCase() === BUILD_OPT_FILE_NAME;
+}
+
+function normalizeBuildOptContent(text) {
+  if (typeof text !== 'string' || text.indexOf('"') === -1) return text;
+  const lines = text.split(/\r?\n/);
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const normalized = normalizeBuildOptLine(lines[i]);
+    if (normalized !== lines[i]) {
+      changed = true;
+      lines[i] = normalized;
+    }
+  }
+  const rebuilt = lines.join('\n');
+  return changed ? rebuilt : text;
+}
+
+function normalizeBuildOptLine(line) {
+  if (typeof line !== 'string' || line.indexOf('"') === -1) return line;
+  const eqIndex = line.indexOf('=');
+  if (eqIndex < 0) return line;
+  const prefix = line.slice(0, eqIndex + 1);
+  const value = line.slice(eqIndex + 1);
+  if (value.indexOf('"') === -1) return line;
+  const leadingMatch = value.match(/^\s*/);
+  const trailingMatch = value.match(/\s*$/);
+  const leadingWs = leadingMatch ? leadingMatch[0] : '';
+  const trailingWs = trailingMatch ? trailingMatch[0] : '';
+  const core = value.slice(leadingWs.length, value.length - trailingWs.length);
+  if (!core) return line;
+  if (core.startsWith("'") && core.endsWith("'")) return line;
+  const normalizedCore = normalizeBuildOptValue(core);
+  if (normalizedCore === core) return line;
+  return prefix + leadingWs + normalizedCore + trailingWs;
+}
+
+function normalizeBuildOptValue(core) {
+  const original = core;
+  const stripped = stripEdgeDecor(core);
+  const unescaped = unescapeSimpleQuoted(stripped.text);
+  const trimmed = trimMatchingQuotes(unescaped.text);
+  const escapedInner = escapeInnerDoubleQuotes(trimmed.text);
+  const finalCore = '"\\"' + escapedInner + '\\""';
+  if (!stripped.changed && !unescaped.changed && !trimmed.changed && finalCore === original) {
+    return original;
+  }
+  return finalCore;
+}
+
+function stripEdgeDecor(str) {
+  let start = 0;
+  let end = str.length;
+  let changed = false;
+  while (start < end) {
+    const remaining = str.slice(start, end);
+    if (remaining.startsWith('\\"')) {
+      start += 2;
+      changed = true;
+      continue;
+    }
+    if (remaining.startsWith('"')) {
+      start += 1;
+      changed = true;
+      continue;
+    }
+    if (remaining.startsWith("'")) {
+      start += 1;
+      changed = true;
+      continue;
+    }
+    break;
+  }
+  while (end > start) {
+    const remaining = str.slice(start, end);
+    if (remaining.endsWith('\\"')) {
+      end -= 2;
+      changed = true;
+      continue;
+    }
+    if (remaining.endsWith('"')) {
+      end -= 1;
+      changed = true;
+      continue;
+    }
+    if (remaining.endsWith("'")) {
+      end -= 1;
+      changed = true;
+      continue;
+    }
+    break;
+  }
+  return { text: str.slice(start, end), changed };
+}
+
+function unescapeSimpleQuoted(str) {
+  let result = '';
+  let changed = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === '\\' && i + 1 < str.length) {
+      const next = str[i + 1];
+      if (next === '"' || next === "'" || next === '\\') {
+        result += next;
+        changed = true;
+        i++;
+        continue;
+      }
+    }
+    result += ch;
+  }
+  return { text: result, changed };
+}
+
+function trimMatchingQuotes(str) {
+  let result = str;
+  let changed = false;
+  while (result.length >= 2) {
+    const startChar = result[0];
+    const endChar = result[result.length - 1];
+    if ((startChar === '"' && endChar === '"') || (startChar === "'" && endChar === "'")) {
+      result = result.slice(1, -1);
+      changed = true;
+      continue;
+    }
+    break;
+  }
+  return { text: result, changed };
+}
+
+function escapeInnerDoubleQuotes(str) {
+  if (!str) return '';
+  return str.replace(/"/g, '\\"');
 }
 
 async function commandOpenArduinoSecretsHeader(arg) {
@@ -4525,6 +4715,7 @@ function activate(context) {
   extContext = context;
   setupIncludeOrderLint(context);
   setupArduinoSecretsSupport(context);
+  setupBuildOptSupport(context);
   compileDiagnostics = vscode.languages.createDiagnosticCollection('arduinoCliCompile');
   context.subscriptions.push(compileDiagnostics);
   assetsDiagnostics = vscode.languages.createDiagnosticCollection('arduinoCliAssets');
