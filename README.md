@@ -43,17 +43,6 @@ Tips:
 - If multiple `.ino` files exist, a picker appears to choose one. If an `.ino` editor is active, it is preferred.
 - If the FQBN cannot be inferred, you can enter one manually.
 
-### Per-sketch build flags (`.arduino-cli-flags`)
-
-Keep secrets and board-specific tweaks outside your repository by placing an `.arduino-cli-flags` file beside the sketch. The extension reads the file each time it compiles and injects the contents as `build.extra_flags`.
-
-- Write one flag per line, for example `-DWIFI_SSID="MySSID"`.
-- Lines starting with `#` or `//`, as well as blank lines, are ignored.
-- The remaining flags are joined with spaces and passed as a single `--build-property build.extra_flags=...` argument.
-- If you already provide `build.extra_flags` via settings, tasks, or the command palette, that configuration takes precedence and the file is skipped.
-
-Because the filename starts with a dot it stays hidden by default. Add it to source control ignore lists (the extension’s `.gitignore` already contains an entry) so credentials never leak into commits.
-
 ### Manage `arduino_secrets.h`
 
 When an `.ino` file contains `#include "arduino_secrets.h"` the editor now shows an inline action directly above the include. Click it to open the secrets header if it already exists, or generate it on the spot when missing. The generator copies any fallback `#define` lines from the sketch's `#else` block so the new header starts with the same defaults, helping you move Wi-Fi credentials into an untracked file with a single click.
@@ -109,6 +98,19 @@ If Arduino CLI builds feel slow on Windows, you can offload compilation to a Lin
    - If a `COM` port does not appear, confirm that Windows detects the board in Device Manager and reinstall drivers when necessary.
 
 With this hybrid setup you get the best of both worlds: fast Linux-based builds and seamless serial access through Windows.
+
+## Advanced customization
+
+### Optional: `.arduino-cli-flags` (extension-only)
+
+If you must inject extra `build.extra_flags` on every compile, you can place an `.arduino-cli-flags` file next to the sketch. **This feature is unique to Arduino CLI Wrapper and other IDEs or extensions will ignore it, so we recommend managing secrets and overrides via `arduino_secrets.h` or standard configuration first.** Treat it as an advanced escape hatch for experienced users who already understand the build pipeline.
+
+- Write one flag per line, for example `-DWIFI_SSID="MySSID"`.
+- Lines starting with `#` or `//`, as well as blank lines, are ignored.
+- The remaining flags are joined with spaces and passed as a single `--build-property build.extra_flags=...` argument.
+- If you already provide `build.extra_flags` via settings, tasks, or the command palette, that configuration takes precedence and the file is skipped.
+
+Because the filename starts with a dot it stays hidden by default. Add it to source control ignore lists (the extension’s `.gitignore` already contains an entry) so credentials never leak into commits.
 
 ## Everyday operations and UI
 
