@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.5.6
 - (EN) .ino editors that include `arduino_secrets.h` now surface an inline action to open the secrets file or create it with fallback `#define` values extracted from the sketch.
 - (JA) `arduino_secrets.h` を含む `.ino` エディターにシークレットファイルを開く / 作成するインラインアクションを追加し、スケッチのフォールバック `#define` から初期値を抽出してヘッダーを生成できるようにしました。
 - (EN) The Examples browser preview now offers tabs for every file in the example folder (README, config headers, etc.) and the copy action pulls the entire folder into your workspace.
