@@ -4740,7 +4740,7 @@ function activate(context) {
         if (action === 'listBoards') return vscode.commands.executeCommand('arduino-cli.listBoards');
         if (action === 'listAllBoards') return vscode.commands.executeCommand('arduino-cli.listAllBoards');
         if (action === 'embedAssets') {
-          if (sketchDir) return embedAssetsForSketch(sketchDir);
+          if (sketchDir) return embedAssetsForSketch(sketchDir, { createDirIfMissing: true });
           return vscode.commands.executeCommand('arduino-cli.embedAssets');
         }
         if (action === 'sketchNew') return vscode.commands.executeCommand('arduino-cli.sketchNew');
@@ -4919,7 +4919,6 @@ function defaultCommandItems(dir, profile, parent, features = {}) {
     new CommandItem('Compile', 'compile', dir, profile, parent, t('treeCompile')),
     new CommandItem('Clean Compile', 'cleanCompile', dir, profile, parent, t('treeCleanCompile')),
     new CommandItem('Upload', 'upload', dir, profile, parent, t('treeUpload')),
-    new CommandItem('Upload Data', 'uploadData', dir, profile, parent, t('treeUploadData')),
     new CommandItem('Monitor', 'monitor', dir, profile, parent, t('treeMonitor')),
   ];
   if (features && features.wokwiEnabled) {
@@ -4928,6 +4927,10 @@ function defaultCommandItems(dir, profile, parent, features = {}) {
   if (profile !== null && profile !== undefined && profile !== '') {
     items.push(new CommandItem('Debug', 'debug', dir, profile, parent, t('treeDebug')));
   }
+  items.push(
+    new CommandItem('Embed Assets', 'embedAssets', dir, profile, parent, t('treeEmbedAssets')),
+    new CommandItem('Upload Data', 'uploadData', dir, profile, parent, t('treeUploadData'))
+  );
   items.push(
     new CommandItem('Sketch.yaml Helper', 'helper', dir, profile, parent, t('treeHelper')),
     new CommandItem('Open Examples', 'examples', dir, profile, parent, t('treeExamples')),
@@ -4946,7 +4949,6 @@ function globalCommandItems() {
     new CommandItem('Open Inspector', 'inspect', '', '', undefined, t('treeInspectorOpen')),
     new CommandItem('Sketch.yaml Versions', 'versionCheck', '', '', undefined, t('treeVersionCheck')),
     new CommandItem('Build Check', 'buildCheck', '', '', undefined, t('treeBuildCheck')),
-    new CommandItem('Embed Assets', 'embedAssets', '', '', undefined, t('treeEmbedAssets')),
     new CommandItem('Refresh View', 'refreshView', '', '', undefined, t('treeRefresh')),
     new CommandItem('New Sketch', 'sketchNew', '', '', undefined, t('treeNewSketch')),
     new CommandItem('Run Command', 'runArbitrary', '', '', undefined, t('treeRunCommand')),
@@ -5751,13 +5753,13 @@ async function commandCleanCompile() {
 async function commandEmbedAssets() {
   const ino = await pickInoFromWorkspace();
   if (!ino) return;
-  await embedAssetsForSketch(path.dirname(ino), { silent: false });
+  await embedAssetsForSketch(path.dirname(ino), { silent: false, createDirIfMissing: true });
 }
 
 async function embedAssetsForSketch(sketchDir, options = {}) {
-  const { silent = false } = options || {};
+  const { silent = false, createDirIfMissing = false } = options || {};
   try {
-    const result = await writeAssetsEmbedHeader(sketchDir);
+    const result = await writeAssetsEmbedHeader(sketchDir, { createDirIfMissing });
     if (!silent) {
       if (result.status === 'noAssets') {
         vscode.window.showWarningMessage(t('embedAssetsNoAssets', { assets: result.assetsPath }));
@@ -9036,12 +9038,22 @@ async function gatherExampleSiblingFiles(primaryPath) {
   return items;
 }
 
-async function writeAssetsEmbedHeader(sketchDir) {
+async function writeAssetsEmbedHeader(sketchDir, options = {}) {
+  const { createDirIfMissing = false } = options || {};
   const assetsDir = path.join(sketchDir, 'assets');
   const headerPath = path.join(sketchDir, 'assets_embed.h');
   const assetsUri = vscode.Uri.file(assetsDir);
   const headerUri = vscode.Uri.file(headerPath);
-  if (!(await pathExists(assetsUri))) {
+  const hasAssetsDir = await pathExists(assetsUri);
+  if (!hasAssetsDir && !createDirIfMissing) {
+    return {
+      status: 'missingDir',
+      count: 0,
+      headerPath,
+      assetsPath: assetsDir
+    };
+  }
+  if (!hasAssetsDir) {
     await ensureDir(assetsUri);
   }
   const entries = await collectAssetFileEntries(assetsUri);
