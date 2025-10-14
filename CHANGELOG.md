@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.5.8
 - (EN) Moved the Embed Assets action from the global tree section into each profile (listed above Upload Data) and now only create the `assets/` folder during manual runs; compile-time regeneration skips writing `assets_embed.h` when the folder is missing.
 - (JA) 「アセットを埋め込む」をツリー上部から各プロファイルのアクション（Upload Data の直前）へ移し、`assets/` フォルダーの自動生成は手動実行時だけに限定しました。さらにコンパイル前の自動生成ではフォルダーがなければ `assets_embed.h` を作成せずに終了します。
 
