@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.5.9
 - (EN) Fixed the sketch.yaml helper truncating `platform_index_url` values so full HTTPS links now survive round trips.
 - (JA) Sketch.yaml ヘルパーで `platform_index_url` が `https` までで切れてしまう問題を修正し、HTTPS URL 全体が保持されるようにしました。
 - (EN) Preserved existing `libraries:` selections when editing FQBNS in the sketch.yaml helper so profile tweaks no longer wipe the list.
