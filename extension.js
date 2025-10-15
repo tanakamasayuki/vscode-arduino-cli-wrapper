@@ -6512,9 +6512,9 @@ function parsePlatformFromProfileYaml(profileYaml, preferProfileName) {
         const trimmed = next.trim();
         if (!trimmed) continue;
         if (trimmed.startsWith('platform_index_url')) {
-          const parts = trimmed.split(/\s*:\s*/, 2);
-          if (parts.length === 2 && parts[1]) {
-            let url = parts[1].trim();
+          const idx = trimmed.indexOf(':');
+          if (idx >= 0) {
+            let url = trimmed.slice(idx + 1).trim();
             if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
               url = url.slice(1, -1);
             }

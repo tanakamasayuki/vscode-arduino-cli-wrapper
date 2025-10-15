@@ -905,12 +905,11 @@
                 try { window.__INIT_STATE__ = { platformId: platformIdForBoard, platformVersion: selectedPlatformVersion || '' }; } catch (_) { }
               }
               if (userChanged && baseChanged) {
-                // Unlock and clear initial preserved state
+                // Unlock preserved state but keep selected libraries so they carry over
                 window.__KEEP_EXISTING_YAML__ = false;
                 window.__INITIAL_PROFILE_BLOCK__ = '';
                 window.__PROFILE_NAME__ = '';
-                // Reset libraries selection
-                try { selectedLibs.clear(); } catch (_) { }
+                try { window.__ALLOW_LIB_PATCH__ = true; } catch (_) { }
                 // Reset library UI filters so items appear
                 try { if (typeof onlySel !== 'undefined' && onlySel) onlySel.checked = false; } catch (_) { }
                 try { if (typeof libsQ !== 'undefined' && libsQ) libsQ.value = ''; } catch (_) { }

@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Fixed the sketch.yaml helper truncating `platform_index_url` values so full HTTPS links now survive round trips.
+- (JA) Sketch.yaml ヘルパーで `platform_index_url` が `https` までで切れてしまう問題を修正し、HTTPS URL 全体が保持されるようにしました。
+- (EN) Preserved existing `libraries:` selections when editing FQBNS in the sketch.yaml helper so profile tweaks no longer wipe the list.
+- (JA) Sketch.yaml ヘルパーで FQBN を編集しても既存の `libraries:` 選択が保持されるようにし、プロファイル調整でライブラリ一覧が消えないようにしました。
 
 ## 1.5.8
 - (EN) Moved the Embed Assets action from the global tree section into each profile (listed above Upload Data) and now only create the `assets/` folder during manual runs; compile-time regeneration skips writing `assets_embed.h` when the folder is missing.
