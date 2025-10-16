@@ -1959,13 +1959,23 @@ const ANSI = {
   cyan: '\x1b[36m', yellow: '\x1b[33m', red: '\x1b[31m', green: '\x1b[32m', gray: '\x1b[90m', white: '\x1b[37m'
 };
 
+// Track per-executable readiness so we only verify once per session unless forced.
+const cliReadyCache = new Map();
+
 // Run a quick check to ensure arduino-cli is available and runnable.
 // Shows guidance and returns false if not ready.
-async function ensureCliReady() {
-  const channel = getOutput();
-  channel.appendLine(t('cliCheckStart'));
+async function ensureCliReady(options = {}) {
+  const force = options && options.force;
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
+  const cacheKey = `${process.platform}|${exe}`;
+  const cacheEntry = cliReadyCache.get(cacheKey);
+  if (!force && cacheEntry && cacheEntry.ok) {
+    return true;
+  }
+
+  const channel = getOutput();
+  channel.appendLine(t('cliCheckStart'));
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
   const args = [...baseArgs, 'version', '--format', 'json'];
   let stdout = '';
@@ -1984,8 +1994,10 @@ async function ensureCliReady() {
     } catch { /* ignore */ }
     if (!version) version = (stdout || '').trim().replace(/\s+/g, ' ');
     channel.appendLine(t('cliCheckOk', { version }));
+    cliReadyCache.set(cacheKey, { ok: true, version });
     return true;
   } catch (e) {
+    cliReadyCache.delete(cacheKey);
     // If executable not found, provide guided actions
     const msg = t('cliCheckFail');
     channel.appendLine(`[error] ${msg}`);
@@ -2427,7 +2439,7 @@ async function commandVersion() {
   const channel = getOutput();
   let current = '';
   let ensured = false;
-  try { ensured = await ensureCliReady(); } catch { ensured = false; }
+  try { ensured = await ensureCliReady({ force: true }); } catch { ensured = false; }
   if (ensured) {
     try { await runCli(['version']); } catch (_) { /* ignore */ }
     try { current = await getArduinoCliVersionString(); } catch { current = ''; }

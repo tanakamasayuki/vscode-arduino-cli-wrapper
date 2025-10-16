@@ -5,6 +5,8 @@
 - (JA) Sketch.yaml ヘルパーでプラットフォーム版数の取得を任意実行に変更し、ボード選択時のフリーズを解消しました。必要なときは新設の「バージョン一覧を取得」ボタンで候補を読み込めます。
 - (EN) Cached Arduino CLI release info and board/library metadata for three hours to avoid repeated downloads within the extension session.
 - (JA) Arduino CLI の最新リリース情報とボード／ライブラリメタデータを 3 時間キャッシュし、拡張機能の実行中に同じファイルを繰り返し取得しないようにしました。
+- (EN) Remembered successful arduino-cli readiness checks per executable so automatic command preflights run only once per session; manual version checks still force a fresh probe and WSL Windows checks keep their own state.
+- (JA) 実行ファイルごとに arduino-cli の準備確認結果を記録し、自動プレフライトはセッション内で 1 度だけ実行されるようにしました。手動のバージョン確認は常に再チェックし、WSL での Windows CLI チェックは別管理です。
 
 ## 1.5.9
 - (EN) Fixed the sketch.yaml helper truncating `platform_index_url` values so full HTTPS links now survive round trips.
