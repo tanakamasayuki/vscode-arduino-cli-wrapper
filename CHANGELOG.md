@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.6.0
 - (EN) Delayed platform version fetching in the sketch.yaml helper so board selection no longer freezes; use the new "Fetch versions" button to load candidates on demand.
 - (JA) Sketch.yaml ヘルパーでプラットフォーム版数の取得を任意実行に変更し、ボード選択時のフリーズを解消しました。必要なときは新設の「バージョン一覧を取得」ボタンで候補を読み込めます。
 - (EN) Cached Arduino CLI release info and board/library metadata for three hours to avoid repeated downloads within the extension session.
