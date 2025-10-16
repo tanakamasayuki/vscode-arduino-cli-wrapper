@@ -399,6 +399,10 @@
         platformVersionSelect.className = 'platform-version-select';
         platformVersionSelect.disabled = true;
         platformVersionWrap.appendChild(platformVersionSelect);
+        const platformVersionFetchBtn = document.createElement('button');
+        platformVersionFetchBtn.type = 'button';
+        platformVersionFetchBtn.textContent = isJa ? 'バージョン一覧を取得' : 'Fetch versions';
+        platformVersionWrap.appendChild(platformVersionFetchBtn);
         const platformVersionStatus = document.createElement('span');
         platformVersionStatus.className = 'platform-version-status';
         platformVersionWrap.appendChild(platformVersionStatus);
@@ -528,71 +532,114 @@
           updateSummary();
           updateMismatches();
         }
-        function populatePlatformVersionSelect() {
+        let platformVersionLoaded = false;
+        let platformVersionLoading = false;
+
+        function resetPlatformVersionOptions(current) {
+          platformVersionSelect.innerHTML = '';
+          const autoOpt = document.createElement('option');
+          autoOpt.value = '';
+          autoOpt.textContent = isJa ? '最新を自動で使用' : 'Use latest';
+          platformVersionSelect.appendChild(autoOpt);
+          if (current) {
+            const opt = document.createElement('option');
+            opt.value = current;
+            opt.textContent = current;
+            platformVersionSelect.appendChild(opt);
+            platformVersionSelect.value = current;
+          } else {
+            platformVersionSelect.value = '';
+          }
+        }
+
+        function initPlatformVersionSelect() {
           if (!platformIdForBoard) {
             platformVersionSelect.disabled = true;
+            platformVersionFetchBtn.disabled = true;
             platformVersionSelect.innerHTML = '';
-            setPlatformVersionStatus(isJa ? 'プラットフォーム ID が不明です' : 'Platform id unavailable', true);
+            setPlatformVersionStatus(isJa ? 'プラットフォーム ID が未設定です' : 'Platform id unavailable', true);
             return;
           }
-          platformVersionSelect.disabled = true;
-          platformVersionSelect.innerHTML = '';
-          setPlatformVersionStatus(isJa ? '読み込み中…' : 'Loading…', false);
-        fetchPlatformVersions(platformIdForBoard, pkgUrl)
-          .then((versions) => {
-            const versionSet = new Set(versions || []);
-            const current = (selectedPlatformVersion || '').trim();
-            platformVersionSelect.innerHTML = '';
-            const autoOpt = document.createElement('option');
-            autoOpt.value = '';
-            autoOpt.textContent = isJa ? '最新を自動で使用' : 'Use latest';
-            platformVersionSelect.appendChild(autoOpt);
-            const ordered = dedupePreserveOrder(Array.isArray(versions) ? versions : []);
-            if (current && !versionSet.has(current)) ordered.unshift(current);
-            ordered.forEach((ver) => {
-              const opt = document.createElement('option');
-              opt.value = ver;
-              opt.textContent = ver + (!versionSet.has(ver) && ver === current ? (isJa ? ' (sketch.yaml)' : ' (sketch.yaml)') : '');
-              platformVersionSelect.appendChild(opt);
-            });
-            platformVersionSelect.value = current || '';
-            if (platformVersionSelect.value !== (current || '')) {
-              platformVersionSelect.value = '';
-            }
-            selectedPlatformVersion = platformVersionSelect.value || '';
-            platformVersionSelect.disabled = false;
-            if (versions && versions.length) setPlatformVersionStatus('', false);
-            else setPlatformVersionStatus(isJa ? '利用可能なバージョンが見つかりません' : 'No versions found', false);
-            syncPlatformVersionToState(false);
-          })
-          .catch(() => {
-            platformVersionSelect.innerHTML = '';
-            const autoOpt = document.createElement('option');
-            autoOpt.value = '';
-            autoOpt.textContent = isJa ? '最新を自動で使用' : 'Use latest';
-            platformVersionSelect.appendChild(autoOpt);
-            const current = (selectedPlatformVersion || '').trim();
-            if (current) {
-              const opt = document.createElement('option');
-              opt.value = current;
-              opt.textContent = current;
-              platformVersionSelect.appendChild(opt);
-              platformVersionSelect.value = current;
-            } else {
-              platformVersionSelect.value = '';
-            }
-            selectedPlatformVersion = platformVersionSelect.value || '';
-            platformVersionSelect.disabled = false;
-            setPlatformVersionStatus(isJa ? 'バージョンの取得に失敗しました' : 'Failed to load versions', true);
-            syncPlatformVersionToState(false);
-          });
+          const current = (selectedPlatformVersion || '').trim();
+          resetPlatformVersionOptions(current);
+          platformVersionSelect.disabled = false;
+          platformVersionFetchBtn.disabled = false;
+          platformVersionFetchBtn.textContent = isJa ? 'バージョン一覧を取得' : 'Fetch versions';
+          platformVersionLoaded = false;
+          setPlatformVersionStatus(isJa ? '「バージョン一覧を取得」で候補を表示します' : 'Click "Fetch versions" to list available versions', false);
+          syncPlatformVersionToState(false);
         }
+
+        function loadPlatformVersions(force) {
+          if (!platformIdForBoard) return;
+          if (platformVersionLoading) return;
+          if (platformVersionLoaded && !force) return;
+          const current = (selectedPlatformVersion || '').trim();
+          platformVersionLoading = true;
+          platformVersionFetchBtn.disabled = true;
+          platformVersionSelect.disabled = true;
+          setPlatformVersionStatus(isJa ? '読み込み中…' : 'Loading…', false);
+          fetchPlatformVersions(platformIdForBoard, pkgUrl)
+            .then((versions) => {
+              platformVersionLoaded = true;
+              const versionSet = new Set(versions || []);
+              platformVersionSelect.innerHTML = '';
+              const autoOpt = document.createElement('option');
+              autoOpt.value = '';
+              autoOpt.textContent = isJa ? '最新を自動で使用' : 'Use latest';
+              platformVersionSelect.appendChild(autoOpt);
+              const ordered = dedupePreserveOrder(Array.isArray(versions) ? versions : []);
+              if (current && !versionSet.has(current)) ordered.unshift(current);
+              ordered.forEach((ver) => {
+                const opt = document.createElement('option');
+                opt.value = ver;
+                opt.textContent = ver + (!versionSet.has(ver) && ver === current ? (isJa ? ' (sketch.yaml)' : ' (sketch.yaml)') : '');
+                platformVersionSelect.appendChild(opt);
+              });
+              platformVersionSelect.value = current || '';
+              if (platformVersionSelect.value !== (current || '')) {
+                platformVersionSelect.value = '';
+              }
+              selectedPlatformVersion = platformVersionSelect.value || '';
+              if (versions && versions.length) {
+                setPlatformVersionStatus('', false);
+              } else {
+                setPlatformVersionStatus(isJa ? 'バージョンが見つかりませんでした' : 'No versions found', false);
+              }
+            })
+            .catch(() => {
+              platformVersionLoaded = false;
+              resetPlatformVersionOptions(current);
+              setPlatformVersionStatus(isJa ? 'バージョン一覧の取得に失敗しました' : 'Failed to fetch versions', true);
+            })
+            .finally(() => {
+              platformVersionLoading = false;
+              platformVersionSelect.disabled = false;
+              platformVersionFetchBtn.disabled = false;
+              if (platformVersionLoaded) {
+                platformVersionFetchBtn.textContent = isJa ? 'バージョン一覧を再取得' : 'Refresh versions';
+              }
+              syncPlatformVersionToState(false);
+            });
+        }
+
         platformVersionSelect.addEventListener('change', () => {
           selectedPlatformVersion = platformVersionSelect.value || '';
           try { window.__USER_CHANGED_OPTIONS__ = true; } catch (_) { }
           syncPlatformVersionToState(true);
         });
-        populatePlatformVersionSelect();
+
+        platformVersionSelect.addEventListener('focus', () => {
+          if (!platformVersionLoaded && !platformVersionLoading) {
+            loadPlatformVersions(false);
+          }
+        });
+
+        platformVersionFetchBtn.addEventListener('click', () => {
+          loadPlatformVersions(true);
+        });
+
+        initPlatformVersionSelect();
         opts.forEach((opt, idx) => {
           const groupName = `opt_${idx}`;
           const fs = document.createElement('fieldset');
@@ -1344,7 +1391,7 @@
               if (hasOption) {
                 platformVersionSelect.value = selectedPlatformVersion || '';
               } else {
-                populatePlatformVersionSelect();
+                loadPlatformVersions(true);
               }
             } catch (_) { }
             try { (window.__INIT_STATE__ = window.__INIT_STATE__ || {}).platformVersion = plat.latest; } catch (_) { }

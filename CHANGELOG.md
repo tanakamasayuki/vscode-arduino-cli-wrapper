@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Delayed platform version fetching in the sketch.yaml helper so board selection no longer freezes; use the new "Fetch versions" button to load candidates on demand.
+- (JA) Sketch.yaml ヘルパーでプラットフォーム版数の取得を任意実行に変更し、ボード選択時のフリーズを解消しました。必要なときは新設の「バージョン一覧を取得」ボタンで候補を読み込めます。
 
 ## 1.5.9
 - (EN) Fixed the sketch.yaml helper truncating `platform_index_url` values so full HTTPS links now survive round trips.
