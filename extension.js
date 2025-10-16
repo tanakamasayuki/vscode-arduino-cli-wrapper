@@ -7,6 +7,14 @@ const os = require('os');
 const path = require('path');
 const https = require('https');
 
+const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+let cachedLatestArduinoCliTag = '';
+let cachedLatestArduinoCliTagFetchedAt = 0;
+let cachedBoardDetailsJson = null;
+let cachedBoardDetailsFetchedAt = 0;
+let cachedLibraryDetailsJson = null;
+let cachedLibraryDetailsFetchedAt = 0;
+
 const DEFAULT_WOKWI_TOML = '[wokwi]\nversion = 1\nfirmware = "wokwi.elf"\n';
 const EXTRA_FLAGS_FILENAME = '.arduino-cli-flags';
 const BUILD_OPT_FILE_NAME = 'build_opt.h';
@@ -2526,7 +2534,10 @@ async function getCliVersionStringForExecutable(exe, options = {}) {
 
 // Fetch latest tag name from GitHub Releases API for arduino/arduino-cli
 async function fetchLatestArduinoCliTag() {
-  const https = require('https');
+  const now = Date.now();
+  if (cachedLatestArduinoCliTag && (now - cachedLatestArduinoCliTagFetchedAt) < THREE_HOURS_MS) {
+    return cachedLatestArduinoCliTag;
+  }
   const url = 'https://api.github.com/repos/arduino/arduino-cli/releases/latest';
   const body = await new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { 'User-Agent': 'vscode-arduino-cli-wrapper' } }, (res) => {
@@ -2551,8 +2562,14 @@ async function fetchLatestArduinoCliTag() {
   try {
     const json = JSON.parse(body || '{}');
     const tag = String(json.tag_name || json.tag || '').trim();
+    if (tag) {
+      cachedLatestArduinoCliTag = tag;
+      cachedLatestArduinoCliTagFetchedAt = now;
+    }
     return tag || '';
-  } catch { return ''; }
+  } catch {
+    return cachedLatestArduinoCliTag || '';
+  }
 }
 
 function normalizeVersion(v) {
@@ -7415,23 +7432,44 @@ async function fetchVersionCheckMetadata(channel) {
     libraries: new Map(),
     warnings: []
   };
+  const now = Date.now();
 
-  try {
-    const boardJson = await fetchJsonWithRedirect(boardsUrl);
-    metadata.platforms = buildPlatformLatestMap(boardJson);
-  } catch (err) {
-    const msg = err && err.message ? err.message : String(err);
-    metadata.warnings.push(`boards: ${msg}`);
-    channel.appendLine(t('versionCheckFetchBoardsFail', { msg }));
+  const useCachedBoards = cachedBoardDetailsJson && (now - cachedBoardDetailsFetchedAt) < THREE_HOURS_MS;
+  if (useCachedBoards) {
+    metadata.platforms = buildPlatformLatestMap(cachedBoardDetailsJson);
+  } else {
+    try {
+      const boardJson = await fetchJsonWithRedirect(boardsUrl);
+      cachedBoardDetailsJson = boardJson;
+      cachedBoardDetailsFetchedAt = Date.now();
+      metadata.platforms = buildPlatformLatestMap(boardJson);
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      metadata.warnings.push(`boards: ${msg}`);
+      channel.appendLine(t('versionCheckFetchBoardsFail', { msg }));
+      if (cachedBoardDetailsJson) {
+        metadata.platforms = buildPlatformLatestMap(cachedBoardDetailsJson);
+      }
+    }
   }
 
-  try {
-    const libraryJson = await fetchJsonWithRedirect(librariesUrl);
-    metadata.libraries = buildLibraryLatestMap(libraryJson);
-  } catch (err) {
-    const msg = err && err.message ? err.message : String(err);
-    metadata.warnings.push(`libraries: ${msg}`);
-    channel.appendLine(t('versionCheckFetchLibrariesFail', { msg }));
+  const useCachedLibraries = cachedLibraryDetailsJson && (now - cachedLibraryDetailsFetchedAt) < THREE_HOURS_MS;
+  if (useCachedLibraries) {
+    metadata.libraries = buildLibraryLatestMap(cachedLibraryDetailsJson);
+  } else {
+    try {
+      const libraryJson = await fetchJsonWithRedirect(librariesUrl);
+      cachedLibraryDetailsJson = libraryJson;
+      cachedLibraryDetailsFetchedAt = Date.now();
+      metadata.libraries = buildLibraryLatestMap(libraryJson);
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      metadata.warnings.push(`libraries: ${msg}`);
+      channel.appendLine(t('versionCheckFetchLibrariesFail', { msg }));
+      if (cachedLibraryDetailsJson) {
+        metadata.libraries = buildLibraryLatestMap(cachedLibraryDetailsJson);
+      }
+    }
   }
 
   return metadata;
