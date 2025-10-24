@@ -123,9 +123,14 @@
       const q = document.getElementById('q');
       const status = document.getElementById('status');
       const list = document.getElementById('list');
+  const IS_JA_LOCALE = ((navigator.language || '').toLowerCase().startsWith('ja'));
+  const MAX_BOARD_RESULTS = 50;
+  const BOARD_REFINE_LABEL = IS_JA_LOCALE ? 'さらに絞り込んでください' : 'Refine the filter to narrow further';
+  const BOARD_NO_RESULTS = IS_JA_LOCALE ? '該当なし' : 'No results';
+  const BOARD_EXACT_LABEL = IS_JA_LOCALE ? '完全一致' : 'exact match';
 
-      /** @type {{fqbn:string,name:string,search:string,el:HTMLLIElement}[]} */
-      let items = [];
+  /** @type {{fqbn:string,name:string,search:string}[]} */
+  let boardEntries = [];
       /** @type {Record<string, {name?:string, version?:string, config_options?: any[], package_url?: string}>} */
       let dataMap = {};
       /** @type {Array<any>|null} */
@@ -261,34 +266,18 @@
         }));
         entries.sort((a, b) => a.name.localeCompare(b.name, 'en'));
         list.innerHTML = '';
-        items = entries.map(({ fqbn, name }) => {
-          const li = document.createElement('li');
-          const nameEl = document.createElement('div');
-          nameEl.className = 'name';
-          nameEl.textContent = name || '(No name)';
-          const fqbnEl = document.createElement('div');
-          fqbnEl.className = 'fqbn';
-          fqbnEl.textContent = fqbn;
-          li.appendChild(nameEl);
-          li.appendChild(fqbnEl);
-          li.addEventListener('click', () => {
-            try { window.__USER_CHANGED_OPTIONS__ = true; window.__INIT_PENDING__ = false; } catch (_) { }
-            q.value = fqbn;
-            applyFilter();
-          });
-          list.appendChild(li);
-          return { fqbn, name, search: (fqbn + ' ' + name).toLowerCase(), el: li };
-        });
-
-
-        setStatus(`${items.length} items`);
+        boardEntries = entries.map(({ fqbn, name }) => ({
+          fqbn,
+          name,
+          search: (fqbn + ' ' + name).toLowerCase(),
+        }));
+        setStatus(boardEntries.length ? (IS_JA_LOCALE ? `${boardEntries.length}件` : `${boardEntries.length} items`) : BOARD_NO_RESULTS);
       }
 
       function applyFilter() {
         const rawNeedle = q.value.trim();
         const needle = rawNeedle.toLowerCase();
         let exact = rawNeedle && Object.prototype.hasOwnProperty.call(dataMap, rawNeedle) ? rawNeedle : null;
-        // Fallback: if user pasted/extFQBN like vendor:arch:board:opt=val, use base vendor:arch:board
         if (!exact && rawNeedle) {
           const parts = rawNeedle.split(':');
           if (parts.length >= 4) {
@@ -298,36 +287,71 @@
             }
           }
         }
+
+        const matches = (() => {
+          if (!needle) return boardEntries.slice();
+          if (exact) return boardEntries.filter(entry => entry.fqbn === exact);
+          return boardEntries.filter(entry => entry.search.includes(needle));
+        })();
+
+        list.innerHTML = '';
+        const limited = matches.slice(0, MAX_BOARD_RESULTS);
+        limited.forEach((entry) => {
+          const li = document.createElement('li');
+          const nameEl = document.createElement('div');
+          nameEl.className = 'name';
+          nameEl.textContent = entry.name || '(No name)';
+          const fqbnEl = document.createElement('div');
+          fqbnEl.className = 'fqbn';
+          fqbnEl.textContent = entry.fqbn;
+          li.appendChild(nameEl);
+          li.appendChild(fqbnEl);
+          li.addEventListener('click', () => {
+            try { window.__USER_CHANGED_OPTIONS__ = true; window.__INIT_PENDING__ = false; } catch (_) { }
+            q.value = entry.fqbn;
+            applyFilter();
+          });
+          list.appendChild(li);
+        });
+
+        const totalMatches = matches.length;
+        const shown = limited.length;
+
         if (!needle) {
-          items.forEach(it => { it.el.style.display = ''; });
-          setStatus(`${items.length} items`);
+          if (totalMatches === 0) {
+            setStatus(BOARD_NO_RESULTS);
+          } else if (totalMatches > MAX_BOARD_RESULTS) {
+            setStatus(IS_JA_LOCALE ? `${shown}件を表示 / 全${totalMatches}件 (${BOARD_REFINE_LABEL})` : `Showing ${shown} / ${totalMatches} items (${BOARD_REFINE_LABEL})`);
+          } else {
+            setStatus(IS_JA_LOCALE ? `${totalMatches}件` : `${totalMatches} items`);
+          }
           renderConfig(null, null);
           return;
         }
+
         if (exact) {
-          let visible = 0;
-          items.forEach(it => {
-            const match = it.fqbn === exact;
-            it.el.style.display = match ? '' : 'none';
-            if (match) visible++;
-          });
-          setStatus(`${visible} item(s) (exact match)`);
+          setStatus(shown ? (IS_JA_LOCALE ? `${shown}件 (${BOARD_EXACT_LABEL})` : `${shown} item(s) (${BOARD_EXACT_LABEL})`) : BOARD_NO_RESULTS);
           try {
             window.__INIT_PENDING__ = false;
             if (!window.__CURRENT_BASEFQBN__) window.__CURRENT_BASEFQBN__ = exact;
             if (!window.__CURRENT_EXTFQBN__) window.__CURRENT_EXTFQBN__ = exact;
           } catch (_) { }
           renderConfig(exact, dataMap[exact] || null);
-        } else {
-          let visible = 0;
-          items.forEach(it => {
-            const match = it.search.includes(needle);
-            it.el.style.display = match ? '' : 'none';
-            if (match) visible++;
-          });
-          setStatus(`${visible} / ${items.length} items`);
-          renderConfig(null, null);
+          return;
         }
+
+        if (totalMatches === 0) {
+          setStatus(BOARD_NO_RESULTS);
+          renderConfig(null, null);
+          return;
+        }
+
+        if (totalMatches > MAX_BOARD_RESULTS) {
+          setStatus(IS_JA_LOCALE ? `${shown}件を表示 / 全${totalMatches}件 (${BOARD_REFINE_LABEL})` : `Showing ${shown} / ${totalMatches} items (${BOARD_REFINE_LABEL})`);
+        } else {
+          setStatus(IS_JA_LOCALE ? `${totalMatches}件 / 全${boardEntries.length}件` : `${totalMatches} / ${boardEntries.length} items`);
+        }
+        renderConfig(null, null);
       }
 
       // VS Code API getter: acquire exactly once to avoid errors
@@ -1167,21 +1191,29 @@
         }
         function renderLibs() {
           libsList.innerHTML = '';
-          if (!Array.isArray(libsCache)) { libsStatus.textContent = 'Load error'; return; }
+          if (!Array.isArray(libsCache)) { libsStatus.textContent = isJa ? '読み込みエラー' : 'Load error'; return; }
           const repoLabel = isJa ? 'リポジトリ' : 'Repository';
           const latestLabel = isJa ? '最新' : 'Latest';
           const unknownLabel = isJa ? '名称不明のライブラリ' : '(Unknown library)';
           const versionAriaFallback = isJa ? 'ライブラリのバージョン' : 'Library version';
+          const refineLabel = isJa ? 'さらに絞り込んでください' : 'Refine the filter to narrow further';
+          const MAX_LIB_RESULTS = 50;
           // No implicit default library selection; respect only provided/selected libraries
           const term = libsQ.value.trim().toLowerCase();
-          let visible = 0;
-          libsCache.forEach((row, idx) => {
+          let renderedCount = 0;
+          let hasMoreMatches = false;
+          for (let idx = 0; idx < libsCache.length; idx++) {
+            const row = libsCache[idx];
             const name = libName(row);
             const ver = libVersion(row);
             const versionsList = libVersions(row);
             const text = (name + ' ' + ver + ' ' + versionsList.join(' ')).toLowerCase();
-            if (term && !text.includes(term)) return;
-            if (onlySel.checked && !selectedLibs.has(name)) return;
+            if (term && !text.includes(term)) continue;
+            if (onlySel.checked && !selectedLibs.has(name)) continue;
+            if (renderedCount >= MAX_LIB_RESULTS) {
+              hasMoreMatches = true;
+              break;
+            }
             const li = document.createElement('li');
             const rowWrap = document.createElement('div');
             rowWrap.className = 'lib-row';
@@ -1275,9 +1307,15 @@
               rowWrap.appendChild(repoLink);
             }
             libsList.appendChild(li);
-            visible++;
-          });
-          libsStatus.textContent = `${visible} item(s)`;
+            renderedCount++;
+          }
+          if (renderedCount === 0 && !hasMoreMatches) {
+            libsStatus.textContent = isJa ? '該当なし' : 'No results';
+          } else if (hasMoreMatches) {
+            libsStatus.textContent = isJa ? `${MAX_LIB_RESULTS}件を表示 (${refineLabel})` : `Showing ${MAX_LIB_RESULTS} results (${refineLabel})`;
+          } else {
+            libsStatus.textContent = isJa ? `${renderedCount}件` : `${renderedCount} item(s)`;
+          }
           try { updateMismatches(); } catch (_) { }
         }
         libsQ.addEventListener('input', renderLibs);

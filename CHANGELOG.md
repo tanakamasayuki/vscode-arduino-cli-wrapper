@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Limited the Sketch.yaml helper board and library pickers to the first 50 matches so the webview stays responsive while filtering large catalogs.
+- (JA) Sketch.yaml ヘルパーのボード／ライブラリ一覧表示を各50件までに制限し、大量候補を扱う際もフィルタリングが遅くならないようにしました。
 
 ## 1.6.0
 - (EN) Delayed platform version fetching in the sketch.yaml helper so board selection no longer freezes; use the new "Fetch versions" button to load candidates on demand.
