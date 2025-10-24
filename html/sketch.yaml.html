@@ -133,7 +133,7 @@
       const BOARD_REFINE_LABEL = IS_JA_LOCALE ? 'さらに絞り込んでください' : 'Refine the filter to narrow further';
       const BOARD_NO_RESULTS = IS_JA_LOCALE ? '該当なし' : 'No results';
       const BOARD_EXACT_LABEL = IS_JA_LOCALE ? '完全一致' : 'exact match';
-  let skipNextBoardClick = false;
+      let skipNextBoardClick = false;
 
       /** @type {{fqbn:string,name:string,search:string}[]} */
       let boardEntries = [];
@@ -552,7 +552,7 @@
           }
         } catch (_) { }
 
-  const opts = Array.isArray(detail.config_options) ? detail.config_options : [];
+        const opts = Array.isArray(detail.config_options) ? detail.config_options : [];
         if (!opts.length) {
           const p = document.createElement('p');
           p.className = 'empty';
