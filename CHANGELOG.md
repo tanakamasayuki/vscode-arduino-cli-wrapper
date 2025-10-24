@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.6.1
 - (EN) Limited the Sketch.yaml helper board and library pickers to the first 50 matches so the webview stays responsive while filtering large catalogs, and ensured board rows select on the first click even with the truncated list.
 - (JA) Sketch.yaml ヘルパーのボード／ライブラリ一覧表示を各50件までに制限し、大量候補を扱う際もフィルタリングが遅くならないようにするとともに、一覧を短縮表示していても最初のクリックでボードが選択されるようにしました。
 
