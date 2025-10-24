@@ -57,6 +57,11 @@
       margin-bottom: 8px;
     }
 
+    li.selected {
+      border-color: #007acc;
+      background-color: rgba(0, 122, 204, 0.12);
+    }
+
     .name {
       font-weight: 600;
     }
@@ -128,6 +133,7 @@
       const BOARD_REFINE_LABEL = IS_JA_LOCALE ? 'さらに絞り込んでください' : 'Refine the filter to narrow further';
       const BOARD_NO_RESULTS = IS_JA_LOCALE ? '該当なし' : 'No results';
       const BOARD_EXACT_LABEL = IS_JA_LOCALE ? '完全一致' : 'exact match';
+  let skipNextBoardClick = false;
 
       /** @type {{fqbn:string,name:string,search:string}[]} */
       let boardEntries = [];
@@ -260,24 +266,33 @@
 
       function render(data) {
         dataMap = data || {};
-        const entries = Object.entries(dataMap).map(([fqbn, v]) => ({
+        const entries = Object.entries(dataMap).map(([fqbn, detail]) => ({
           fqbn,
-          name: (v && typeof v.name === 'string') ? v.name : '',
+          name: (detail && typeof detail.name === 'string') ? detail.name : '',
+          detail: detail || null,
         }));
         entries.sort((a, b) => a.name.localeCompare(b.name, 'en'));
         list.innerHTML = '';
-        boardEntries = entries.map(({ fqbn, name }) => ({
+        boardEntries = entries.map(({ fqbn, name, detail }) => ({
           fqbn,
           name,
+          detail,
           search: (fqbn + ' ' + name).toLowerCase(),
         }));
         setStatus(boardEntries.length ? (IS_JA_LOCALE ? `${boardEntries.length}件` : `${boardEntries.length} items`) : BOARD_NO_RESULTS);
       }
 
-      function applyFilter() {
-        const rawNeedle = q.value.trim();
+      function selectBoard(fqbn, detail) {
+        try { window.__USER_CHANGED_OPTIONS__ = true; window.__INIT_PENDING__ = false; } catch (_) { }
+        try { window.__CURRENT_SELECTED_FQBN__ = fqbn; } catch (_) { }
+        q.value = fqbn;
+        applyFilter(fqbn, detail || null);
+      }
+
+      function applyFilter(forcedFqbn = null, forcedDetail = null) {
+        const rawNeedle = (forcedFqbn || q.value || '').trim();
         const needle = rawNeedle.toLowerCase();
-        let exact = rawNeedle && Object.prototype.hasOwnProperty.call(dataMap, rawNeedle) ? rawNeedle : null;
+        let exact = forcedFqbn || (rawNeedle && Object.prototype.hasOwnProperty.call(dataMap, rawNeedle) ? rawNeedle : null);
         if (!exact && rawNeedle) {
           const parts = rawNeedle.split(':');
           if (parts.length >= 4) {
@@ -306,16 +321,36 @@
           fqbnEl.textContent = entry.fqbn;
           li.appendChild(nameEl);
           li.appendChild(fqbnEl);
+          if (exact && entry.fqbn === exact) li.classList.add('selected');
+          li.addEventListener('mousedown', (ev) => {
+            if (ev.button !== 0) return;
+            skipNextBoardClick = true;
+            ev.preventDefault();
+            selectBoard(entry.fqbn, entry.detail || null);
+            setTimeout(() => { skipNextBoardClick = false; }, 200);
+          });
           li.addEventListener('click', () => {
-            try { window.__USER_CHANGED_OPTIONS__ = true; window.__INIT_PENDING__ = false; } catch (_) { }
-            q.value = entry.fqbn;
-            applyFilter();
+            if (skipNextBoardClick) {
+              skipNextBoardClick = false;
+              return;
+            }
+            selectBoard(entry.fqbn, entry.detail || null);
           });
           list.appendChild(li);
         });
 
         const totalMatches = matches.length;
         const shown = limited.length;
+
+        let detailForExact = forcedDetail || null;
+        if (!detailForExact && exact) {
+          const fromMap = dataMap[exact];
+          if (fromMap) detailForExact = fromMap;
+          else {
+            const foundEntry = matches.find(entry => entry.fqbn === exact);
+            if (foundEntry && foundEntry.detail) detailForExact = foundEntry.detail;
+          }
+        }
 
         if (!needle) {
           if (totalMatches === 0) {
@@ -336,7 +371,7 @@
             if (!window.__CURRENT_BASEFQBN__) window.__CURRENT_BASEFQBN__ = exact;
             if (!window.__CURRENT_EXTFQBN__) window.__CURRENT_EXTFQBN__ = exact;
           } catch (_) { }
-          renderConfig(exact, dataMap[exact] || null);
+          renderConfig(exact, detailForExact || null);
           return;
         }
 
@@ -371,7 +406,10 @@
         root.innerHTML = '';
         const summaryBottom = document.getElementById('summaryBottom');
         summaryBottom.textContent = '';
-        if (!fqbn || !detail) return;
+        if (!fqbn) return;
+        const resolvedDetail = detail || dataMap[fqbn] || null;
+        if (!resolvedDetail) return;
+        detail = resolvedDetail;
         const isJa = (navigator.language || '').toLowerCase().startsWith('ja');
 
         const title = document.createElement('h2');
@@ -514,7 +552,7 @@
           }
         } catch (_) { }
 
-        const opts = Array.isArray(detail.config_options) ? detail.config_options : [];
+  const opts = Array.isArray(detail.config_options) ? detail.config_options : [];
         if (!opts.length) {
           const p = document.createElement('p');
           p.className = 'empty';
