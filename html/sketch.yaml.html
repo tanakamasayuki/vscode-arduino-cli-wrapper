@@ -123,14 +123,14 @@
       const q = document.getElementById('q');
       const status = document.getElementById('status');
       const list = document.getElementById('list');
-  const IS_JA_LOCALE = ((navigator.language || '').toLowerCase().startsWith('ja'));
-  const MAX_BOARD_RESULTS = 50;
-  const BOARD_REFINE_LABEL = IS_JA_LOCALE ? 'さらに絞り込んでください' : 'Refine the filter to narrow further';
-  const BOARD_NO_RESULTS = IS_JA_LOCALE ? '該当なし' : 'No results';
-  const BOARD_EXACT_LABEL = IS_JA_LOCALE ? '完全一致' : 'exact match';
+      const IS_JA_LOCALE = ((navigator.language || '').toLowerCase().startsWith('ja'));
+      const MAX_BOARD_RESULTS = 50;
+      const BOARD_REFINE_LABEL = IS_JA_LOCALE ? 'さらに絞り込んでください' : 'Refine the filter to narrow further';
+      const BOARD_NO_RESULTS = IS_JA_LOCALE ? '該当なし' : 'No results';
+      const BOARD_EXACT_LABEL = IS_JA_LOCALE ? '完全一致' : 'exact match';
 
-  /** @type {{fqbn:string,name:string,search:string}[]} */
-  let boardEntries = [];
+      /** @type {{fqbn:string,name:string,search:string}[]} */
+      let boardEntries = [];
       /** @type {Record<string, {name?:string, version?:string, config_options?: any[], package_url?: string}>} */
       let dataMap = {};
       /** @type {Array<any>|null} */
