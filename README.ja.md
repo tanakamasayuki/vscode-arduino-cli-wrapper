@@ -117,6 +117,14 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 
 ドットから始まるファイル名のため既定では隠しファイルとして扱われます。認証情報がコミットに含まれないよう、必要に応じて `.gitignore` へ追加してください（本拡張の `.gitignore` には既にエントリを用意済みです）。
 
+また、ビルド環境のタイムゾーンをコードから参照できるよう、拡張機能は既定でビルド時に次のプリプロセッサーマクロを `build.extra_flags` へ追加します。必要に応じて設定 **Arduino CLI Wrapper › Inject Timezone Macros** を無効化すると自動付与を停止できます。
+
+- `CLI_BUILD_TZ_IANA` – `Asia/Tokyo` のような IANA タイムゾーン ID。
+- `CLI_BUILD_TZ_POSIX` – newlib の `TZ` 変数へ設定できる POSIX 形式（例: `JST-9` や `PST8PDT,M3.2.0/2,M11.1.0/2`）。
+- `CLI_BUILD_TZ_OFFSET_SEC` – 現在の UTC オフセット（秒）。
+- `CLI_BUILD_TZ_OFFSET_ISO` – `+09:00` 形式の ISO ライクなオフセット文字列。
+- `CLI_BUILD_TZ_ABBR` – `JST` や `PST/PDT` など画面表示向けの略称。
+
 ## 日常操作と UI
 
 ### コマンドパレットから始める（初心者ガイド）

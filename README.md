@@ -113,6 +113,14 @@ If you must inject extra `build.extra_flags` on every compile, you can place an 
 
 Because the filename starts with a dot it stays hidden by default. Add it to source control ignore lists (the extension’s `.gitignore` already contains an entry) so credentials never leak into commits.
 
+In addition, the extension injects the following preprocessor macros by default so sketches can consume the build host’s timezone without touching `.arduino-cli-flags`. Disable **Arduino CLI Wrapper › Inject Timezone Macros** if you prefer to manage these flags yourself.
+
+- `CLI_BUILD_TZ_IANA` – IANA timezone identifier such as `Asia/Tokyo`.
+- `CLI_BUILD_TZ_POSIX` – POSIX expression suitable for newlib’s `TZ` (e.g. `JST-9` or `PST8PDT,M3.2.0/2,M11.1.0/2`).
+- `CLI_BUILD_TZ_OFFSET_SEC` – Current UTC offset in seconds.
+- `CLI_BUILD_TZ_OFFSET_ISO` – ISO-style offset string such as `+09:00`.
+- `CLI_BUILD_TZ_ABBR` – Short label for UI surfaces, for example `JST` or `PST/PDT`.
+
 ## Everyday operations and UI
 
 ### Getting started with commands (Command Palette)

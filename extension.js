@@ -179,6 +179,7 @@ let monitorTerminal;
 // Log terminal (ANSI capable, no command execution)
 let logTerminal;
 let logTermWriteEmitter;
+let timezoneDefineCache;
 
 // Simple i18n without external deps.
 // Note: We intentionally avoid bundling any library to keep
@@ -1858,6 +1859,7 @@ function getConfig() {
     verbose: !!verbose,
     warnings: normalizedWarnings,
     localBuildPath: cfg.get('arduino-cli-wrapper.localBuildPath', false),
+    injectTimezoneMacros: cfg.get('arduino-cli-wrapper.injectTimezoneMacros', true),
   };
 }
 
@@ -3774,12 +3776,468 @@ async function appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, chann
   }
 }
 
+function shouldInjectTimezoneMacros(cfg) {
+  if (cfg && typeof cfg.injectTimezoneMacros === 'boolean') {
+    return cfg.injectTimezoneMacros;
+  }
+  try {
+    const direct = vscode.workspace.getConfiguration().get('arduino-cli-wrapper.injectTimezoneMacros');
+    if (typeof direct === 'boolean') {
+      return direct;
+    }
+  } catch (_) { }
+  return true;
+}
+
+function ensureTimezoneDefines(originalArgs, baseArgs, sketchDir, cfg) {
+  if (!shouldInjectTimezoneMacros(cfg)) return;
+  const payload = getTimezoneBuildDefines();
+  const addition = payload && payload.flags ? payload.flags : '';
+  if (!addition) return;
+  if (appendTimezoneFlagsToArgs(originalArgs, addition)) return;
+  if (appendTimezoneFlagsToArgs(baseArgs, addition)) return;
+  if (!Array.isArray(originalArgs)) return;
+  const sketchIdx = typeof sketchDir === 'string' && sketchDir
+    ? originalArgs.lastIndexOf(sketchDir)
+    : -1;
+  const insertIdx = sketchIdx >= 0 ? sketchIdx : originalArgs.length;
+  originalArgs.splice(insertIdx, 0, '--build-property', `build.extra_flags=${addition}`);
+}
+
+function appendTimezoneFlagsToArgs(arr, addition) {
+  if (!Array.isArray(arr) || !addition) return false;
+  for (let i = 0; i < arr.length; i += 1) {
+    const entry = arr[i];
+    if (typeof entry !== 'string') continue;
+    if (entry === '--build-property') {
+      const next = arr[i + 1];
+      if (typeof next === 'string' && next.startsWith('build.extra_flags=')) {
+        arr[i + 1] = mergeBuildExtraFlags(next, addition);
+        return true;
+      }
+      continue;
+    }
+    if (entry.startsWith('--build-property=')) {
+      const idx = entry.indexOf('=');
+      const prop = entry.slice(idx + 1);
+      if (prop.startsWith('build.extra_flags=')) {
+        const mergedProp = mergeBuildExtraFlags(prop, addition);
+        arr[i] = `${entry.slice(0, idx + 1)}${mergedProp}`;
+        return true;
+      }
+      continue;
+    }
+    if (entry.startsWith('build.extra_flags=')) {
+      arr[i] = mergeBuildExtraFlags(entry, addition);
+      return true;
+    }
+  }
+  return false;
+}
+
+function mergeBuildExtraFlags(current, addition) {
+  if (!addition) return current;
+  const prefix = 'build.extra_flags=';
+  if (!current.startsWith(prefix)) return current;
+  if (current.includes('CLI_BUILD_TZ_IANA')) return current;
+  const existing = current.slice(prefix.length).trim();
+  if (!existing) return `${prefix}${addition}`;
+  if (existing.includes('CLI_BUILD_TZ_IANA')) return current;
+  return `${prefix}${existing} ${addition}`;
+}
+
+function getTimezoneBuildDefines() {
+  if (!timezoneDefineCache) {
+    timezoneDefineCache = buildTimezoneDefinePayload();
+  }
+  return timezoneDefineCache;
+}
+
+function buildTimezoneDefinePayload() {
+  try {
+    const meta = computeTimezoneMetadata();
+    const macros = [
+      { key: 'CLI_BUILD_TZ_IANA', value: meta.iana, quoted: true },
+      { key: 'CLI_BUILD_TZ_POSIX', value: meta.posix, quoted: true },
+      { key: 'CLI_BUILD_TZ_OFFSET_SEC', value: String(meta.offsetSeconds), quoted: false },
+      { key: 'CLI_BUILD_TZ_OFFSET_ISO', value: meta.offsetIso, quoted: true },
+      { key: 'CLI_BUILD_TZ_ABBR', value: meta.abbreviation, quoted: true }
+    ].filter((item) => item.value !== undefined && item.value !== null && item.value !== '');
+    const flags = macros
+      .map((item) => {
+        const escaped = item.quoted ? `"${escapeDefineString(item.value)}"` : item.value;
+        return `-D${item.key}=${escaped}`;
+      })
+      .join(' ')
+      .trim();
+    return { flags, meta };
+  } catch (err) {
+    return { flags: '', meta: null, error: err };
+  }
+}
+
+function computeTimezoneMetadata() {
+  const iana = detectSystemTimeZone();
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const offsetFormatter = new Intl.DateTimeFormat('en-US', { timeZone: iana, timeZoneName: 'longOffset' });
+  const dateFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: iana,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    weekday: 'short'
+  });
+  const shortLocales = ['en', 'en-US', 'en-GB', 'en-CA', 'en-AU', 'es-ES', 'it-IT', 'ja-JP', 'de-DE', 'fr-FR'];
+  const shortFormatters = shortLocales.map((locale) => {
+    try {
+      return new Intl.DateTimeFormat(locale, { timeZone: iana, timeZoneName: 'short' });
+    } catch (_) {
+      return null;
+    }
+  });
+  const longFormatter = new Intl.DateTimeFormat('en', { timeZone: iana, timeZoneName: 'long' });
+
+  const getOffsetMinutes = (date) => {
+    try {
+      const part = offsetFormatter.formatToParts(date).find((p) => p.type === 'timeZoneName');
+      return parseGmtOffsetMinutes(part ? part.value : 'GMT');
+    } catch (_) {
+      return -date.getTimezoneOffset();
+    }
+  };
+
+  const currentOffsetMinutes = getOffsetMinutes(now);
+  const offsets = new Set();
+  for (let month = 0; month < 12; month += 1) {
+    const sample = new Date(Date.UTC(year, month, 1, 12, 0, 0));
+    offsets.add(getOffsetMinutes(sample));
+  }
+  const uniqueOffsets = Array.from(offsets).sort((a, b) => a - b);
+  const standardOffset = uniqueOffsets.length ? uniqueOffsets[0] : currentOffsetMinutes;
+  const dstOffset = uniqueOffsets.length > 1 ? uniqueOffsets[uniqueOffsets.length - 1] : null;
+
+  const stdSample = findSampleDateForOffset(getOffsetMinutes, year, standardOffset) || now;
+  const dstSample = dstOffset != null ? findSampleDateForOffset(getOffsetMinutes, year, dstOffset) : null;
+  const standardAbbr = resolveAbbreviation(shortFormatters, longFormatter, stdSample) || formatOffsetAsUtcLabel(standardOffset);
+  const dstAbbrRaw = dstSample ? resolveAbbreviation(shortFormatters, longFormatter, dstSample) : '';
+  const dstAbbr = dstAbbrRaw || (dstOffset != null && standardAbbr ? `${standardAbbr}D` : '');
+
+  const transitions = dstOffset != null
+    ? findDstTransitions({
+      year,
+      getOffsetMinutes,
+      dateFormatter,
+      standardOffset,
+      dstOffset
+    })
+    : { startRule: '', endRule: '', startOffset: null, endOffset: null };
+
+  const posix = buildPosixString({
+    standardAbbr,
+    standardOffset,
+    dstAbbr,
+    dstOffset,
+    startRule: transitions.startRule,
+    endRule: transitions.endRule
+  });
+
+  const abbreviation = dstOffset != null && dstAbbr && dstAbbr !== standardAbbr
+    ? `${standardAbbr}/${dstAbbr}`
+    : standardAbbr;
+
+  return {
+    iana,
+    posix,
+    offsetSeconds: currentOffsetMinutes * 60,
+    offsetIso: formatIsoOffset(currentOffsetMinutes),
+    abbreviation
+  };
+}
+
+function detectSystemTimeZone() {
+  const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (resolved && typeof resolved === 'string') return resolved;
+  if (typeof process.env.TZ === 'string' && process.env.TZ) return process.env.TZ;
+  return 'UTC';
+}
+
+function parseGmtOffsetMinutes(label) {
+  if (!label) return 0;
+  if (label === 'GMT' || label === 'UTC') return 0;
+  const match = String(label).match(/^(?:GMT|UTC)([+-])(\d{2})(?::?(\d{2}))?/i);
+  if (!match) return 0;
+  const sign = match[1] === '-' ? -1 : 1;
+  const hours = parseInt(match[2], 10) || 0;
+  const minutes = parseInt(match[3] || '0', 10) || 0;
+  return sign * (hours * 60 + minutes);
+}
+
+function findSampleDateForOffset(getOffsetMinutes, year, targetOffset) {
+  for (let month = 0; month < 12; month += 1) {
+    for (let day = 1; day <= 28; day += 7) {
+      const sample = new Date(Date.UTC(year, month, day, 12, 0, 0));
+      if (getOffsetMinutes(sample) === targetOffset) return sample;
+    }
+  }
+  return null;
+}
+
+function resolveAbbreviation(shortFormatters, longFormatter, date) {
+  for (const fmt of shortFormatters) {
+    if (!fmt) continue;
+    try {
+      const part = fmt.formatToParts(date).find((p) => p.type === 'timeZoneName');
+      if (!part) continue;
+      const normalized = normalizeAbbreviation(part.value);
+      if (normalized && !/^UTC[+-]?\d/.test(normalized)) {
+        return normalized;
+      }
+      if (normalized && !normalized.startsWith('UTC')) {
+        return normalized;
+      }
+    } catch (_) {
+      continue;
+    }
+  }
+  try {
+    const part = longFormatter.formatToParts(date).find((p) => p.type === 'timeZoneName');
+    const derived = deriveAbbreviationFromLong(part ? part.value : '');
+    if (derived) return derived;
+  } catch (_) {
+    // ignore
+  }
+  return '';
+}
+
+function normalizeAbbreviation(label) {
+  if (!label) return '';
+  const trimmed = label.trim();
+  const upper = TIMEZONE_ABBREVIATION_MAP[trimmed] || TIMEZONE_ABBREVIATION_MAP[trimmed.toUpperCase()] || trimmed.toUpperCase();
+  if (/^GMT[+-]/.test(upper)) {
+    return upper.replace(/^GMT/, 'UTC');
+  }
+  if (/^[A-Z]{2,5}(?:\/[A-Z]{2,5})?$/.test(upper)) {
+    return upper;
+  }
+  if (/^UTC[+-]?\d/.test(upper)) {
+    return upper;
+  }
+  return upper;
+}
+
+const TIMEZONE_ABBREVIATION_MAP = {
+  MESZ: 'CEST',
+  MEZ: 'CET',
+  OESZ: 'EEST',
+  OEZ: 'EET',
+  HNE: 'EST',
+  HAE: 'EDT',
+  HNC: 'CST',
+  HAC: 'CDT',
+  HNR: 'MST',
+  HAR: 'MDT',
+  HNP: 'PST',
+  HAP: 'PDT',
+  '日本標準時': 'JST'
+};
+
+function deriveAbbreviationFromLong(longName) {
+  if (!longName) return '';
+  const cleaned = longName.replace(/\b(Time|Zone)\b/gi, '').trim();
+  const primaryWords = cleaned.split(/[\s-]+/).filter(Boolean);
+  let letters = primaryWords
+    .filter((word) => !/^(Standard|Daylight|Summer|Winter)$/i.test(word))
+    .map((word) => word[0] ? word[0].toUpperCase() : '')
+    .join('');
+  if (letters.length >= 3) return letters.substring(0, 4);
+  letters = primaryWords.map((word) => word[0] ? word[0].toUpperCase() : '').join('');
+  if (letters.length >= 2) {
+    if (letters.length === 2) return `${letters}T`;
+    return letters.substring(0, 4);
+  }
+  return '';
+}
+
+function findDstTransitions({ year, getOffsetMinutes, dateFormatter, standardOffset, dstOffset }) {
+  const startOfYear = Date.UTC(year, 0, 1);
+  const endOfYear = Date.UTC(year + 1, 0, 1);
+  const step = 3600000;
+  let prevOffset = getOffsetMinutes(new Date(startOfYear));
+  const result = { startRule: '', endRule: '', startOffset: null, endOffset: null };
+  for (let ts = startOfYear + step; ts < endOfYear; ts += step) {
+    const offset = getOffsetMinutes(new Date(ts));
+    if (offset === prevOffset) continue;
+    const refined = refineTransitionTimestamp(ts - step, ts, prevOffset, offset, getOffsetMinutes);
+    const rule = buildPosixRule(refined, prevOffset, dateFormatter);
+    if (offset > prevOffset && !result.startRule) {
+      result.startRule = rule;
+      result.startOffset = offset;
+    } else if (offset < prevOffset && !result.endRule) {
+      result.endRule = rule;
+      result.endOffset = offset;
+    }
+    prevOffset = offset;
+    if (result.startRule && result.endRule) break;
+  }
+  return result;
+}
+
+function refineTransitionTimestamp(startTs, endTs, prevOffset, newOffset, getOffsetMinutes) {
+  let low = startTs;
+  let high = endTs;
+  while (high - low > 60000) {
+    const mid = Math.floor((low + high) / 2);
+    const offset = getOffsetMinutes(new Date(mid));
+    if (offset === newOffset) {
+      high = mid;
+    } else {
+      low = mid;
+    }
+  }
+  for (let ts = low; ts <= high; ts += 60000) {
+    const offset = getOffsetMinutes(new Date(ts));
+    if (offset === newOffset) {
+      return ts;
+    }
+  }
+  return high;
+}
+
+function buildPosixRule(timestamp, prevOffset, dateFormatter) {
+  const beforeTs = Math.max(timestamp - 60000, timestamp - 60000);
+  const components = extractLocalComponents(new Date(beforeTs), dateFormatter);
+  const adjusted = incrementMinute(components);
+  const week = computeWeekOfMonth(adjusted.year, adjusted.month, adjusted.day);
+  const timePart = formatRuleTime(adjusted.hour, adjusted.minute, adjusted.second);
+  return `M${adjusted.month}.${week}.${adjusted.weekday}/${timePart}`;
+}
+
+function extractLocalComponents(date, formatter) {
+  const parts = formatter.formatToParts(date);
+  const data = {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+    hour: date.getUTCHours(),
+    minute: date.getUTCMinutes(),
+    second: date.getUTCSeconds(),
+    weekday: date.getUTCDay()
+  };
+  const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  for (const part of parts) {
+    switch (part.type) {
+      case 'year': data.year = Number(part.value); break;
+      case 'month': data.month = Number(part.value); break;
+      case 'day': data.day = Number(part.value); break;
+      case 'hour': data.hour = Number(part.value); break;
+      case 'minute': data.minute = Number(part.value); break;
+      case 'second': data.second = Number(part.value); break;
+      case 'weekday': data.weekday = weekdayMap[part.value] ?? data.weekday; break;
+      default: break;
+    }
+  }
+  return data;
+}
+
+function incrementMinute(components) {
+  const result = { ...components };
+  result.minute += 1;
+  if (result.minute >= 60) {
+    result.minute -= 60;
+    result.hour += 1;
+  }
+  if (result.hour >= 24) {
+    result.hour -= 24;
+    result.day += 1;
+    result.weekday = (result.weekday + 1) % 7;
+    const dim = daysInMonth(result.year, result.month);
+    if (result.day > dim) {
+      result.day = 1;
+      result.month += 1;
+      if (result.month > 12) {
+        result.month = 1;
+        result.year += 1;
+      }
+    }
+  }
+  result.second = 0;
+  return result;
+}
+
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function computeWeekOfMonth(year, month, day) {
+  const dim = daysInMonth(year, month);
+  const week = Math.floor((day - 1) / 7) + 1;
+  if (day + 7 > dim) return 5;
+  return week;
+}
+
+function formatRuleTime(hour, minute, second) {
+  let result = String(hour);
+  if (minute || second) {
+    result += `:${minute.toString().padStart(2, '0')}`;
+  }
+  if (second) {
+    result += `:${second.toString().padStart(2, '0')}`;
+  }
+  return result;
+}
+
+function buildPosixString({ standardAbbr, standardOffset, dstAbbr, dstOffset, startRule, endRule }) {
+  const stdAbbr = standardAbbr || 'UTC';
+  const base = `${stdAbbr}${formatPosixOffset(standardOffset)}`;
+  if (!dstOffset || !startRule || !endRule) {
+    return base;
+  }
+  const dstPart = dstAbbr && dstAbbr !== stdAbbr ? dstAbbr : `${stdAbbr}D`;
+  const offsetDelta = dstOffset - standardOffset;
+  const dstOffsetPart = offsetDelta === 60 ? '' : formatPosixOffset(dstOffset);
+  return `${base}${dstPart}${dstOffsetPart ? dstOffsetPart : ''},${startRule},${endRule}`;
+}
+
+function formatPosixOffset(offsetMinutes) {
+  const total = -offsetMinutes;
+  const sign = total < 0 ? '-' : '';
+  const abs = Math.abs(total);
+  const hours = Math.floor(abs / 60);
+  const minutes = abs % 60;
+  if (minutes === 0) return `${sign}${hours}`;
+  return `${sign}${hours}:${minutes.toString().padStart(2, '0')}`;
+}
+
+function formatIsoOffset(offsetMinutes) {
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMinutes);
+  const hours = Math.floor(abs / 60);
+  const minutes = abs % 60;
+  return `${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+}
+
+function formatOffsetAsUtcLabel(offsetMinutes) {
+  const iso = formatIsoOffset(offsetMinutes);
+  return `UTC${iso}`;
+}
+
+function escapeDefineString(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"');
+}
+
 // Run compile and update IntelliSense by exporting compile_commands.json.
 async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   const { profileName = '', wokwiEnabled = false, fqbn = '', skipLocalBuildPath = false } = opts || {};
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
-  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra.slice() : [];
   const originalArgs = Array.isArray(args) ? args.slice() : [];
   const startTime = Date.now();
   if (originalArgs.length === 0 || originalArgs[0] !== 'compile') {
@@ -3837,6 +4295,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   }
 
   await appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, channel);
+  ensureTimezoneDefines(originalArgs, baseArgs, sketchDir, cfg);
 
   const compileArgs = originalArgs.slice();
 
@@ -8376,9 +8835,11 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
     }
   }
   args.push(sketchDir);
-  const finalArgs = [...baseArgs, ...args];
   const channel = getOutput();
   channel.show();
+  await appendExtraFlagsFromFile(args, baseArgs, sketchDir, channel);
+  ensureTimezoneDefines(args, baseArgs, sketchDir, cfg);
+  const finalArgs = [...baseArgs, ...args];
   const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : quoteArg(exe);
   channel.appendLine(`${ANSI.cyan}[inspector] $ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
   channel.appendLine(`${ANSI.dim}[inspector] (cwd: ${sketchDir})${ANSI.reset}`);

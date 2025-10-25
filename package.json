@@ -225,6 +225,11 @@
           "default": false,
           "markdownDescription": "%config.localBuildPath.description%"
         },
+        "arduino-cli-wrapper.injectTimezoneMacros": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.injectTimezoneMacros.description%"
+        },
         "arduino-cli-wrapper.lint.m5gfxIncludes": {
           "type": "array",
           "default": [
