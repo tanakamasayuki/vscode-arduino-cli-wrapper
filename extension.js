@@ -423,9 +423,18 @@ const MSG = {
     inspectorTabSymbols: 'Top Symbols',
     inspectorTabLibraries: 'Libraries',
     inspectorTabBuildProps: 'Build Properties',
+    inspectorTabMap: 'Map',
     inspectorTabPartitions: 'partitions.csv',
     inspectorTabSdkconfig: 'sdkconfig',
     inspectorTabRawJson: 'Raw JSON',
+    inspectorTabDefines: 'Defines',
+    inspectorDefinesNoData: 'No defines generated.',
+    inspectorDefinesCopy: 'Copy defines',
+    inspectorDefinesCommand: 'Command',
+    inspectorDefinesSource: 'Source',
+    inspectorDefinesError: 'Failed to collect defines: {msg}',
+    inspectorDefinesCount: '{count} defines',
+    inspectorCopySuccess: 'Copied to clipboard.',
     inspectorSummaryBuildPath: 'Build path',
     inspectorSummarySketch: 'Sketch',
     inspectorSummaryProfile: 'Profile',
@@ -536,9 +545,18 @@ const MSG = {
     inspectorTabSymbols: '大きいシンボル',
     inspectorTabLibraries: 'ライブラリ',
     inspectorTabBuildProps: 'ビルドプロパティ',
+    inspectorTabMap: 'マップ',
     inspectorTabPartitions: 'partitions.csv',
     inspectorTabSdkconfig: 'sdkconfig',
     inspectorTabRawJson: 'JSON 出力',
+    inspectorTabDefines: '定義一覧',
+    inspectorDefinesNoData: '定義を取得できませんでした。',
+    inspectorDefinesCopy: '定義をコピー',
+    inspectorDefinesCommand: 'コマンド',
+    inspectorDefinesSource: 'ソース',
+    inspectorDefinesError: '定義の取得に失敗しました: {msg}',
+    inspectorDefinesCount: '定義 {count} 件',
+    inspectorCopySuccess: 'クリップボードにコピーしました。',
     inspectorSummaryBuildPath: 'ビルドパス',
     inspectorSummarySketch: 'スケッチ',
     inspectorSummaryProfile: 'プロファイル',
@@ -7142,6 +7160,28 @@ async function commandOpenInspector(ctx) {
           }
           break;
         }
+        case 'copyText': {
+          const text = typeof msg.text === 'string' ? msg.text : '';
+          const requestId = typeof msg.requestId === 'string' ? msg.requestId : '';
+          if (!text) {
+            if (requestId) {
+              panel.webview.postMessage({ type: 'copyResult', requestId, success: false, message: 'No text to copy.' });
+            }
+            return;
+          }
+          try {
+            await vscode.env.clipboard.writeText(text);
+            if (requestId) {
+              panel.webview.postMessage({ type: 'copyResult', requestId, success: true });
+            }
+          } catch (err) {
+            const detail = err && err.message ? err.message : String(err);
+            if (requestId) {
+              panel.webview.postMessage({ type: 'copyResult', requestId, success: false, message: detail });
+            }
+          }
+          break;
+        }
       }
     } catch (err) {
       showError(err);
@@ -7165,6 +7205,7 @@ function buildInspectorStrings() {
     'inspectorAnalysisFailed',
     'inspectorTabSummary',
     'inspectorTabDiagnostics',
+    'inspectorTabMap',
     'inspectorTabSections',
     'inspectorTabSymbols',
     'inspectorTabLibraries',
@@ -7172,6 +7213,7 @@ function buildInspectorStrings() {
     'inspectorTabPartitions',
     'inspectorTabSdkconfig',
     'inspectorTabRawJson',
+    'inspectorTabDefines',
     'inspectorSummaryBuildPath',
     'inspectorSummarySketch',
     'inspectorSummaryProfile',
@@ -7202,7 +7244,14 @@ function buildInspectorStrings() {
     'inspectorMapMissing',
     'inspectorMapParseFailed',
     'inspectorMapNoSymbols',
-    'inspectorOpenInEditor'
+    'inspectorOpenInEditor',
+    'inspectorDefinesNoData',
+    'inspectorDefinesCopy',
+    'inspectorDefinesCommand',
+    'inspectorDefinesSource',
+    'inspectorDefinesError',
+    'inspectorDefinesCount',
+    'inspectorCopySuccess'
   ];
   const result = {};
   for (const key of keys) {
@@ -8371,7 +8420,311 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
     rawJson: JSON.stringify(data, null, 2),
     files: filesMeta.public
   };
+  if (buildPath) {
+    try {
+      payload.defines = await collectInspectorDefines({ buildPath });
+    } catch (err) {
+      payload.defines = {
+        success: false,
+        error: err && err.message ? err.message : String(err || 'unknown')
+      };
+    }
+  } else {
+    payload.defines = {
+      success: false,
+      error: 'build path unavailable'
+    };
+  }
   return { payload, filesMeta: filesMeta.private };
+}
+
+async function collectInspectorDefines({ buildPath }) {
+  const result = { success: false, macros: '', command: '', source: '', error: '', language: '', stderr: '' };
+  if (!buildPath) {
+    result.error = 'build path unavailable';
+    return result;
+  }
+  const commandsUri = vscode.Uri.file(path.join(buildPath, 'compile_commands.json'));
+  if (!(await pathExists(commandsUri))) {
+    result.error = 'compile_commands.json not found';
+    return result;
+  }
+  let entries;
+  try {
+    const raw = await readTextFile(commandsUri);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      result.error = 'compile_commands.json has unexpected format';
+      return result;
+    }
+    entries = parsed;
+  } catch (err) {
+    result.error = err && err.message ? err.message : String(err || 'unknown');
+    return result;
+  }
+  const commandInfo = pickInoCompileCommand(entries);
+  if (!commandInfo) {
+    result.error = 'ino compile command not found';
+    return result;
+  }
+  const prepared = await prepareDefineCommand(commandInfo, buildPath);
+  if (!prepared.success) {
+    result.error = prepared.error || 'Unable to prepare define command';
+    return result;
+  }
+  result.command = prepared.display;
+  result.source = prepared.sourceDisplay || commandInfo.sourcePath;
+  result.language = prepared.language;
+  const execResult = await runCommandCapture(prepared.executable, prepared.args, prepared.cwd);
+  if (execResult.error) {
+    result.stderr = execResult.stderr || '';
+    result.error = execResult.error && execResult.error.message ? execResult.error.message : String(execResult.error || 'unknown');
+    return result;
+  }
+  if (typeof execResult.code === 'number' && execResult.code !== 0) {
+    const stderrText = execResult.stderr ? execResult.stderr.trim() : '';
+    result.stderr = execResult.stderr || '';
+    result.error = stderrText || `exit ${execResult.code}`;
+    return result;
+  }
+  result.success = true;
+  result.macros = execResult.stdout || '';
+  result.stderr = execResult.stderr || '';
+  return result;
+}
+
+function pickInoCompileCommand(entries) {
+  if (!Array.isArray(entries)) return null;
+  let fallback = null;
+  for (const entry of entries) {
+    const tokens = extractCompileCommandTokens(entry);
+    if (tokens.length < 2) continue;
+    const sourceInfo = findSourceIndexInTokens(tokens);
+    if (!sourceInfo) continue;
+    const record = {
+      tokens,
+      sourceIndex: sourceInfo.index,
+      sourcePath: sourceInfo.path,
+      directory: typeof entry?.directory === 'string' ? entry.directory : '',
+      executable: tokens[0]
+    };
+    const lower = sourceInfo.path.toLowerCase();
+    if (lower.endsWith('.ino') || lower.endsWith('.ino.cpp')) return record;
+    if (!fallback && (lower.endsWith('.cpp') || lower.endsWith('.cxx') || lower.endsWith('.cc'))) {
+      fallback = record;
+    }
+  }
+  return fallback;
+}
+
+function extractCompileCommandTokens(entry) {
+  if (!entry || typeof entry !== 'object') return [];
+  if (Array.isArray(entry.arguments) && entry.arguments.length > 0) {
+    return entry.arguments.map((tok) => (typeof tok === 'string' ? stripArgumentQuotes(tok) : String(tok ?? '')));
+  }
+  if (typeof entry.command === 'string' && entry.command.trim()) {
+    const matches = entry.command.match(ARGUMENT_TOKEN_PATTERN);
+    if (matches) return matches.map(stripArgumentQuotes);
+  }
+  return [];
+}
+
+function findSourceIndexInTokens(tokens) {
+  if (!Array.isArray(tokens) || tokens.length < 2) return null;
+  for (let i = tokens.length - 1; i >= 1; i -= 1) {
+    const token = tokens[i];
+    if (!token) continue;
+    if (token.startsWith('-') || token.startsWith('@')) continue;
+    const lower = token.toLowerCase();
+    if (lower.endsWith('.ino') || lower.endsWith('.ino.cpp') || lower.endsWith('.cpp') || lower.endsWith('.cxx') || lower.endsWith('.cc') || (lower.endsWith('.c') && !lower.endsWith('.cpp'))) {
+      return { index: i, path: token };
+    }
+  }
+  return null;
+}
+
+async function prepareDefineCommand(commandInfo, buildPath) {
+  const tokens = Array.isArray(commandInfo?.tokens) ? commandInfo.tokens.slice() : [];
+  if (tokens.length < 2 || typeof commandInfo.sourceIndex !== 'number' || commandInfo.sourceIndex <= 0 || commandInfo.sourceIndex >= tokens.length) {
+    return { success: false, error: 'Invalid compile command tokens' };
+  }
+  const sourcePath = commandInfo.sourcePath;
+  const executableOriginal = tokens[0];
+  const language = detectCommandLanguage(sourcePath, executableOriginal);
+  const sanitized = [];
+  const dropFlags = new Set(['-c', '-mmd', '-md', '-mg', '-mp']);
+  const dropAndConsumeNext = new Set(['-mf', '-mt', '-mq', '-o', '-x']);
+  const dropInlinePrefixes = ['-mf', '-mt', '-mq'];
+  const dropStandalone = new Set(['-dm', '-e']);
+  let skipNext = false;
+  for (let i = 1; i < tokens.length; i += 1) {
+    if (i === commandInfo.sourceIndex) continue;
+    if (skipNext) {
+      skipNext = false;
+      continue;
+    }
+    let token = tokens[i];
+    if (typeof token !== 'string') token = String(token ?? '');
+    if (!token) continue;
+    const lower = token.toLowerCase();
+    if (dropFlags.has(lower) || dropStandalone.has(lower)) continue;
+    if (dropAndConsumeNext.has(lower)) {
+      skipNext = true;
+      continue;
+    }
+    let shouldSkip = false;
+    for (const prefix of dropInlinePrefixes) {
+      if (lower.startsWith(prefix) && lower.length > prefix.length) {
+        shouldSkip = true;
+        break;
+      }
+    }
+    if (shouldSkip) continue;
+    const normalized = normalizeTokenForEnvironment(token, sanitized.length ? sanitized[sanitized.length - 1] : null);
+    sanitized.push(normalized);
+  }
+  const sourceArg = normalizeTokenForEnvironment(sourcePath, sanitized.length ? sanitized[sanitized.length - 1] : null);
+  sanitized.push(sourceArg);
+  const finalArgs = ['-dM', '-E', '-x', language, ...sanitized];
+  const executable = await resolveExecutableForDefine(executableOriginal);
+  if (!executable) {
+    return { success: false, error: 'Compiler executable not found' };
+  }
+  const cwd = await resolveWorkingDirectoryForDefine(commandInfo.directory, buildPath);
+  const displayCommand = `${quoteArg(executable)} ${finalArgs.map(quoteArg).join(' ')}`.trim();
+  return {
+    success: true,
+    executable,
+    args: finalArgs,
+    cwd,
+    display: displayCommand,
+    language,
+    sourceDisplay: sourcePath
+  };
+}
+
+function detectCommandLanguage(sourcePath, executablePath) {
+  const lowerSource = typeof sourcePath === 'string' ? sourcePath.toLowerCase() : '';
+  if (lowerSource.endsWith('.ino') || lowerSource.endsWith('.ino.cpp') || lowerSource.endsWith('.cpp') || lowerSource.endsWith('.cxx') || lowerSource.endsWith('.cc')) {
+    return 'c++';
+  }
+  if (lowerSource.endsWith('.c')) {
+    return 'c';
+  }
+  const execLower = typeof executablePath === 'string' ? executablePath.toLowerCase() : '';
+  if (execLower.includes('g++') || execLower.includes('clang++')) return 'c++';
+  return 'c';
+}
+
+async function resolveExecutableForDefine(originalPath) {
+  if (typeof originalPath !== 'string' || !originalPath) return '';
+  let candidate = originalPath;
+  if (_isWslEnv && /^[A-Za-z]:[\\/]/.test(candidate)) {
+    let converted = windowsDrivePathToWsl(candidate);
+    if (converted && await pathExistsSafe(converted)) {
+      candidate = converted;
+    } else if (converted && !converted.toLowerCase().endsWith('.exe') && await pathExistsSafe(`${converted}.exe`)) {
+      candidate = `${converted}.exe`;
+    } else if (converted) {
+      candidate = converted;
+    }
+  }
+  return candidate;
+}
+
+async function resolveWorkingDirectoryForDefine(directory, buildPath) {
+  const primary = typeof directory === 'string' && directory ? directory : (buildPath || '');
+  if (!primary) return undefined;
+  const converted = _isWslEnv ? windowsDrivePathToWsl(primary) : primary;
+  if (!converted) return undefined;
+  if (await pathExistsSafe(converted)) return converted;
+  return undefined;
+}
+
+function windowsDrivePathToWsl(p) {
+  if (!_isWslEnv) return p;
+  if (typeof p !== 'string' || !/^[A-Za-z]:[\\/]/.test(p)) return p;
+  const drive = p[0].toLowerCase();
+  const rest = p.slice(2).replace(/\\/g, '/').replace(/^\/+/, '');
+  return `/mnt/${drive}/${rest}`;
+}
+
+async function pathExistsSafe(fsPath) {
+  if (!fsPath) return false;
+  try {
+    return await pathExists(vscode.Uri.file(fsPath));
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTokenForEnvironment(token, previousToken) {
+  if (!_isWslEnv || typeof token !== 'string') return token;
+  const winPathPattern = /^[A-Za-z]:[\\/]/;
+  const lower = token.toLowerCase();
+  if (winPathPattern.test(token)) {
+    return windowsDrivePathToWsl(token);
+  }
+  if (token.startsWith('@')) {
+    const target = token.slice(1);
+    if (winPathPattern.test(target)) {
+      return `@${windowsDrivePathToWsl(target)}`;
+    }
+  }
+  for (const prefix of INLINE_PATH_FLAG_PREFIXES) {
+    if (lower.startsWith(prefix) && token.length > prefix.length) {
+      const suffix = token.slice(prefix.length);
+      if (winPathPattern.test(suffix)) {
+        const converted = windowsDrivePathToWsl(suffix);
+        return token.slice(0, prefix.length) + converted;
+      }
+    }
+  }
+  if (previousToken) {
+    const prevLower = String(previousToken).toLowerCase();
+    if (SEPARATE_PATH_FLAGS.has(prevLower) && winPathPattern.test(token)) {
+      return windowsDrivePathToWsl(token);
+    }
+  }
+  const eqIndex = token.indexOf('=');
+  if (eqIndex > 0) {
+    const value = token.slice(eqIndex + 1);
+    if (winPathPattern.test(value)) {
+      const convertedValue = windowsDrivePathToWsl(value);
+      return `${token.slice(0, eqIndex + 1)}${convertedValue}`;
+    }
+  }
+  return token;
+}
+
+const INLINE_PATH_FLAG_PREFIXES = ['-iwithprefixbefore', '-iwithprefix', '-iquote', '-isystem', '-idirafter', '-include', '-imacros', '-iprefix', '-i', '-b', '-l'];
+const SEPARATE_PATH_FLAGS = new Set(['-iwithprefixbefore', '-iwithprefix', '-iquote', '-isystem', '-idirafter', '-include', '-imacros', '-iprefix', '-i', '-b', '-l']);
+
+async function runCommandCapture(executable, args, cwd) {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    try {
+      const child = cp.spawn(executable, Array.isArray(args) ? args : [], { shell: false, cwd: cwd || undefined });
+      child.stdout.on('data', (d) => { stdout += d.toString(); });
+      child.stderr.on('data', (d) => { stderr += d.toString(); });
+      child.on('error', (error) => {
+        if (settled) return;
+        settled = true;
+        resolve({ code: null, stdout, stderr, error });
+      });
+      child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        resolve({ code, stdout, stderr, error: null });
+      });
+    } catch (error) {
+      if (settled) return;
+      settled = true;
+      resolve({ code: null, stdout, stderr, error });
+    }
+  });
 }
 
 function formatInspectorDiagnostic(diag) {

@@ -235,6 +235,7 @@
       <button data-tab="map">Map</button>
       <button data-tab="libraries">Libraries</button>
       <button data-tab="build">Build</button>
+      <button data-tab="defines">Defines</button>
       <button data-tab="files">Files</button>
       <button data-tab="raw">Raw JSON</button>
     </div>
@@ -253,6 +254,9 @@
     <div id="tab-build" class="tab">
       <div id="buildPropsContent"></div>
     </div>
+    <div id="tab-defines" class="tab">
+      <div id="definesContent"></div>
+    </div>
     <div id="tab-files" class="tab">
       <div id="filesContent"></div>
     </div>
@@ -270,7 +274,10 @@
         files: {},
         currentAnalysis: null,
         analysisRequestId: 0,
-        autoRunDone: false
+        autoRunDone: false,
+        definesText: '',
+        definesMeta: null,
+        pendingCopyId: ''
       };
 
       const titleEl = document.getElementById('title');
@@ -283,6 +290,7 @@
       const mapContent = document.getElementById('mapContent');
       const librariesContent = document.getElementById('librariesContent');
       const buildPropsContent = document.getElementById('buildPropsContent');
+      const definesContent = document.getElementById('definesContent');
       const filesContent = document.getElementById('filesContent');
       const rawJsonEl = document.getElementById('rawJson');
       const tabButtons = Array.from(document.querySelectorAll('.tab-bar button'));
@@ -292,6 +300,7 @@
         map: document.getElementById('tab-map'),
         libraries: document.getElementById('tab-libraries'),
         build: document.getElementById('tab-build'),
+        defines: document.getElementById('tab-defines'),
         files: document.getElementById('tab-files'),
         raw: document.getElementById('tab-raw')
       };
@@ -307,13 +316,24 @@
         if (strings.inspectorSelectProfile) document.getElementById('labelProfile').textContent = strings.inspectorSelectProfile;
         if (strings.inspectorStatusIdle) setStatus(strings.inspectorStatusIdle);
         if (strings.inspectorRunButton) analyzeBtn.textContent = strings.inspectorRunButton;
-        if (strings.inspectorTabSummary) tabButtons[0].textContent = strings.inspectorTabSummary;
-        if (strings.inspectorTabDiagnostics) tabButtons[1].textContent = strings.inspectorTabDiagnostics;
-        if (strings.inspectorTabMap) tabButtons[2].textContent = strings.inspectorTabMap;
-        if (strings.inspectorTabLibraries) tabButtons[3].textContent = strings.inspectorTabLibraries;
-        if (strings.inspectorTabBuildProps) tabButtons[4].textContent = strings.inspectorTabBuildProps;
-        if (strings.inspectorTabPartitions) tabButtons[5].textContent = strings.inspectorTabPartitions + ' / ' + strings.inspectorTabSdkconfig;
-        if (strings.inspectorTabRawJson) tabButtons[6].textContent = strings.inspectorTabRawJson;
+        const tabLabelMap = {
+          summary: strings.inspectorTabSummary,
+          diagnostics: strings.inspectorTabDiagnostics,
+          map: strings.inspectorTabMap,
+          libraries: strings.inspectorTabLibraries,
+          build: strings.inspectorTabBuildProps,
+          defines: strings.inspectorTabDefines,
+          files: (strings.inspectorTabPartitions && strings.inspectorTabSdkconfig)
+            ? `${strings.inspectorTabPartitions} / ${strings.inspectorTabSdkconfig}`
+            : (strings.inspectorTabPartitions || strings.inspectorTabSdkconfig || 'Files'),
+          raw: strings.inspectorTabRawJson
+        };
+        tabButtons.forEach((btn) => {
+          const tabId = btn.dataset.tab;
+          if (!tabId) return;
+          const label = tabLabelMap[tabId];
+          if (label) btn.textContent = label;
+        });
       }
 
       function populateSketches(sketches, context) {
@@ -514,6 +534,45 @@
         `;
       }
 
+      function renderDefines(defines) {
+        const str = state.strings;
+        state.definesMeta = defines || null;
+        state.definesText = '';
+        if (!defines) {
+          definesContent.innerHTML = `<p>${escapeHtml(str.inspectorDefinesNoData || 'No defines generated.')}</p>`;
+          return;
+        }
+        if (!defines.success) {
+          const rawMsg = defines.error || '';
+          const msg = rawMsg
+            ? (str.inspectorDefinesError ? str.inspectorDefinesError.replace('{msg}', rawMsg) : rawMsg)
+            : (str.inspectorDefinesNoData || 'No defines generated.');
+          definesContent.innerHTML = `<p>${escapeHtml(msg)}</p>`;
+          return;
+        }
+        const macros = typeof defines.macros === 'string' ? defines.macros : '';
+        state.definesText = macros;
+        const lines = macros ? macros.split(/\r?\n/) : [];
+        const nonEmpty = lines.filter((line) => line.trim().length > 0).length;
+        const countLabel = str.inspectorDefinesCount
+          ? str.inspectorDefinesCount.replace('{count}', nonEmpty.toLocaleString())
+          : `${nonEmpty} defines`;
+        const copyLabel = str.inspectorDefinesCopy || 'Copy defines';
+        const commandLabel = str.inspectorDefinesCommand || 'Command';
+        const sourceLabel = str.inspectorDefinesSource || 'Source';
+        const commandHtml = defines.command ? `<div><strong>${escapeHtml(commandLabel)}:</strong> <code>${escapeHtml(defines.command)}</code></div>` : '';
+        const sourceHtml = defines.source ? `<div><strong>${escapeHtml(sourceLabel)}:</strong> <span class="mono">${escapeHtml(defines.source)}</span></div>` : '';
+        definesContent.innerHTML = `
+          <div class="file-actions">
+            <button id="definesCopyBtn" data-action="copyDefines">${escapeHtml(copyLabel)}</button>
+            <span class="dim-note">${escapeHtml(countLabel)}</span>
+          </div>
+          ${commandHtml}
+          ${sourceHtml}
+          <pre id="definesPre" class="mono">${escapeHtml(macros)}</pre>
+        `;
+      }
+
       function renderFiles(files) {
         state.files = files || {};
         const entries = Object.entries(files || {});
@@ -633,6 +692,16 @@
         }
       });
 
+      definesContent.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.getAttribute('data-action') !== 'copyDefines') return;
+        if (!state.definesText) return;
+        const requestId = `defines-${Date.now()}`;
+        state.pendingCopyId = requestId;
+        vscode.postMessage({ type: 'copyText', text: state.definesText, requestId });
+      });
+
       diagnosticsContent.addEventListener('click', (event) => {
         const targetEl = event.target instanceof HTMLElement ? event.target.closest('button[data-action="openLocation"]') : null;
         if (!targetEl) return;
@@ -675,6 +744,7 @@
               renderMap(msg.map || {});
               renderLibraries(msg.libraries || []);
               renderBuildProps(msg.buildProps || []);
+              renderDefines(msg.defines || null);
               renderFiles(msg.files || {});
               rawJsonEl.textContent = msg.rawJson || '';
             } else {
@@ -683,6 +753,16 @@
             break;
           case 'fileContent':
             handleFileContent(msg);
+            break;
+          case 'copyResult':
+            if (msg.requestId && msg.requestId === state.pendingCopyId) {
+              state.pendingCopyId = '';
+              if (msg.success) {
+                setStatus(state.strings.inspectorCopySuccess || 'Copied to clipboard.');
+              } else if (msg.message) {
+                setStatus(msg.message);
+              }
+            }
             break;
         }
       });
