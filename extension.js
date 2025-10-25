@@ -417,6 +417,9 @@ const MSG = {
     inspectorStatusRunning: 'Analyzing...',
     inspectorAnalysisSuccess: 'Analysis complete.',
     inspectorAnalysisFailed: 'Analysis failed: {msg}',
+    inspectorProgressTitle: 'Running Sketch Inspector…',
+    inspectorProgressMessage: 'Sketch: {sketch}',
+    inspectorProgressMessageProfile: 'Sketch: {sketch} (Profile: {profile})',
     inspectorTabSummary: 'Summary',
     inspectorTabDiagnostics: 'Diagnostics',
     inspectorTabSections: 'Sections',
@@ -539,6 +542,9 @@ const MSG = {
     inspectorStatusRunning: '分析中...',
     inspectorAnalysisSuccess: '分析が完了しました。',
     inspectorAnalysisFailed: '分析に失敗しました: {msg}',
+    inspectorProgressTitle: 'スケッチインスペクターを実行中…',
+    inspectorProgressMessage: 'スケッチ: {sketch}',
+    inspectorProgressMessageProfile: 'スケッチ: {sketch} (プロファイル: {profile})',
     inspectorTabSummary: 'サマリー',
     inspectorTabDiagnostics: '診断',
     inspectorTabSections: 'セクション',
@@ -7087,7 +7093,30 @@ async function commandOpenInspector(ctx) {
           state.running = true;
           panel.webview.postMessage({ type: 'analysisStatus', status: 'start', requestId });
           try {
-            const result = await runInspectorAnalysis({ sketchDir, profile, inoPath });
+            const progressTitle = t('inspectorProgressTitle');
+            const sketchLabel = workspaceRelativePath(sketchDir) || sketchDir;
+            const progressMessage = profile
+              ? t('inspectorProgressMessageProfile', { sketch: sketchLabel, profile })
+              : t('inspectorProgressMessage', { sketch: sketchLabel });
+            const outcome = await runWithNotificationProgress({
+              location: vscode.ProgressLocation.Notification,
+              title: progressTitle
+            }, async (progress) => {
+              if (progressMessage) {
+                progress.report({ message: progressMessage });
+              }
+              return await runInspectorAnalysis({ sketchDir, profile, inoPath });
+            });
+            if (outcome === PROGRESS_BUSY) {
+              panel.webview.postMessage({
+                type: 'analysisResult',
+                requestId,
+                success: false,
+                message: t('progressBusyWarn')
+              });
+              return;
+            }
+            const result = outcome || {};
             state.lastFiles = result.filesMeta || {};
             panel.webview.postMessage({ type: 'analysisResult', requestId, ...result.payload });
           } catch (err) {

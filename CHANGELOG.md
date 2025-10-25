@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Inspector now replays the compiler with `-dM -E` to list active preprocessor defines, surfaces the results in a new Defines tab, and includes a copy button so you can grab the raw output instantly.
 - (JA) インスペクターでコンパイラを `-dM -E` 付きで再実行し、有効なプリプロセッサー定義を新設の Defines タブに表示、ワンクリックでコピーできるボタンも追加しました。
+- (EN) Inspector runs now show a progress notification in the status corner so you can track analysis just like compile and upload commands.
+- (JA) インスペクター実行時に分析中であることを示す進行通知を右下へ追加し、コンパイルや書き込みと同様に状態を把握できるようにしました。
 
 ## 1.6.1
 - (EN) Limited the Sketch.yaml helper board and library pickers to the first 50 matches so the webview stays responsive while filtering large catalogs, and ensured board rows select on the first click even with the truncated list.
