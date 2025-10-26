@@ -8774,6 +8774,28 @@ function isWorkspaceFile(fsPath) {
 }
 
 
+function flushInspectorCliOutput(channel, stdout, stderr) {
+  if (!channel) return;
+  const trimmedStdout = typeof stdout === 'string' ? stdout.trim() : '';
+  const trimmedStderr = typeof stderr === 'string' ? stderr.trim() : '';
+  if (!trimmedStdout && !trimmedStderr) return;
+  channel.appendLine(`${ANSI.dim}[inspector] --- arduino-cli output ---${ANSI.reset}`);
+  if (trimmedStdout) {
+    channel.appendLine(`${ANSI.dim}[inspector] [stdout]${ANSI.reset}`);
+    channel.append(stdout);
+    if (!stdout.endsWith('\n')) {
+      channel.appendLine('');
+    }
+  }
+  if (trimmedStderr) {
+    channel.appendLine(`${ANSI.dim}[inspector] [stderr]${ANSI.reset}`);
+    channel.append(stderr);
+    if (!stderr.endsWith('\n')) {
+      channel.appendLine('');
+    }
+  }
+}
+
 async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   if (!(await ensureCliReady())) {
     throw new Error(t('cliCheckFail', {}));
@@ -8845,28 +8867,37 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
   channel.appendLine(`${ANSI.dim}[inspector] (cwd: ${sketchDir})${ANSI.reset}`);
   let stdout = '';
   let stderr = '';
+  let outputFlushed = false;
   const code = await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
     child.stdout.on('data', (d) => {
-      const text = d.toString();
-      stdout += text;
-      channel.append(text);
+      stdout += d.toString();
     });
     child.stderr.on('data', (d) => {
-      const text = d.toString();
-      stderr += text;
-      channel.append(text);
+      stderr += d.toString();
     });
     child.on('error', reject);
     child.on('close', resolve);
   });
+  if (code !== 0) {
+    flushInspectorCliOutput(channel, stdout, stderr);
+    outputFlushed = true;
+  }
   const parsed = parseBuildCheckJson(stdout);
   if (!parsed.data) {
+    if (!outputFlushed) {
+      flushInspectorCliOutput(channel, stdout, stderr);
+      outputFlushed = true;
+    }
     const fallback = stderr && stderr.trim() ? stderr.trim() : (stdout && stdout.trim() ? stdout.trim() : '');
     const detail = parsed.error || fallback || `exit ${code}`;
     throw new Error(t('inspectorAnalysisFailed', { msg: detail }));
   }
   const data = parsed.data;
+  if (!data.success && !outputFlushed) {
+    flushInspectorCliOutput(channel, stdout, stderr);
+    outputFlushed = true;
+  }
   const builder = data && typeof data === 'object' ? data.builder_result || {} : {};
   const buildPath = typeof builder.build_path === 'string' ? builder.build_path : '';
   const diagnostics = Array.isArray(builder.diagnostics) ? builder.diagnostics : [];

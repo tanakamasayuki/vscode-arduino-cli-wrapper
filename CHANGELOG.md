@@ -9,6 +9,8 @@
 - (JA) インスペクターでも `.arduino-cli-flags` を読み込み、コンパイルと同様にカスタム `build.extra_flags` を解析ビルドへ反映するようにしました。
 - (EN) Every compile now adds timezone macros (`CLI_BUILD_TZ_*`) with the host’s IANA name, POSIX string, UTC offset, ISO offset, and display abbreviation so sketches can adjust behaviour without extra flags files.
 - (JA) すべてのビルドでホスト環境の IANA 名・POSIX 形式・UTC オフセット・ISO オフセット・表示用略称を含む `CLI_BUILD_TZ_*` マクロを自動付与し、追加フラグなしでタイムゾーン情報を参照できるようにしました。
+- (EN) Inspector now suppresses arduino-cli stdout/stderr on successful runs, only dumping the captured output if compilation or parsing fails so logs stay concise.
+- (JA) インスペクター実行が成功した場合は arduino-cli の標準出力／標準エラーを表示せず、コンパイルや解析が失敗したときだけログを展開して端末出力を簡潔に保つようにしました。
 - (EN) Added a setting ("Arduino CLI Wrapper › Inject Timezone Macros") to disable the automatic `CLI_BUILD_TZ_*` injection when you prefer to supply timezone flags manually.
 - (JA) タイムゾーンフラグを手動管理したい場合に自動付与を止められる設定「Arduino CLI Wrapper › Inject Timezone Macros」を追加しました。
 
