@@ -423,6 +423,7 @@ const MSG = {
     inspectorProgressMessageProfile: 'Sketch: {sketch} (Profile: {profile})',
     inspectorTabSummary: 'Summary',
     inspectorTabDiagnostics: 'Diagnostics',
+    inspectorCleanOptionLabel: 'Clean build (--clean)',
     inspectorTabSections: 'Sections',
     inspectorTabSymbols: 'Top Symbols',
     inspectorTabLibraries: 'Libraries',
@@ -546,6 +547,7 @@ const MSG = {
     inspectorProgressTitle: 'スケッチインスペクターを実行中…',
     inspectorProgressMessage: 'スケッチ: {sketch}',
     inspectorProgressMessageProfile: 'スケッチ: {sketch} (プロファイル: {profile})',
+    inspectorCleanOptionLabel: 'クリーンビルド (--clean)',
     inspectorTabSummary: 'サマリー',
     inspectorTabDiagnostics: '診断',
     inspectorTabSections: 'セクション',
@@ -7487,7 +7489,8 @@ async function commandOpenInspector(ctx) {
   const initialContext = {
     sketchDir: requestedSketchDir,
     profile: requestedProfile,
-    autoRun: !!(requestedSketchDir && requestedProfile)
+    autoRun: !!(requestedSketchDir && requestedProfile),
+    clean: false
   };
   const state = {
     running: false,
@@ -7548,6 +7551,7 @@ async function commandOpenInspector(ctx) {
           }
           const profile = typeof msg.profile === 'string' ? msg.profile : '';
           const inoPath = typeof msg.inoPath === 'string' ? msg.inoPath : '';
+          const clean = typeof msg.clean === 'boolean' ? msg.clean : false;
           const requestId = typeof msg.requestId === 'number' ? msg.requestId : Date.now();
           state.running = true;
           panel.webview.postMessage({ type: 'analysisStatus', status: 'start', requestId });
@@ -7564,7 +7568,7 @@ async function commandOpenInspector(ctx) {
               if (progressMessage) {
                 progress.report({ message: progressMessage });
               }
-              return await runInspectorAnalysis({ sketchDir, profile, inoPath });
+              return await runInspectorAnalysis({ sketchDir, profile, inoPath, clean });
             });
             if (outcome === PROGRESS_BUSY) {
               panel.webview.postMessage({
@@ -7685,6 +7689,7 @@ function buildInspectorStrings() {
     'inspectorSelectProfile',
     'inspectorProfileNone',
     'inspectorRunButton',
+    'inspectorCleanOptionLabel',
     'inspectorStatusIdle',
     'inspectorStatusNoSketch',
     'inspectorStatusPreparing',
@@ -8796,14 +8801,18 @@ function flushInspectorCliOutput(channel, stdout, stderr) {
   }
 }
 
-async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
+async function runInspectorAnalysis({ sketchDir, profile, inoPath, clean }) {
   if (!(await ensureCliReady())) {
     throw new Error(t('cliCheckFail', {}));
   }
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra.slice() : [];
-  const args = ['compile', '--warnings=all', '--json', '--clean'];
+  const cleanCompile = !!clean;
+  const args = ['compile', '--warnings=all', '--json'];
+  if (cleanCompile) {
+    args.push('--clean');
+  }
   let usedProfile = '';
   let usedFqbn = '';
   if (profile) {
@@ -8926,6 +8935,7 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath }) {
       usedProfile,
       usedFqbn,
       buildPath,
+      clean: cleanCompile,
       warnings,
       errors,
       exitCode: code,

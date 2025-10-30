@@ -53,6 +53,17 @@
       opacity: 0.8;
     }
 
+    .option {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.9rem;
+    }
+
+    .option input[type="checkbox"] {
+      margin: 0;
+    }
+
     .tabs {
       border-top: 1px solid rgba(128, 128, 128, 0.4);
     }
@@ -224,6 +235,10 @@
       <span id="labelProfile">Profile</span>
       <select id="profileSelect"></select>
     </label>
+    <label class="option">
+      <input type="checkbox" id="cleanToggle" />
+      <span id="cleanLabel">Clean build (--clean)</span>
+    </label>
     <button id="analyzeBtn">Analyze</button>
     <span id="status" class="status">Idle</span>
   </div>
@@ -283,6 +298,7 @@
       const titleEl = document.getElementById('title');
       const sketchSelect = document.getElementById('sketchSelect');
       const profileSelect = document.getElementById('profileSelect');
+      const cleanToggle = document.getElementById('cleanToggle');
       const analyzeBtn = document.getElementById('analyzeBtn');
       const statusEl = document.getElementById('status');
       const summaryContent = document.getElementById('summaryContent');
@@ -316,6 +332,7 @@
         if (strings.inspectorSelectProfile) document.getElementById('labelProfile').textContent = strings.inspectorSelectProfile;
         if (strings.inspectorStatusIdle) setStatus(strings.inspectorStatusIdle);
         if (strings.inspectorRunButton) analyzeBtn.textContent = strings.inspectorRunButton;
+        if (strings.inspectorCleanOptionLabel) document.getElementById('cleanLabel').textContent = strings.inspectorCleanOptionLabel;
         const tabLabelMap = {
           summary: strings.inspectorTabSummary,
           diagnostics: strings.inspectorTabDiagnostics,
@@ -368,6 +385,7 @@
           sketchSelect.selectedIndex = 0;
         }
         updateProfileSelect(context && context.profile ? context.profile : '');
+        cleanToggle.checked = !!(context && context.clean);
         maybeAutoRun(context);
       }
 
@@ -402,6 +420,7 @@
         const hasProfileOption = Array.from(profileSelect.options || []).some(opt => opt.value === targetProfile);
         if (!hasProfileOption) return;
         profileSelect.value = targetProfile;
+        cleanToggle.checked = !!context.clean;
         state.autoRunDone = true;
         setTimeout(() => {
           requestAnalysis();
@@ -420,6 +439,7 @@
           type: 'requestAnalysis',
           sketchDir,
           profile: profileSelect.value,
+          clean: !!cleanToggle.checked,
           requestId
         });
       }
@@ -739,6 +759,9 @@
             if (msg.requestId && msg.requestId !== state.analysisRequestId) return;
             if (msg.success) {
               setStatus(msg.message || state.strings.inspectorAnalysisSuccess || 'Done');
+              if (typeof msg.summary?.clean === 'boolean') {
+                cleanToggle.checked = !!msg.summary.clean;
+              }
               renderSummary(msg);
               renderDiagnostics(msg.diagnostics || []);
               renderMap(msg.map || {});

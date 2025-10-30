@@ -77,5 +77,6 @@
   "msg.uploadDataProgressMessageResolve": "Collecting filesystem metadata…",
   "msg.uploadDataProgressMessageBuild": "Building {fsType} image…",
   "msg.uploadDataProgressMessageFlash": "Flashing filesystem image via esptool…",
-  "msg.progressBusyWarn": "Another command is already running. Please wait for it to finish."
+  "msg.progressBusyWarn": "Another command is already running. Please wait for it to finish.",
+  "inspectorCleanOptionLabel": "Clean build (--clean)"
 }

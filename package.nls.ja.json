@@ -77,5 +77,6 @@
   "msg.uploadDataProgressMessageBuild": "{fsType} イメージを生成しています…",
   "msg.uploadDataProgressMessageFlash": "esptool でファイルシステムイメージを書き込み中です…",
   "msg.progressBusyWarn": "別のコマンドが実行中です。完了するまでお待ちください。",
+  "inspectorCleanOptionLabel": "クリーンビルド (--clean)",
   "lang.buildOpt.alias": "Arduino ビルドオプション"
 }

@@ -206,7 +206,7 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 - **Monitor Serial** – シリアルモニタを開き、ポートとボーレートを指定できます（既定は 115200）。ポートが使用中の場合は注意点も表示します。
 - **Configure IntelliSense** – ビルドを走らせずに `.vscode/c_cpp_properties.json` を再生成し、最新のコンパイルフラグをエディタに反映します。
 - **Run Command** – UI にないオプションを試したいときに、任意の引数を `arduino-cli` へ直接渡せます。
-- **Inspector** – ビルド後に生成される map ファイルやセクションサイズを解析し、メモリ使用量を一目で把握できます。
+- **Inspector** – ビルド後に生成される map ファイルやセクションサイズを解析し、メモリ使用量を一目で把握できます。クリーンビルドが必要なときは **Clean build (--clean)** チェックを有効にしてください。既定では OFF なので手早い確認では既存ビルドを再利用します。
 - **ステータスバーのトグル** – 警告レベル（`none` / `workspace` / `default` / `more` / `all`）と `--verbose` の ON/OFF をワンクリックで切替できます。バッジ表記（例: `all+V`）ですぐに状態が分かります。
 - **Include Order Lint** – `.ino` の中で M5GFX 系ヘッダーより前に FS 系ヘッダーを書いた場合に警告を表示し、実行時のトラブルを未然に防ぎます。
 

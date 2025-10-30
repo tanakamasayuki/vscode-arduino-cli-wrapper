@@ -202,7 +202,7 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 - **Monitor Serial** – Opens a serial terminal with selectable port and baudrate (default 115200). Helpful tips appear if the port is busy.
 - **Configure IntelliSense** – Regenerates `.vscode/c_cpp_properties.json` using the latest compiler flags without running a build.
 - **Run Command** – Lets you pass custom arguments straight to `arduino-cli` when you need an advanced flag that the UI does not expose.
-- **Inspector** – Examines the generated map file, ELF sections, and other build artifacts so you can understand memory usage at a glance.
+- **Inspector** – Examines the generated map file, ELF sections, and other build artifacts so you can understand memory usage at a glance. Use the **Clean build (--clean)** toggle when you need a fresh compile; it defaults to off so quick inspections reuse the existing build.
 - **Status controls in the status bar** – Toggle warning levels (`none`, `workspace`, `default`, `more`, `all`) and the `--verbose` switch. The badge (for example `all+V`) updates instantly.
 - **Include Order Lint** – Watches `.ino` files and warns if filesystem headers appear before M5GFX headers, catching a common runtime pitfall.
 

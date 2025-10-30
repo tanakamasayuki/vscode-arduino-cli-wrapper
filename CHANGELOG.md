@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Inspector adds a **Clean build (--clean)** toggle so you can opt into `--clean` compiles when needed; the default stays off and tree view shortcuts continue to run without `--clean`.
+- (JA) インスペクターに **Clean build (--clean)** チェックを追加し、必要なときだけ `--clean` 付きで再コンパイルできるようにしました。既定は OFF で、ツリーからのショートカットも従来どおり `--clean` なしで実行されます。
 
 ## 1.6.2
 - (EN) Inspector now replays the compiler with `-dM -E` to list active preprocessor defines, surfaces the results in a new Defines tab, and includes a copy button so you can grab the raw output instantly.
