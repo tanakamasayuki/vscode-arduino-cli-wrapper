@@ -9,6 +9,8 @@
 - (JA) ステータスバーのプロファイル表示を `スケッチ名/プロファイル名` 形式に変更し、どのスケッチに紐づくか一目で分かるようにしました。
 - (EN) Removed automatic profile switching from the status bar; it now shows the last profile you picked, displays `Profile: Not set` while profile-capable sketches exist but nothing is selected, and no longer changes when you simply focus a different file.
 - (JA) ステータスバーが編集中のファイルに合わせて勝手に切り替わらず、プロファイル対応スケッチがある場合は `Profile: 未選択` を表示して選択を促し、最後に明示的に選んだプロファイルだけを保持するようにしました。
+- (EN) Saving `sketch.yaml` now refreshes the Arduino CLI view automatically so newly added profiles appear instantly.
+- (JA) `sketch.yaml` を保存すると Arduino CLI ビューが自動更新され、新しく追加したプロファイルがすぐに反映されるようにしました。
 
 ## 1.6.2
 - (EN) Inspector now replays the compiler with `-dM -E` to list active preprocessor defines, surfaces the results in a new Defines tab, and includes a copy button so you can grab the raw output instantly.

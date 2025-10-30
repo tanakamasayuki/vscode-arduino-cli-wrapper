@@ -5394,6 +5394,14 @@ function activate(context) {
 
   vscode.window.onDidChangeActiveTextEditor(updateStatusBar, null, context.subscriptions);
   vscode.workspace.onDidChangeWorkspaceFolders(updateStatusBar, null, context.subscriptions);
+  vscode.workspace.onDidSaveTextDocument(async (doc) => {
+    try {
+      const basename = path.basename(doc.fileName || '').toLowerCase();
+      if (basename !== 'sketch.yaml') return;
+      await vscode.commands.executeCommand('arduino-cli.refreshView');
+      await updateStatusBar();
+    } catch { /* ignore refresh failures */ }
+  }, null, context.subscriptions);
   vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration('arduino-cli-wrapper.compileWarnings') || event.affectsConfiguration('arduino-cli-wrapper.verbose')) {
       updateStatusBar();
