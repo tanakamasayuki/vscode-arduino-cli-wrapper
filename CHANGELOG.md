@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.6.4
 - (EN) assets_embed.h now exposes `assets_file_names`, `assets_file_data`, and `assets_file_sizes` arrays alongside individual symbols so virtual file system consumers can iterate assets without bespoke bookkeeping.
 - (JA) assets_embed.h で個別シンボルに加えて `assets_file_names`・`assets_file_data`・`assets_file_sizes` の配列を出力し、仮想ファイルシステムなどが追加処理なしでアセット一覧を走査できるようにしました。
 
