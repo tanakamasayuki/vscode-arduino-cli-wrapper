@@ -6619,7 +6619,14 @@ async function commandSetProfile(required) {
   const sketchDir = path.dirname(ino);
   const yamlInfo = await readSketchYamlInfo(sketchDir);
   if (!yamlInfo || yamlInfo.profiles.length === 0) {
-    vscode.window.showWarningMessage('sketch.yaml に profiles が見つかりません。先に Create sketch.yaml を実行してください。');
+    const message = _isJa
+      ? 'sketch.yaml に profiles が見つかりません。先に Create sketch.yaml を実行してください。'
+      : 'No profiles found in sketch.yaml. Run Create sketch.yaml first.';
+    const helperLabel = _isJa ? 'Sketch.yaml Helper を開く' : 'Open Sketch.yaml Helper';
+    const picked = await vscode.window.showWarningMessage(message, helperLabel);
+    if (picked === helperLabel) {
+      try { await vscode.commands.executeCommand('arduino-cli.sketchYamlHelper', { sketchDir }); } catch { }
+    }
     await clearSelectedProfile();
     return await commandSetFqbn(required);
   }
@@ -7362,7 +7369,7 @@ async function commandOpenSketchYamlHelper(ctx) {
       let merged = mergeProfileIntoSketchYaml(existing, profileName, blockText);
       merged = formatSketchYamlLayout(merged);
       await writeTextFile(yamlUri, merged);
-  await rememberSelectedProfile(sketchDir, profileName);
+      await rememberSelectedProfile(sketchDir, profileName);
       vscode.window.setStatusBarMessage(t('yamlApplied', { name: profileName }), 2000);
       // Optionally reveal the file
       try { await vscode.window.showTextDocument(yamlUri); } catch { }
