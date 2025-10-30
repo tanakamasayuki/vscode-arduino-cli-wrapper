@@ -165,6 +165,8 @@ const STATE_FQBN = 'arduino-cli.selectedFqbn';
 const STATE_PORT = 'arduino-cli.selectedPort';
 const STATE_BAUD = 'arduino-cli.selectedBaud';
 const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
+const STATE_SELECTED_SKETCH = 'arduino-cli.selectedSketchDir';
+const STATE_SELECTED_PROFILE = 'arduino-cli.selectedProfile';
 const PORT_NONE_SENTINEL = '__arduino-cli-port-none__';
 const PICK_NO_PORT = '__arduino-cli-pick-no-port__';
 const VALID_WARNING_LEVELS = new Set(['workspace', 'none', 'default', 'more', 'all']);
@@ -2733,6 +2735,7 @@ async function commandCompile() {
     if (!selectedProfile) return; // user cancelled
     channel.appendLine(`[compile] Using profile from sketch.yaml: ${selectedProfile}`);
     args.push('--profile', selectedProfile);
+    await rememberSelectedProfile(sketchDir, selectedProfile);
   } else {
     resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
     if (!resolvedFqbn) {
@@ -2786,6 +2789,7 @@ async function commandConfigureIntelliSense() {
     selectedProfile = await resolveProfileName(yamlInfo);
     if (!selectedProfile) return;
     args.push('--profile', selectedProfile);
+    await rememberSelectedProfile(sketchDir, selectedProfile);
   } else {
     resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
     if (!resolvedFqbn) {
@@ -2838,6 +2842,7 @@ async function commandUpload() {
     if (!selectedProfile) return;
     channel.appendLine(`[upload] Using profile from sketch.yaml: ${selectedProfile}`);
     compileArgs.push('--profile', selectedProfile);
+    await rememberSelectedProfile(sketchDir, selectedProfile);
   } else {
     resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
     if (!resolvedFqbn) {
@@ -2973,6 +2978,10 @@ async function commandDebug(sketchDir, profileFromTree) {
         if (!resolved) return;
         selectedProfile = resolved;
       }
+    }
+
+    if (selectedProfile) {
+      await rememberSelectedProfile(targetDir, selectedProfile);
     }
 
     let usedFqbn = '';
@@ -3548,6 +3557,7 @@ async function commandUploadData() {
       if (!selectedProfile) return;
       usingProfile = true;
       propsArgs.push('--profile', selectedProfile);
+      await rememberSelectedProfile(sketchDir, selectedProfile);
     } else {
       resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
       if (!resolvedFqbn) {
@@ -5581,6 +5591,9 @@ async function findSketchYamlEntries() {
 // Run helpers for explicit profile
 async function runCompileFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
+  if (sketchDir && profile) {
+    await rememberSelectedProfile(sketchDir, profile);
+  }
   const cfg = getConfig();
   const channel = getOutput();
   const args = ['compile'];
@@ -5621,6 +5634,9 @@ async function runCompileFor(sketchDir, profile) {
 }
 async function runCleanCompileFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
+  if (sketchDir && profile) {
+    await rememberSelectedProfile(sketchDir, profile);
+  }
   const cfg = getConfig();
   const channel = getOutput();
   const args = ['compile', '--clean'];
@@ -5662,6 +5678,9 @@ async function runCleanCompileFor(sketchDir, profile) {
 }
 async function runUploadFor(sketchDir, profile) {
   if (!(await ensureCliReady())) return;
+  if (sketchDir && profile) {
+    await rememberSelectedProfile(sketchDir, profile);
+  }
   const cfg = getConfig();
   const channel = getOutput();
   // Require port
@@ -5745,6 +5764,9 @@ async function runUploadFor(sketchDir, profile) {
 
 // Tree helper: upload data for an explicit sketch/profile
 async function commandUploadDataFor(sketchDir, profile) {
+  if (sketchDir && profile) {
+    await rememberSelectedProfile(sketchDir, profile);
+  }
   // Temporarily set default profile resolution context by writing lastResolved
   let info = await readSketchYamlInfo(sketchDir);
   if (info && profile) info.lastResolved = profile;
@@ -5789,6 +5811,7 @@ async function commandRunWokwi(sketchDir, profile) {
       vscode.window.showWarningMessage(msg);
       return;
     }
+    await rememberSelectedProfile(targetDir, selectedProfile);
     const folderName = sanitizeProfileFolderName(selectedProfile);
     const wokwiDirPath = path.join(targetDir, '.wokwi', folderName);
     const { diagramUri } = await ensureWokwiDefaults(wokwiDirPath, selectedProfile, { sketchDir: targetDir, profileName: selectedProfile });
@@ -6265,6 +6288,7 @@ async function commandCleanCompile() {
     if (!profile) return; // user cancelled
     channel.appendLine(`[clean-compile] Using profile from sketch.yaml: ${profile}`);
     args.push('--profile', profile);
+    await rememberSelectedProfile(sketchDir, profile);
     const opts = { emptyIncludePath: true, profileName: profile };
     args.push(sketchDir);
     try {
@@ -6473,6 +6497,32 @@ function formatWarningsBadge(level, verbose) {
   return verbose ? `${base}+V` : base;
 }
 
+function getSelectedProfileState() {
+  const sketchDir = extContext?.workspaceState.get(STATE_SELECTED_SKETCH, '') || '';
+  const profile = extContext?.workspaceState.get(STATE_SELECTED_PROFILE, '') || '';
+  return { sketchDir, profile };
+}
+
+async function rememberSelectedProfile(sketchDir, profile) {
+  if (!extContext) return;
+  const normalizedSketch = sketchDir ? String(sketchDir) : '';
+  const normalizedProfile = profile ? String(profile) : '';
+  if (!normalizedSketch || !normalizedProfile) {
+    await clearSelectedProfile();
+    return;
+  }
+  await extContext.workspaceState.update(STATE_SELECTED_SKETCH, normalizedSketch);
+  await extContext.workspaceState.update(STATE_SELECTED_PROFILE, normalizedProfile);
+  await updateStatusBar();
+}
+
+async function clearSelectedProfile() {
+  if (!extContext) return;
+  await extContext.workspaceState.update(STATE_SELECTED_SKETCH, '');
+  await extContext.workspaceState.update(STATE_SELECTED_PROFILE, '');
+  await updateStatusBar();
+}
+
 /**
  * Refresh status bar items (FQBN/profile, port, baud, action buttons)
  * based on current workspace and state.
@@ -6490,53 +6540,50 @@ async function updateStatusBar() {
     statusWarnings.hide();
     return;
   }
-  const sketchDir = await detectSketchDirForStatus();
-  if (!sketchDir) {
-    statusBuild.hide();
-    statusUpload.hide();
-    statusMonitor.hide();
-    statusFqbn.hide();
-    statusPort.hide();
-    statusBaud.hide();
-    statusWarnings.hide();
-    return;
-  }
   const cfg = getConfig();
   const warningsLevel = cfg && typeof cfg.warnings === 'string' ? cfg.warnings : 'none';
   const verboseEnabled = !!(cfg && cfg.verbose);
-  let yamlInfo = await readSketchYamlInfo(sketchDir);
+  let { sketchDir: selectedSketchDir, profile: selectedProfile } = getSelectedProfileState();
+  if (selectedSketchDir) {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(selectedSketchDir));
+    } catch {
+      if (extContext) {
+        await extContext.workspaceState.update(STATE_SELECTED_SKETCH, '');
+        await extContext.workspaceState.update(STATE_SELECTED_PROFILE, '');
+      }
+      selectedSketchDir = '';
+      selectedProfile = '';
+    }
+  }
+  let hasSketchYamlProfiles = false;
+  if (!selectedSketchDir) {
+    try {
+      const entries = await findSketchYamlEntries();
+      hasSketchYamlProfiles = Array.isArray(entries) && entries.length > 0;
+    } catch {
+      hasSketchYamlProfiles = false;
+    }
+  }
   const fqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
-  let portInfo = getStoredPortInfo();
-  let portDisplay = portInfo.display;
-  let portCliValue = portInfo.cliPort;
+  const portInfo = getStoredPortInfo();
+  const portDisplay = portInfo.display;
   const baud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
 
-  if (yamlInfo && yamlInfo.profiles.length > 0) {
-    const label = yamlInfo.defaultProfile || yamlInfo.profiles[0];
-    const sketchName = path.basename(sketchDir) || 'sketch';
-    const statusLabel = label ? `${sketchName}/${label}` : sketchName;
-    statusFqbn.text = `$(circuit-board) ${statusLabel}`;
-    statusFqbn.tooltip = _isJa ? '現在のスケッチ/プロファイル（クリックで変更）' : 'Current sketch/profile (click to change)';
+  if (selectedSketchDir) {
+    const sketchName = path.basename(selectedSketchDir) || 'sketch';
+    const profileLabel = selectedProfile
+      ? `${sketchName}/${selectedProfile}`
+      : `${sketchName}/${_isJa ? '未選択' : 'Not set'}`;
+    statusFqbn.text = `$(circuit-board) ${profileLabel}`;
+    statusFqbn.tooltip = selectedProfile
+      ? (_isJa ? '現在のスケッチ/プロファイル（クリックで変更）' : 'Current sketch/profile (click to change)')
+      : (_isJa ? '現在のスケッチ（プロファイル未選択）' : 'Current sketch (profile not set)');
     statusFqbn.command = 'arduino-cli.setProfile';
-    // Apply port/baud from current profile when values differ (robust against FS timing)
-    try {
-      if (label) {
-        await extContext.workspaceState.update(STATE_LAST_PROFILE, label);
-        const curInfo = getStoredPortInfo();
-        const curPort = curInfo.cliPort;
-        const curBaud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
-        const p = await getPortFromSketchYaml(sketchDir, label);
-        if (p && p !== curPort && !isNoPortSelected(curInfo)) {
-          const hostHint = (_isWslEnv && /^com\d+/i.test(p)) ? 'windows' : (_isWslEnv ? 'wsl' : 'local');
-          await extContext.workspaceState.update(STATE_PORT, formatStoredPortValue(p, hostHint));
-          portInfo = getStoredPortInfo();
-          portDisplay = portInfo.display;
-          portCliValue = portInfo.cliPort;
-        }
-        const b = await getPortConfigBaudFromSketchYaml(sketchDir, label);
-        if (b && String(b) !== String(curBaud)) await extContext.workspaceState.update(STATE_BAUD, String(b));
-      }
-    } catch (_) { }
+  } else if (hasSketchYamlProfiles) {
+    statusFqbn.text = _isJa ? '$(circuit-board) プロファイル: 未選択' : '$(circuit-board) Profile: Not set';
+    statusFqbn.tooltip = _isJa ? 'sketch.yaml のプロファイルを選択' : 'Pick a sketch.yaml profile';
+    statusFqbn.command = 'arduino-cli.setProfile';
   } else {
     statusFqbn.text = fqbn ? `$(circuit-board) ${fqbn}` : (_isJa ? '$(circuit-board) FQBN: 未選択' : '$(circuit-board) FQBN: Not set');
     statusFqbn.tooltip = _isJa ? '現在の FQBN（クリックで変更）' : 'Current FQBN (click to change)';
@@ -6573,7 +6620,8 @@ async function commandSetProfile(required) {
   const yamlInfo = await readSketchYamlInfo(sketchDir);
   if (!yamlInfo || yamlInfo.profiles.length === 0) {
     vscode.window.showWarningMessage('sketch.yaml に profiles が見つかりません。先に Create sketch.yaml を実行してください。');
-    return false;
+    await clearSelectedProfile();
+    return await commandSetFqbn(required);
   }
   const pick = await vscode.window.showQuickPick(
     yamlInfo.profiles.map(p => ({ label: p, description: p === yamlInfo.defaultProfile ? 'default' : undefined, value: p })),
@@ -6597,8 +6645,8 @@ async function commandSetProfile(required) {
   } catch (_) { }
   text = formatSketchYamlLayout(text);
   await writeTextFile(yamlUri, text);
+  await rememberSelectedProfile(sketchDir, pick.value);
   vscode.window.setStatusBarMessage(_isJa ? `Profile を設定: ${pick.value}` : `Set profile: ${pick.value}`, 2000);
-  updateStatusBar();
   return true;
 }
 
@@ -6627,7 +6675,7 @@ async function commandSetFqbn(required) {
     fqbn = input.trim();
   }
   await extContext.workspaceState.update(STATE_FQBN, fqbn);
-  updateStatusBar();
+  await clearSelectedProfile();
   vscode.window.setStatusBarMessage(t('statusSetFqbn', { fqbn }), 2000);
   return true;
 }
@@ -7314,10 +7362,10 @@ async function commandOpenSketchYamlHelper(ctx) {
       let merged = mergeProfileIntoSketchYaml(existing, profileName, blockText);
       merged = formatSketchYamlLayout(merged);
       await writeTextFile(yamlUri, merged);
+  await rememberSelectedProfile(sketchDir, profileName);
       vscode.window.setStatusBarMessage(t('yamlApplied', { name: profileName }), 2000);
       // Optionally reveal the file
       try { await vscode.window.showTextDocument(yamlUri); } catch { }
-      updateStatusBar();
       try { await vscode.commands.executeCommand('arduino-cli.refreshView'); } catch { }
       panel.dispose();
     } catch (e) {
@@ -7538,6 +7586,9 @@ async function commandOpenInspector(ctx) {
   );
   const requestedSketchDir = ctx && typeof ctx.sketchDir === 'string' ? ctx.sketchDir : '';
   const requestedProfile = ctx && typeof ctx.profile === 'string' ? ctx.profile : '';
+  if (requestedSketchDir && requestedProfile) {
+    await rememberSelectedProfile(requestedSketchDir, requestedProfile);
+  }
   const initialContext = {
     sketchDir: requestedSketchDir,
     profile: requestedProfile,

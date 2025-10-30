@@ -7,6 +7,8 @@
 - (JA) `arduino-cli update` / `arduino-cli upgrade` の専用コマンドを追加し、セッション中に最初に CLI バージョン確認を行った直後に `arduino-cli update` を自動実行するようにしました。
 - (EN) Status bar profile badge now shows `sketch/profile`, making it easy to see which sketch the active profile belongs to at a glance.
 - (JA) ステータスバーのプロファイル表示を `スケッチ名/プロファイル名` 形式に変更し、どのスケッチに紐づくか一目で分かるようにしました。
+- (EN) Removed automatic profile switching from the status bar; it now shows the last profile you picked, displays `Profile: Not set` while profile-capable sketches exist but nothing is selected, and no longer changes when you simply focus a different file.
+- (JA) ステータスバーが編集中のファイルに合わせて勝手に切り替わらず、プロファイル対応スケッチがある場合は `Profile: 未選択` を表示して選択を促し、最後に明示的に選んだプロファイルだけを保持するようにしました。
 
 ## 1.6.2
 - (EN) Inspector now replays the compiler with `-dM -E` to list active preprocessor defines, surfaces the results in a new Defines tab, and includes a copy button so you can grab the raw output instantly.

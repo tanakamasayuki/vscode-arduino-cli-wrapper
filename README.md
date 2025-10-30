@@ -145,8 +145,7 @@ Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:”
 - `$(cloud-upload) Upload`: uploads the `.ino` in the current workspace folder
 - `$(pulse) Monitor`: opens the serial monitor
 - `$(circuit-board) <FQBN/Profile>`:
-  - If `sketch.yaml` exists, shows the default or first profile and lets you switch via "Arduino CLI: Set Profile".
-  - Otherwise shows FQBN and lets you change via "Arduino CLI: Set FQBN".
+   - Shows the profile you last selected via "Arduino CLI: Set Profile" or the Arduino CLI tree. If no profile is recorded but any `sketch.yaml` exists, it displays `Profile: Not set` and opens the profile picker. When no profile-enabled sketches are found, it falls back to the current FQBN and lets you change it via "Arduino CLI: Set FQBN".
 - `$(plug) <Port>`: shows current serial port (click to change). Pick **External programmer (JTAG/SWD/ISP)** when you flash through a dedicated programmer so uploads skip passing `-p`.
 - `$(watch) <Baud>`: shows current baudrate (click to change)
 - `$(megaphone) <Warnings>`: shows compile warnings/verbose badge (click to pick combinations)
