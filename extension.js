@@ -180,6 +180,7 @@ let monitorTerminal;
 let logTerminal;
 let logTermWriteEmitter;
 let timezoneDefineCache;
+let autoUpdateTriggered = false;
 
 // Simple i18n without external deps.
 // Note: We intentionally avoid bundling any library to keep
@@ -2463,6 +2464,52 @@ async function pickBoardOrFqbn(requirePort) {
   return { fqbn: pick.fqbn, port: pick.port };
 }
 
+async function runArduinoCliUpdate(options = {}) {
+  const auto = !!options.auto;
+  if (!(await ensureCliReady())) return false;
+  try {
+    await runCli(['update']);
+    return true;
+  } catch (err) {
+    if (auto) {
+      const channel = getOutput();
+      const msg = (err && err.message) ? err.message : String(err || 'unknown');
+      channel.appendLine(`[warn] arduino-cli update failed: ${msg}`);
+      return false;
+    }
+    throw err;
+  }
+}
+
+async function commandUpdate() {
+  try {
+    await runArduinoCliUpdate({ auto: false });
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function maybeRunAutoUpdate() {
+  if (autoUpdateTriggered) return;
+  autoUpdateTriggered = true;
+  try {
+    await runArduinoCliUpdate({ auto: true });
+  } catch (err) {
+    const channel = getOutput();
+    const msg = (err && err.message) ? err.message : String(err || 'unknown');
+    channel.appendLine(`[warn] arduino-cli update failed: ${msg}`);
+  }
+}
+
+async function commandUpgrade() {
+  if (!(await ensureCliReady())) return;
+  try {
+    await runCli(['upgrade']);
+  } catch (err) {
+    showError(err);
+  }
+}
+
 async function commandVersion() {
   const channel = getOutput();
   let current = '';
@@ -2471,6 +2518,7 @@ async function commandVersion() {
   if (ensured) {
     try { await runCli(['version']); } catch (_) { /* ignore */ }
     try { current = await getArduinoCliVersionString(); } catch { current = ''; }
+    await maybeRunAutoUpdate();
   } else {
     channel.appendLine('[info] arduino-cli not detected. Showing latest release info…');
   }
@@ -5279,6 +5327,8 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.inspector', () => commandOpenInspector({})),
     vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
+    vscode.commands.registerCommand('arduino-cli.update', commandUpdate),
+    vscode.commands.registerCommand('arduino-cli.upgrade', commandUpgrade),
     vscode.commands.registerCommand('arduino-cli.listBoards', commandListBoards),
     vscode.commands.registerCommand('arduino-cli.listAllBoards', commandListAllBoards),
     vscode.commands.registerCommand('arduino-cli.boardDetails', commandBoardDetails),

@@ -86,6 +86,14 @@
         "title": "%cmd.version%"
       },
       {
+        "command": "arduino-cli.update",
+        "title": "%cmd.update%"
+      },
+      {
+        "command": "arduino-cli.upgrade",
+        "title": "%cmd.upgrade%"
+      },
+      {
         "command": "arduino-cli.listBoards",
         "title": "%cmd.listBoards%"
       },

@@ -128,6 +128,8 @@ In addition, the extension injects the following preprocessor macros by default 
 Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:” to see the commands below. Each one carries a short description in the palette, but the summaries here walk through what to expect on your very first run.
 
 - **Check CLI Version** – Confirms that `arduino-cli` is installed and reachable. If it is missing, the extension shows a friendly setup guide.
+- **Update Index** – Runs `arduino-cli update` to refresh board and library package metadata. This command also runs automatically the first time you check the CLI version during a VS Code session.
+- **Upgrade Cores/Libraries** – Executes `arduino-cli upgrade` so installed platforms and libraries pick up the latest releases from the refreshed index.
 - **List Connected Boards** – Scans USB/serial ports and shows the detected boards so you can double‑check the connection before you upload.
 - **List All Boards** – Displays the complete board index. You can type a search word (for example `nano`) to narrow the list, just like running `arduino-cli board listall <filter>` manually.
 - **Board Details** – Shows the technical info for the currently selected profile/FQBN, making it easy to verify you picked the right board package.

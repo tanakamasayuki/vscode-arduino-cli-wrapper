@@ -3,6 +3,8 @@
   "ext.description": "Run Arduino CLI commands from VS Code",
   "cmd.runArbitrary": "Arduino CLI: Run Command",
   "cmd.version": "Arduino CLI: Check CLI Version",
+  "cmd.update": "Arduino CLI: Update Index",
+  "cmd.upgrade": "Arduino CLI: Upgrade Cores/Libraries",
   "cmd.sketchNew": "Arduino CLI: New Sketch",
   "cmd.listBoards": "Arduino CLI: List Connected Boards",
   "cmd.listAllBoards": "Arduino CLI: List All Boards (listall)",

@@ -132,6 +132,8 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 **Ctrl+Shift+P**（macOS は **Cmd+Shift+P**）でコマンドパレットを開き、「Arduino CLI」と入力すると下記のコマンドが並びます。それぞれのコマンドに何が起きるのかを、初めての方でも分かるようにまとめました。
 
 - **CLI バージョン確認** – `arduino-cli` がインストールされているかチェックします。未設定なら手順付きのガイドが表示されます。
+- **インデックスを更新 (Update Index)** – `arduino-cli update` でボード／ライブラリのインデックスを更新します。このコマンドは VS Code を起動して最初に CLI バージョンを確認したタイミングでも自動実行されます。
+- **コア/ライブラリをアップグレード (Upgrade Cores/Libraries)** – `arduino-cli upgrade` を実行し、更新されたインデックスに基づいてインストール済みのプラットフォームやライブラリを最新化します。
 - **List Connected Boards** – PC に接続されている Arduino ボードを一覧表示し、書き込み前に接続状況を確認できます。
 - **List All Boards** – すべてのボードを検索できます。フィルター欄にキーワードを入力すると `arduino-cli board listall <filter>` と同じ結果が得られます。
 - **Board Details** – 現在選択中のプロファイル/FQBN の詳細情報を表示し、使用しているボード設定を再確認できます。
