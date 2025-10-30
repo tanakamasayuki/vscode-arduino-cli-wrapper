@@ -6511,6 +6511,29 @@ function getSelectedProfileState() {
   return { sketchDir, profile };
 }
 
+async function applyProfileSerialSettings(sketchDir, profile) {
+  if (!extContext || !sketchDir || !profile) return;
+  try {
+    await extContext.workspaceState.update(STATE_LAST_PROFILE, profile);
+    const portRaw = await getPortFromSketchYaml(sketchDir, profile);
+    if (typeof portRaw === 'string') {
+      const trimmed = portRaw.trim();
+      if (trimmed) {
+        if (/^(none|no[-_ ]?serial)$/i.test(trimmed)) {
+          await extContext.workspaceState.update(STATE_PORT, PORT_NONE_SENTINEL);
+        } else {
+          const hostHint = (_isWslEnv && /^com\d+/i.test(trimmed)) ? 'windows' : (_isWslEnv ? 'wsl' : 'local');
+          await extContext.workspaceState.update(STATE_PORT, formatStoredPortValue(trimmed, hostHint));
+        }
+      }
+    }
+    const baudRaw = await getPortConfigBaudFromSketchYaml(sketchDir, profile);
+    if (baudRaw) {
+      await extContext.workspaceState.update(STATE_BAUD, String(baudRaw));
+    }
+  } catch { }
+}
+
 async function rememberSelectedProfile(sketchDir, profile) {
   if (!extContext) return;
   const normalizedSketch = sketchDir ? String(sketchDir) : '';
@@ -6521,6 +6544,7 @@ async function rememberSelectedProfile(sketchDir, profile) {
   }
   await extContext.workspaceState.update(STATE_SELECTED_SKETCH, normalizedSketch);
   await extContext.workspaceState.update(STATE_SELECTED_PROFILE, normalizedProfile);
+  await applyProfileSerialSettings(normalizedSketch, normalizedProfile);
   await updateStatusBar();
 }
 
@@ -6646,18 +6670,6 @@ async function commandSetProfile(required) {
   const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
   let text = await readTextFile(yamlUri);
   text = replaceYamlKey(text, 'default_profile', pick.value);
-  // Immediately reflect port/baud from the selected profile in memory to avoid stale reads
-  try {
-    const profName = pick.value;
-    const portFromText = getPortFromSketchYamlText(text, profName);
-    if (portFromText && !isNoPortSelected(getStoredPortInfo())) {
-      const hostHint = (_isWslEnv && /^com\d+/i.test(portFromText)) ? 'windows' : (_isWslEnv ? 'wsl' : 'local');
-      await extContext.workspaceState.update(STATE_PORT, formatStoredPortValue(portFromText, hostHint));
-    }
-    const baudFromText = getPortConfigBaudFromSketchYamlText(text, profName);
-    if (baudFromText) await extContext.workspaceState.update(STATE_BAUD, String(baudFromText));
-    await extContext.workspaceState.update(STATE_LAST_PROFILE, profName);
-  } catch (_) { }
   text = formatSketchYamlLayout(text);
   await writeTextFile(yamlUri, text);
   await rememberSelectedProfile(sketchDir, pick.value);

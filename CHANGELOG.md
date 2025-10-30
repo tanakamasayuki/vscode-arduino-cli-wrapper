@@ -11,6 +11,8 @@
 - (JA) ステータスバーが編集中のファイルに合わせて勝手に切り替わらず、プロファイル対応スケッチがある場合は `Profile: 未選択` を表示して選択を促し、最後に明示的に選んだプロファイルだけを保持するようにしました。
 - (EN) Saving `sketch.yaml` now refreshes the Arduino CLI view automatically so newly added profiles appear instantly.
 - (JA) `sketch.yaml` を保存すると Arduino CLI ビューが自動更新され、新しく追加したプロファイルがすぐに反映されるようにしました。
+- (EN) Selecting a profile from the status bar or Explorer now also applies its `port` and `port_config.baudrate`, keeping serial settings in sync.
+- (JA) ステータスバーやエクスプローラーでプロファイルを切り替えると、`port` と `port_config.baudrate` も同時に反映されるようになり、シリアル設定が自動で同期されます。
 
 ## 1.6.2
 - (EN) Inspector now replays the compiler with `-dM -E` to list active preprocessor defines, surfaces the results in a new Defines tab, and includes a copy button so you can grab the raw output instantly.
