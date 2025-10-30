@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.6.3
 - (EN) Inspector adds a **Clean build (--clean)** toggle so you can opt into `--clean` compiles when needed; the default stays off and tree view shortcuts continue to run without `--clean`.
 - (JA) インスペクターに **Clean build (--clean)** チェックを追加し、必要なときだけ `--clean` 付きで再コンパイルできるようにしました。既定は OFF で、ツリーからのショートカットも従来どおり `--clean` なしで実行されます。
 - (EN) Added dedicated commands for `arduino-cli update` and `arduino-cli upgrade`; the extension now runs `arduino-cli update` automatically right after the first CLI version check in each session.
