@@ -5,6 +5,8 @@
 - (JA) インスペクターに **Clean build (--clean)** チェックを追加し、必要なときだけ `--clean` 付きで再コンパイルできるようにしました。既定は OFF で、ツリーからのショートカットも従来どおり `--clean` なしで実行されます。
 - (EN) Added dedicated commands for `arduino-cli update` and `arduino-cli upgrade`; the extension now runs `arduino-cli update` automatically right after the first CLI version check in each session.
 - (JA) `arduino-cli update` / `arduino-cli upgrade` の専用コマンドを追加し、セッション中に最初に CLI バージョン確認を行った直後に `arduino-cli update` を自動実行するようにしました。
+- (EN) Status bar profile badge now shows `sketch/profile`, making it easy to see which sketch the active profile belongs to at a glance.
+- (JA) ステータスバーのプロファイル表示を `スケッチ名/プロファイル名` 形式に変更し、どのスケッチに紐づくか一目で分かるようにしました。
 
 ## 1.6.2
 - (EN) Inspector now replays the compiler with `-dM -E` to list active preprocessor defines, surfaces the results in a new Defines tab, and includes a copy button so you can grab the raw output instantly.

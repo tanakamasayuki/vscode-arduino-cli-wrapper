@@ -6513,8 +6513,10 @@ async function updateStatusBar() {
 
   if (yamlInfo && yamlInfo.profiles.length > 0) {
     const label = yamlInfo.defaultProfile || yamlInfo.profiles[0];
-    statusFqbn.text = `$(circuit-board) ${label}`;
-    statusFqbn.tooltip = _isJa ? '現在のプロファイル（クリックで変更）' : 'Current profile (click to change)';
+    const sketchName = path.basename(sketchDir) || 'sketch';
+    const statusLabel = label ? `${sketchName}/${label}` : sketchName;
+    statusFqbn.text = `$(circuit-board) ${statusLabel}`;
+    statusFqbn.tooltip = _isJa ? '現在のスケッチ/プロファイル（クリックで変更）' : 'Current sketch/profile (click to change)';
     statusFqbn.command = 'arduino-cli.setProfile';
     // Apply port/baud from current profile when values differ (robust against FS timing)
     try {
