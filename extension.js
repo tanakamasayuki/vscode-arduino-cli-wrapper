@@ -10177,6 +10177,9 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
   const sortedEntries = Array.isArray(entries)
     ? entries.slice().sort((a, b) => String(a.relative || '').localeCompare(String(b.relative || ''), undefined, { sensitivity: 'base' }))
     : [];
+  const fileNames = [];
+  const dataSymbols = [];
+  const sizeSymbols = [];
   lines.push('// Index:');
   for (const entry of sortedEntries) {
     const symbol = makeAssetSymbolName(entry.relative);
@@ -10194,6 +10197,10 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
   for (const entry of sortedEntries) {
     const data = await vscode.workspace.fs.readFile(entry.uri);
     const symbol = makeAssetSymbolName(entry.relative);
+    const prettyPath = '/' + String(entry.relative || '').replace(/^[\/]+/, '').replace(/\\/g, '/');
+    fileNames.push(`"${prettyPath}"`);
+    dataSymbols.push(symbol);
+    sizeSymbols.push(`${symbol}_len`);
     lines.push(`// assets/${entry.relative}`);
     lines.push(`alignas(4) const uint8_t ${symbol}[] PROGMEM = {`);
     const body = formatAssetBytes(data);
@@ -10202,6 +10209,26 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
     lines.push(`const size_t ${symbol}_len = ${data.length};`);
     lines.push('');
   }
+  lines.push(`constexpr size_t assets_file_count = ${sortedEntries.length};`);
+  lines.push(`const char* const assets_file_names[assets_file_count] = {`);
+  for (let i = 0; i < fileNames.length; i++) {
+    const suffix = (i + 1) < fileNames.length ? ',' : '';
+    lines.push(`  ${fileNames[i]}${suffix}`);
+  }
+  lines.push('};');
+  lines.push(`const uint8_t* const assets_file_data[assets_file_count] = {`);
+  for (let i = 0; i < dataSymbols.length; i++) {
+    const suffix = (i + 1) < dataSymbols.length ? ',' : '';
+    lines.push(`  ${dataSymbols[i]}${suffix}`);
+  }
+  lines.push('};');
+  lines.push(`const size_t assets_file_sizes[assets_file_count] = {`);
+  for (let i = 0; i < sizeSymbols.length; i++) {
+    const suffix = (i + 1) < sizeSymbols.length ? ',' : '';
+    lines.push(`  ${sizeSymbols[i]}${suffix}`);
+  }
+  lines.push('};');
+  lines.push('');
   return lines.join('\n');
 }
 

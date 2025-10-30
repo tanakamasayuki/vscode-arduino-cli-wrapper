@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) assets_embed.h now exposes `assets_file_names`, `assets_file_data`, and `assets_file_sizes` arrays alongside individual symbols so virtual file system consumers can iterate assets without bespoke bookkeeping.
+- (JA) assets_embed.h で個別シンボルに加えて `assets_file_names`・`assets_file_data`・`assets_file_sizes` の配列を出力し、仮想ファイルシステムなどが追加処理なしでアセット一覧を走査できるようにしました。
 
 ## 1.6.3
 - (EN) Inspector adds a **Clean build (--clean)** toggle so you can opt into `--clean` compiles when needed; the default stays off and tree view shortcuts continue to run without `--clean`.
