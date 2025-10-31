@@ -2718,9 +2718,20 @@ async function commandSketchNew() {
  */
 async function commandCompile() {
   if (!(await ensureCliReady())) return;
-  const ino = await pickInoFromWorkspace();
-  if (!ino) return;
-  const sketchDir = path.dirname(ino);
+  // If a sketch/profile is selected via status bar, use it directly to avoid
+  // prompting the user each time. Otherwise fall back to picking an .ino.
+  let sketchDir;
+  try {
+    const sel = getSelectedProfileState();
+    if (sel && sel.sketchDir) {
+      sketchDir = sel.sketchDir;
+    }
+  } catch (_) { /* ignore */ }
+  if (!sketchDir) {
+    const ino = await pickInoFromWorkspace();
+    if (!ino) return;
+    sketchDir = path.dirname(ino);
+  }
   const cfg = getConfig();
   const channel = getOutput();
 
@@ -2731,8 +2742,15 @@ async function commandCompile() {
   let selectedProfile = '';
   let resolvedFqbn = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
-    selectedProfile = await resolveProfileName(yamlInfo);
-    if (!selectedProfile) return; // user cancelled
+    // If user previously selected a profile via status bar and it matches
+    // this sketch, prefer that without prompting.
+    const sel = getSelectedProfileState();
+    if (sel && sel.sketchDir === sketchDir && sel.profile && yamlInfo.profiles.indexOf(sel.profile) >= 0) {
+      selectedProfile = sel.profile;
+    } else {
+      selectedProfile = await resolveProfileName(yamlInfo);
+      if (!selectedProfile) return; // user cancelled
+    }
     channel.appendLine(`[compile] Using profile from sketch.yaml: ${selectedProfile}`);
     args.push('--profile', selectedProfile);
     await rememberSelectedProfile(sketchDir, selectedProfile);
@@ -2815,9 +2833,18 @@ async function commandConfigureIntelliSense() {
  */
 async function commandUpload() {
   if (!(await ensureCliReady())) return;
-  const ino = await pickInoFromWorkspace();
-  if (!ino) return;
-  const sketchDir = path.dirname(ino);
+  // Prefer selected profile/sketch from status bar when available so
+  // status-bar Upload uses the displayed profile without asking again.
+  let sketchDir;
+  try {
+    const sel = getSelectedProfileState();
+    if (sel && sel.sketchDir) sketchDir = sel.sketchDir;
+  } catch (_) { /* ignore */ }
+  if (!sketchDir) {
+    const ino = await pickInoFromWorkspace();
+    if (!ino) return;
+    sketchDir = path.dirname(ino);
+  }
   const cfg = getConfig();
   const channel = getOutput();
 
@@ -2838,8 +2865,14 @@ async function commandUpload() {
   let selectedProfile = '';
   let resolvedFqbn = '';
   if (yamlInfo && yamlInfo.profiles.length > 0) {
-    selectedProfile = await resolveProfileName(yamlInfo);
-    if (!selectedProfile) return;
+    // Prefer status-bar selected profile if it matches this sketch.
+    const sel = getSelectedProfileState();
+    if (sel && sel.sketchDir === sketchDir && sel.profile && yamlInfo.profiles.indexOf(sel.profile) >= 0) {
+      selectedProfile = sel.profile;
+    } else {
+      selectedProfile = await resolveProfileName(yamlInfo);
+      if (!selectedProfile) return;
+    }
     channel.appendLine(`[upload] Using profile from sketch.yaml: ${selectedProfile}`);
     compileArgs.push('--profile', selectedProfile);
     await rememberSelectedProfile(sketchDir, selectedProfile);
@@ -2858,6 +2891,7 @@ async function commandUpload() {
   const uploadArgs = ['upload'];
   if (cfg.verbose) uploadArgs.push('--verbose');
   if (yamlInfo && yamlInfo.profiles.length > 0) {
+    // Use profile already chosen above, or fallback to lastResolved or a prompt.
     const profile = selectedProfile || yamlInfo.lastResolved || await resolveProfileName(yamlInfo);
     if (!profile) return;
     uploadArgs.push('--profile', profile);
