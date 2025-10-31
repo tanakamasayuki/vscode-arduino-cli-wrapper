@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.6.5
 - (EN) Status bar Compile/Upload now respect the selected sketch/profile and will no longer show the project selection prompt when a profile is already chosen in the status bar. Falls back to the picker when no profile/sketch is selected.
 - (JA) ステータスバーからの Compile／Upload 実行時に、ステータスバーで選択されているスケッチ／プロファイルを優先して使用するようにしました。プロファイルが表示されている場合は毎回プロジェクト選択ダイアログが表示されなくなります。未選択の場合は従来どおり選択画面が表示されます。
 
