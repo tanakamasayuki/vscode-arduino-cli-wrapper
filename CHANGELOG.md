@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- (EN) Build Check now shows a notification progress spinner for each profile compile so long-running builds surface activity in the bottom-right notification area. If another progress is already active the build-check run is aborted to avoid overlapping operations.
+- (JA) ビルドチェック実行中に各プロファイルのコンパイルが長時間かかる場合、右下の通知プログレスを表示するようにしました。進行中の別コマンドがある場合は競合を避けるためビルドチェックを中断します。
+
 ## 1.6.5
 - (EN) Status bar Compile/Upload now respect the selected sketch/profile and will no longer show the project selection prompt when a profile is already chosen in the status bar. Falls back to the picker when no profile/sketch is selected.
 - (JA) ステータスバーからの Compile／Upload 実行時に、ステータスバーで選択されているスケッチ／プロファイルを優先して使用するようにしました。プロファイルが表示されている場合は毎回プロジェクト選択ダイアログが表示されなくなります。未選択の場合は従来どおり選択画面が表示されます。

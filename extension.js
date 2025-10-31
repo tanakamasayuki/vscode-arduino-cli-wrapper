@@ -315,6 +315,7 @@ const MSG = {
     cliWindowsUploadFallback: '[cli][win] Upload via arduino-cli.exe failed ({msg}). Falling back to WSL arduino-cli.',
     cliWindowsOnlyOperation: '[cli][win] This command does not support Windows-hosted serial ports from WSL. Use a port recognized inside WSL or run this command from Windows.',
     buildCheckStart: '[build-check] Scanning sketch.yaml files…',
+    buildCheckProgressTitle: 'Build Check: Compiling…',
     buildCheckNoWorkspace: '[build-check] No workspace folder is open. Open a folder in VS Code and re-run Build Check from the Arduino CLI view.',
     buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found. Use the Sketch.yaml Helper to create profiles, then run Build Check again.',
     buildCheckSkipNoProfiles: '[build-check] {sketch} skipped (no profiles defined in sketch.yaml).',
@@ -699,6 +700,7 @@ const MSG = {
     cliWindowsUploadFallback: '[cli][win] arduino-cli.exe でのアップロードに失敗したため WSL 側の arduino-cli へフォールバックします ({msg})。',
     cliWindowsOnlyOperation: '[cli][win] このコマンドは WSL から Windows ホストのシリアルポートへは接続できません。WSL で認識されるポートを利用するか、Windows 側でコマンドを実行してください。',
     buildCheckStart: '[build-check] sketch.yaml を走査しています…',
+    buildCheckProgressTitle: 'ビルドチェック: コンパイル中…',
     buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。VS Code でフォルダーを開き、Arduino CLI ビューからビルドチェックを再実行してください。',
     buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。Sketch.yaml ヘルパーでプロファイルを作成してからビルドチェックを再実行してください。',
     buildCheckSkipNoProfiles: '[build-check] {sketch} をスキップしました (sketch.yaml にプロファイルがありません)。',
@@ -5983,7 +5985,20 @@ async function commandBuildCheck() {
       let detailPushed = false;
       let runResult;
       try {
-        runResult = await runBuildCheckCompile(exe, sketchDir, profile);
+        // Show a notification progress in the bottom-right while the
+        // per-profile compile runs so long-running builds surface activity.
+        runResult = await runWithNotificationProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: t('buildCheckProgressTitle')
+        }, async (progress) => {
+          // Report a descriptive message in the notification.
+          progress.report({ message: t('buildCheckCompileStart', { sketch: sketchLabel, profile }) });
+          return await runBuildCheckCompile(exe, sketchDir, profile);
+        });
+        if (runResult === PROGRESS_BUSY) {
+          // Another progress is active; abort the build check run.
+          return;
+        }
       } catch (err) {
         totals.failed += 1;
         if (err && typeof err.durationMs === 'number') {
