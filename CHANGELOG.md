@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+## 1.7.0
 - (EN) Build Check now shows a notification progress spinner for each profile compile so long-running builds surface activity in the bottom-right notification area. If another progress is already active the build-check run is aborted to avoid overlapping operations.
 - (JA) ビルドチェック実行中に各プロファイルのコンパイルが長時間かかる場合、右下の通知プログレスを表示するようにしました。進行中の別コマンドがある場合は競合を避けるためビルドチェックを中断します。
 - (EN) Refreshed the extension icon to match the latest branding update.
