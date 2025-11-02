@@ -4,6 +4,8 @@
 
 - (EN) Build Check now shows a notification progress spinner for each profile compile so long-running builds surface activity in the bottom-right notification area. If another progress is already active the build-check run is aborted to avoid overlapping operations.
 - (JA) ビルドチェック実行中に各プロファイルのコンパイルが長時間かかる場合、右下の通知プログレスを表示するようにしました。進行中の別コマンドがある場合は競合を避けるためビルドチェックを中断します。
+- (EN) Refreshed the extension icon to match the latest branding update.
+- (JA) 拡張機能アイコンを最新のブランド更新に合わせてリフレッシュしました。
 - (EN) compile_commands.json now updates even when compilation fails by reconstructing entries from includes.cache and build.options.json so IntelliSense stays in sync after error builds.
 - (JA) コンパイルが失敗した場合でも includes.cache と build.options.json からエントリを再構築して compile_commands.json を更新し、エラー発生時のビルド後も IntelliSense を最新状態に保つようにしました。
 
