@@ -223,6 +223,7 @@ const MSG = {
     compileCommandsSourceMissing: 'compile_commands.json not found: {path}',
     compileCommandsParseError: 'Failed to parse compile_commands.json: {msg}',
     compileCommandsInvalidFormat: 'compile_commands.json has unexpected format.',
+    compileCommandsRebuiltFromCache: 'Reconstructed compile_commands.json from includes.cache ({count} entries).',
     sketchYamlCreateStart: '[sketch.yaml] Create start: {dir}',
     sketchYamlExistsOpen: 'sketch.yaml already exists. Open it?',
     open: 'Open',
@@ -520,6 +521,7 @@ const MSG = {
     compileCommandsSourceMissing: '[IntelliSense] build.path に compile_commands.json が見つかりませんでした: {path}',
     compileCommandsParseError: '[IntelliSense] compile_commands.json の解析に失敗しました: {msg}',
     compileCommandsInvalidFormat: '[IntelliSense] compile_commands.json の形式が不正です。',
+    compileCommandsRebuiltFromCache: '[IntelliSense] compile_commands.json を includes.cache から再構築しました (エントリ数: {count})。',
     sketchYamlCreateStart: '[sketch.yaml] 作成開始: {dir}',
     sketchYamlExistsOpen: 'sketch.yaml は既に存在します。開きますか？',
     open: '開く',
@@ -4450,42 +4452,45 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
           await vscode.commands.executeCommand('workbench.actions.view.problems');
         } catch (_) { }
       }
-      if (code !== 0) {
-        const err = new Error(`arduino-cli exited with code ${code}`);
-        err.code = code;
-        err.stdout = stdoutBuffer;
-        err.stderr = stderrBuffer;
-        err.durationMs = durationMs;
-        reject(err);
-        return;
-      }
+
+      let buildPath = localBuildPath;
+      let compileCommandCount = -1;
       try {
         await ensureCompileCommandsSetting(sketchDir);
-        let buildPath = localBuildPath;
         if (!buildPath) {
           buildPath = await detectBuildPathForCompile(exe, baseArgs, originalArgs, sketchDir);
         }
         if (!buildPath) {
           channel.appendLine(t('compileCommandsBuildPathMissing'));
         } else {
-          const count = await updateCompileCommandsFromBuild(sketchDir, buildPath);
-          if (count > 0) {
-            channel.appendLine(t('compileCommandsUpdated', { count }));
-          } else if (count === 0) {
+          compileCommandCount = await updateCompileCommandsFromBuild(sketchDir, buildPath);
+          if (compileCommandCount > 0) {
+            channel.appendLine(t('compileCommandsUpdated', { count: compileCommandCount }));
+          } else if (compileCommandCount === 0) {
             channel.appendLine(t('compileCommandsNoInoEntries'));
-          }
-          if (wokwiEnabled && profileName) {
-            try {
-              await handleWokwiArtifacts(sketchDir, profileName, buildPath);
-            } catch (err) {
-              channel.appendLine(`[warn] ${err.message}`);
-            }
           }
         }
       } catch (err) {
         channel.appendLine(`[warn] ${err.message}`);
       }
-      resolve({ code, stdout: stdoutBuffer, stderr: stderrBuffer, durationMs });
+      if (code === 0) {
+        if (wokwiEnabled && profileName && buildPath) {
+          try {
+            await handleWokwiArtifacts(sketchDir, profileName, buildPath);
+          } catch (err) {
+            channel.appendLine(`[warn] ${err.message}`);
+          }
+        }
+        resolve({ code, stdout: stdoutBuffer, stderr: stderrBuffer, durationMs });
+        return;
+      }
+      const err = new Error(`arduino-cli exited with code ${code}`);
+      err.code = code;
+      err.stdout = stdoutBuffer;
+      err.stderr = stderrBuffer;
+      err.durationMs = durationMs;
+      reject(err);
+      return;
     });
   });
 
@@ -4955,26 +4960,169 @@ async function normalizeCompileCommandEntry(entry) {
   }
 }
 
+const SOURCE_PATH_PATTERN = /\.(?:ino(?:\.cpp)?|c|cc|cpp|cxx|m|mm|s|sx|S)$/i;
+
+function findSourcePathFromArgs(args) {
+  if (!Array.isArray(args)) return '';
+  for (let i = args.length - 1; i >= 0; i -= 1) {
+    let value = args[i];
+    if (typeof value !== 'string') {
+      value = value == null ? '' : String(value);
+    }
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    if (SOURCE_PATH_PATTERN.test(trimmed)) {
+      return trimmed;
+    }
+  }
+  return '';
+}
+
+function normalizeCompileTaskArgs(args, compileInfo) {
+  if (!Array.isArray(args)) return [];
+  const normalized = [];
+  const skipTokens = new Set(['-E', '-CC', '-w']);
+  const objectPathRaw = compileInfo && typeof compileInfo.object_path === 'string'
+    ? compileInfo.object_path.trim()
+    : '';
+  for (let i = 0; i < args.length; i += 1) {
+    let token = args[i];
+    if (typeof token !== 'string') {
+      token = token == null ? '' : String(token);
+    }
+    if (!token) {
+      continue;
+    }
+    if (skipTokens.has(token)) {
+      continue;
+    }
+    if (token === '-o') {
+      let target = objectPathRaw;
+      if (!target) {
+        const next = i + 1 < args.length ? args[i + 1] : '';
+        target = typeof next === 'string' ? next : String(next || '');
+      }
+      if (target && target !== '/dev/null') {
+        normalized.push('-o');
+        normalized.push(target);
+      }
+      if (i + 1 < args.length) {
+        i += 1;
+      }
+      continue;
+    }
+    if (objectPathRaw && token === '/dev/null') {
+      continue;
+    }
+    normalized.push(token);
+  }
+  return normalized;
+}
+
+async function rebuildCompileCommandsFromCache(sketchDir, buildPath) {
+  if (!buildPath) return [];
+  const includesUri = vscode.Uri.file(path.join(buildPath, 'includes.cache'));
+  if (!(await pathExists(includesUri))) return [];
+  let payloadText = '';
+  try {
+    payloadText = await readTextFile(includesUri);
+  } catch (_) {
+    return [];
+  }
+  let payload;
+  try {
+    payload = JSON.parse(payloadText);
+  } catch (_) {
+    return [];
+  }
+  if (!Array.isArray(payload)) return [];
+  let baseDirectory = typeof sketchDir === 'string' && sketchDir ? sketchDir : '';
+  try {
+    const optionsUri = vscode.Uri.file(path.join(buildPath, 'build.options.json'));
+    if (await pathExists(optionsUri)) {
+      const raw = await readTextFile(optionsUri);
+      const json = JSON.parse(raw);
+      if (json && typeof json.sketchLocation === 'string' && json.sketchLocation.trim()) {
+        baseDirectory = json.sketchLocation.trim();
+      }
+    }
+  } catch (_) {
+    // Ignore build.options.json failures and fall back to sketchDir.
+  }
+  const results = [];
+  for (const entry of payload) {
+    if (!entry || typeof entry !== 'object') continue;
+    const task = entry.compile_task;
+    const compileInfo = entry.compile || {};
+    if (!task || typeof task !== 'object') continue;
+    const args = Array.isArray(task.args) ? task.args : [];
+    if (args.length === 0) continue;
+    const sourcePath = typeof compileInfo.source_path === 'string' && compileInfo.source_path.trim()
+      ? compileInfo.source_path.trim()
+      : findSourcePathFromArgs(args);
+    if (!sourcePath) continue;
+    const normalizedArgs = normalizeCompileTaskArgs(args, compileInfo);
+    if (normalizedArgs.length === 0) continue;
+    let resolvedSource = sourcePath;
+    try {
+      resolvedSource = path.normalize(sourcePath);
+    } catch (_) {
+      resolvedSource = sourcePath;
+    }
+    let resolvedDir = baseDirectory;
+    if (!resolvedDir) {
+      try {
+        resolvedDir = path.dirname(resolvedSource);
+      } catch (_) {
+        resolvedDir = sketchDir || '';
+      }
+    }
+    results.push({
+      directory: resolvedDir,
+      arguments: normalizedArgs.map((value) => {
+        if (typeof value === 'string') return value;
+        if (value == null) return '';
+        return String(value);
+      }),
+      file: resolvedSource
+    });
+  }
+  return results;
+}
+
 async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
   try {
     const sourcePath = path.join(buildPath, 'compile_commands.json');
     const sourceUri = vscode.Uri.file(sourcePath);
     const sourceExists = await pathExists(sourceUri);
-    if (!sourceExists) {
-      getOutput().appendLine(t('compileCommandsSourceMissing', { path: sourcePath }));
-      return -1;
-    }
     let parsed;
+    let invalidFormat = false;
+    let usedFallback = false;
     try {
-      const raw = await readTextFile(sourceUri);
-      parsed = JSON.parse(raw);
+      if (sourceExists) {
+        const raw = await readTextFile(sourceUri);
+        parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+          invalidFormat = true;
+        }
+      }
     } catch (err) {
       getOutput().appendLine(t('compileCommandsParseError', { msg: err.message }));
-      return -1;
     }
+
     if (!Array.isArray(parsed)) {
-      getOutput().appendLine(t('compileCommandsInvalidFormat'));
-      return -1;
+      const fallback = await rebuildCompileCommandsFromCache(sketchDir, buildPath);
+      if (Array.isArray(fallback) && fallback.length > 0) {
+        parsed = fallback;
+        usedFallback = true;
+      } else {
+        if (!sourceExists) {
+          getOutput().appendLine(t('compileCommandsSourceMissing', { path: sourcePath }));
+        } else if (invalidFormat) {
+          getOutput().appendLine(t('compileCommandsInvalidFormat'));
+        }
+        return -1;
+      }
     }
     const filtered = [];
     let workspaceInoMapPromise;
@@ -5051,6 +5199,10 @@ async function updateCompileCommandsFromBuild(sketchDir, buildPath) {
     }
     if (filtered.length === 0) {
       return 0;
+    }
+
+    if (usedFallback) {
+      getOutput().appendLine(t('compileCommandsRebuiltFromCache', { count: filtered.length }));
     }
 
     const outputInfo = resolveCompileCommandsOutput(sketchDir);
