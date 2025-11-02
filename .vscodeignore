@@ -8,6 +8,7 @@ node_modules
 **/.DS_Store
 **/Thumbs.db
 images/*.svg
+images/icon_big.png
 *.txt
 *.bat
 .gitignore
