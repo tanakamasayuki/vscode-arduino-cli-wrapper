@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Command Center cards now surface the exact `arduino-cli` invocation, making it easier to understand what will run before triggering a command.
+- (JA) コマンドセンターの各カードに実行される `arduino-cli` コマンドを表示し、実行前に内容を把握できるようにしました。
 
 ## 1.7.2
 - (EN) Build Check and the sketch.yaml Version Check now trigger `arduino-cli update` right before they run so both commands always work with the latest core and library indexes.

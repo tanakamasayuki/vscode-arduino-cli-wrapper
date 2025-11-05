@@ -157,6 +157,32 @@
       gap: 6px;
     }
 
+    .command-cli {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: #9cdcfe;
+    }
+
+    .command-cli-label {
+      font-weight: 600;
+      color: #9cdcfe;
+    }
+
+    .command-cli-text {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      background: #1b1b1b;
+      border: 1px solid #2d2d2d;
+      border-radius: 4px;
+      padding: 6px 8px;
+      color: #c5e4ff;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     .command-actions {
       display: flex;
       align-items: center;
@@ -546,6 +572,7 @@
         run: '実行',
         running: '実行中…',
         commandId: 'コマンド ID',
+        commandCliLabel: '実行コマンド',
         requiresProfile: 'プロファイルが必要です',
         noCommands: '一致するコマンドはありません。',
         activeProfile: (label) => label ? `選択中: ${label}` : '',
@@ -625,6 +652,7 @@
         run: 'Run',
         running: 'Running…',
         commandId: 'Command ID',
+        commandCliLabel: 'CLI Command',
         requiresProfile: 'Profile required',
         noCommands: 'No commands match the filter.',
         activeProfile: (label) => label ? `Profile: ${label}` : '',
@@ -899,7 +927,8 @@
       commandList.innerHTML = '';
       let visibleCount = 0;
       state.commands.forEach((cmd) => {
-        const haystack = `${cmd.title} ${cmd.description} ${cmd.command}`.toLowerCase();
+        const cliText = typeof cmd.cli === 'string' ? cmd.cli : '';
+        const haystack = `${cmd.title} ${cmd.description} ${cmd.command} ${cliText}`.toLowerCase();
         if (filter && !haystack.includes(filter)) return;
         visibleCount += 1;
         const card = document.createElement('div');
@@ -921,6 +950,20 @@
         desc.className = 'command-desc';
         desc.textContent = cmd.description;
         info.appendChild(desc);
+
+        if (cliText) {
+          const cliWrap = document.createElement('div');
+          cliWrap.className = 'command-cli';
+          const cliLabel = document.createElement('div');
+          cliLabel.className = 'command-cli-label';
+          cliLabel.textContent = text('commandCliLabel');
+          cliWrap.appendChild(cliLabel);
+          const cliValue = document.createElement('pre');
+          cliValue.className = 'command-cli-text';
+          cliValue.textContent = cliText;
+          cliWrap.appendChild(cliValue);
+          info.appendChild(cliWrap);
+        }
 
         const requiresProfile = !!cmd.requiresProfile;
         const hasProfile = !!state.hasProfile;
@@ -1417,7 +1460,14 @@
       switch (message.type) {
         case 'init':
           if (message.locale) setLocale(message.locale);
-          if (Array.isArray(message.commands)) state.commands = message.commands;
+          if (Array.isArray(message.commands)) {
+            state.commands = message.commands.map((cmd) => ({
+              ...cmd,
+              cli: typeof cmd.cli === 'string' ? cmd.cli : '',
+            }));
+          } else {
+            state.commands = [];
+          }
           state.hasProfile = !!message.hasProfile;
           state.profileLabel = message.profileLabel || '';
           state.configDump = message.configDump || '';
