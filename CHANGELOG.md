@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.7.1
 - (EN) Automatically re-run `arduino-cli update` before major commands when 24 hours have elapsed since the previous run, keeping cached package data fresh across sessions.
 - (JA) 主要コマンドの実行前に前回から24時間経過していれば `arduino-cli update` を自動再実行し、セッションをまたいでもパッケージ情報を最新に保つようにしました。
 
