@@ -22,7 +22,9 @@ Arduino CLI を VS Code から「コマンドパレット」「ステータス�
 - `PATH` に通すか、設定 `arduino-cli-wrapper.path` に実行ファイルのフルパスを指定。
 - 「Arduino CLI: Check CLI Version」で認識確認（未設定ならガイドを表示）。
   - Windows: インストーラー https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi または `winget install ArduinoSA.CLI`
-  - Linux / macOS: https://arduino.github.io/arduino-cli/latest/installation/
+  - Linux: `curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=~/.local/bin sh`
+  - macOS: `brew update && brew install arduino-cli`
+    - その他のインストール方法は公式ドキュメント https://arduino.github.io/arduino-cli/latest/installation/ を参照してください。
 
   ### 推奨 VS Code 拡張機能
 
@@ -321,5 +323,4 @@ clangd などの設定で `<ワークスペース>/.vscode/compile_commands.json
 ## ライセンス
 
 CC0 1.0 Universal (Public Domain Dedication)。詳細は `LICENSE` を参照してください。
-
 

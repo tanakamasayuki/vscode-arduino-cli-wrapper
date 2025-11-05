@@ -22,7 +22,9 @@ The goal is to make Arduino CLI approachable for beginners while unlocking the a
 - Put it in `PATH` or set a full path in the setting `arduino-cli-wrapper.path`.
 - Confirm with "Arduino CLI: Check CLI Version" (a guide appears if not configured).
   - Windows: installer https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.msi or `winget install ArduinoSA.CLI`
-  - Linux / macOS: follow https://arduino.github.io/arduino-cli/latest/installation/
+  - Linux: `curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=~/.local/bin sh`
+  - macOS: `brew update && brew install arduino-cli`
+    - See the official installation guide for additional options: https://arduino.github.io/arduino-cli/latest/installation/
 
 ### Recommended VS Code extensions
 
