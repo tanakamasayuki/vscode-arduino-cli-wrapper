@@ -181,7 +181,8 @@
       margin: 0;
     }
 
-    .core-note {
+    .core-note,
+    .library-note {
       font-size: 12px;
       color: #ccc;
       background: #1f1f1f;
@@ -191,16 +192,19 @@
       line-height: 1.5;
     }
 
-    .core-note strong {
+    .core-note strong,
+    .library-note strong {
       color: #fff;
     }
 
-    .core-toolbar {
+    .core-toolbar,
+    .library-toolbar {
       gap: 12px;
       flex-wrap: wrap;
     }
 
-    .core-toolbar input[type="text"] {
+    .core-toolbar input[type="text"],
+    .library-toolbar input[type="text"] {
       flex: 1;
       min-width: 220px;
     }
@@ -212,7 +216,8 @@
       flex-wrap: wrap;
     }
 
-    .core-table select {
+    .core-table select,
+    .library-table select {
       padding: 5px 8px;
       background: #2d2d2d;
       color: #d4d4d4;
@@ -220,36 +225,79 @@
       border-radius: 4px;
     }
 
-    .core-name {
+    .core-name,
+    .library-name {
       font-weight: 600;
     }
 
-    .core-meta {
+    .core-meta,
+    .library-meta {
       color: #999;
       font-size: 11px;
       margin-top: 2px;
     }
 
-    .core-status-cell {
+    .core-status-cell,
+    .library-status-cell {
       font-size: 12px;
       color: #ddd;
     }
 
-    .core-action-buttons {
+    .core-action-buttons,
+    .library-action-buttons {
       display: flex;
       gap: 8px;
       align-items: center;
       flex-wrap: wrap;
     }
 
-    .core-empty {
+    .core-empty,
+    .library-empty {
       font-size: 13px;
       color: #808080;
       text-align: center;
       margin-top: 16px;
     }
 
-    .core-tag {
+    .library-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      table-layout: fixed;
+    }
+
+    .library-table th:nth-child(1) {
+      width: 32%;
+    }
+
+    .library-table th:nth-child(2),
+    .library-table th:nth-child(3) {
+      width: 14%;
+    }
+
+    .library-table th:nth-child(4) {
+      width: 18%;
+    }
+
+    .library-table th:nth-child(5) {
+      width: 22%;
+    }
+
+    .library-table th,
+    .library-table td {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: top;
+    }
+
+    .library-name,
+    .library-meta {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .core-tag,
+    .library-tag {
       display: inline-block;
       padding: 2px 6px;
       border-radius: 4px;
@@ -259,16 +307,19 @@
       margin-left: 6px;
     }
 
-    .core-row.pending {
+    .core-row.pending,
+    .library-row.pending {
       opacity: 0.6;
     }
 
-    .core-installed {
+    .core-installed,
+    .library-installed {
       color: #4ec9b0;
       font-weight: 600;
     }
 
-    .core-not-installed {
+    .core-not-installed,
+    .library-not-installed {
       color: #bbb;
     }
 
@@ -362,6 +413,7 @@
     <button id="tabCommands" class="active" data-tab="commands"></button>
     <button id="tabConfig" data-tab="config"></button>
     <button id="tabCores" data-tab="cores"></button>
+    <button id="tabLibraries" data-tab="libraries"></button>
     <span id="status" class="status"></span>
   </header>
   <main>
@@ -423,6 +475,36 @@
       </table>
       <div id="coreEmpty" class="core-empty hidden"></div>
     </section>
+    <section id="panelLibraries" class="tab-panel">
+      <div class="library-note" id="libraryNotice"></div>
+      <div class="toolbar library-toolbar">
+        <input id="libraryFilter" type="text" />
+        <div class="checkbox-group">
+          <label class="checkbox">
+            <input type="checkbox" id="libraryShowInstalled" />
+            <span id="libraryShowInstalledLabel"></span>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="libraryShowUpdatable" />
+            <span id="libraryShowUpdatableLabel"></span>
+          </label>
+        </div>
+        <button id="libraryRefresh" class="primary"></button>
+      </div>
+      <table class="library-table">
+        <thead>
+          <tr>
+            <th id="libraryHeaderName"></th>
+            <th id="libraryHeaderLatest"></th>
+            <th id="libraryHeaderInstalled"></th>
+            <th id="libraryHeaderVersion"></th>
+            <th id="libraryHeaderActions"></th>
+          </tr>
+        </thead>
+        <tbody id="libraryTable"></tbody>
+      </table>
+      <div id="libraryEmpty" class="library-empty hidden"></div>
+    </section>
   </main>
   <script>
     const vscode = acquireVsCodeApi();
@@ -445,13 +527,21 @@
       coreBusy: false,
       coreSelections: {},
       corePendingAction: null,
+      libraries: [],
+      libraryFilter: '',
+      libraryShowInstalled: false,
+      libraryShowUpdatable: false,
+      libraryBusy: false,
+      librarySelections: {},
+      libraryPendingAction: null,
     };
 
     const STR = {
       ja: {
         tabCommands: 'コマンド',
-        tabCores: 'コア',
         tabConfig: '設定',
+        tabCores: 'コア',
+        tabLibraries: 'ライブラリ',
         filterPlaceholder: 'コマンドを検索',
         run: '実行',
         running: '実行中…',
@@ -501,11 +591,36 @@
         coreLatestTag: '最新',
         coreOptionInstalled: ' (インストール済み)',
         coreOptionLatest: ' (最新)',
+        libraryNotice: 'この一覧では sketch.yaml でバージョンを固定していない場合に使用される Arduino ライブラリの既定バージョンを管理します。推奨は各プロジェクトでバージョンを指定することであり、ここでインストールしたライブラリは Arduino IDE でも利用できます。',
+        libraryFilterPlaceholder: 'ライブラリ名／作者／説明で絞り込み',
+        libraryShowInstalled: 'インストール済みのみ',
+        libraryShowUpdatable: 'アップデート可能のみ',
+        libraryHeaderName: 'ライブラリ',
+        libraryHeaderLatest: '最新バージョン',
+        libraryHeaderInstalled: 'インストール済み',
+        libraryHeaderVersion: '選択バージョン',
+        libraryHeaderActions: '操作',
+        libraryRefresh: '一覧を更新',
+        libraryInstall: 'インストール',
+        libraryInstallSelected: '選択をインストール',
+        libraryReinstall: '再インストール',
+        libraryUpdate: '最新に更新',
+        libraryUninstall: 'アンインストール',
+        libraryLoading: 'ライブラリ情報を取得しています…',
+        libraryNoData: 'ライブラリ情報が未取得です。更新ボタンで取得してください。',
+        libraryNoMatch: 'フィルター条件に一致するライブラリがありません。',
+        libraryInstalledLabel: 'バージョン {version}',
+        libraryNotInstalledLabel: '未インストール',
+        libraryUpdateTag: '更新可能',
+        libraryLatestTag: '最新',
+        libraryOptionInstalled: ' (インストール済み)',
+        libraryOptionLatest: ' (最新)',
       },
       en: {
         tabCommands: 'Commands',
-        tabCores: 'Cores',
         tabConfig: 'Settings',
+        tabCores: 'Cores',
+        tabLibraries: 'Libraries',
         filterPlaceholder: 'Search commands',
         run: 'Run',
         running: 'Running…',
@@ -555,18 +670,44 @@
         coreLatestTag: 'Latest',
         coreOptionInstalled: ' (installed)',
         coreOptionLatest: ' (latest)',
+        libraryNotice: 'Manage default Arduino libraries used when sketch.yaml does not pin an explicit release. Projects should prefer pinning versions inside sketch.yaml; any library installed here is also available to the Arduino IDE.',
+        libraryFilterPlaceholder: 'Filter libraries (name/author/description)',
+        libraryShowInstalled: 'Installed only',
+        libraryShowUpdatable: 'Update available',
+        libraryHeaderName: 'Library',
+        libraryHeaderLatest: 'Latest',
+        libraryHeaderInstalled: 'Installed',
+        libraryHeaderVersion: 'Selected version',
+        libraryHeaderActions: 'Actions',
+        libraryRefresh: 'Refresh List',
+        libraryInstall: 'Install',
+        libraryInstallSelected: 'Install Selected',
+        libraryReinstall: 'Reinstall',
+        libraryUpdate: 'Update to Latest',
+        libraryUninstall: 'Uninstall',
+        libraryLoading: 'Loading libraries…',
+        libraryNoData: 'Library data has not been loaded yet. Use Refresh to retrieve it.',
+        libraryNoMatch: 'No libraries match the current filters.',
+        libraryInstalledLabel: 'Version {version}',
+        libraryNotInstalledLabel: 'Not installed',
+        libraryUpdateTag: 'Update available',
+        libraryLatestTag: 'Latest',
+        libraryOptionInstalled: ' (installed)',
+        libraryOptionLatest: ' (latest)',
       }
     };
 
     const tabButtons = {
       commands: document.getElementById('tabCommands'),
-      cores: document.getElementById('tabCores'),
       config: document.getElementById('tabConfig'),
+      cores: document.getElementById('tabCores'),
+      libraries: document.getElementById('tabLibraries'),
     };
     const panels = {
       commands: document.getElementById('panelCommands'),
-      cores: document.getElementById('panelCores'),
       config: document.getElementById('panelConfig'),
+      cores: document.getElementById('panelCores'),
+      libraries: document.getElementById('panelLibraries'),
     };
     const statusEl = document.getElementById('status');
     const filterInput = document.getElementById('filterInput');
@@ -587,6 +728,20 @@
     const coreHeaderActions = document.getElementById('coreHeaderActions');
     const coreTable = document.getElementById('coreTable');
     const coreEmpty = document.getElementById('coreEmpty');
+    const libraryNotice = document.getElementById('libraryNotice');
+    const libraryFilterInput = document.getElementById('libraryFilter');
+    const libraryShowInstalledToggle = document.getElementById('libraryShowInstalled');
+    const libraryShowInstalledLabel = document.getElementById('libraryShowInstalledLabel');
+    const libraryShowUpdatableToggle = document.getElementById('libraryShowUpdatable');
+    const libraryShowUpdatableLabel = document.getElementById('libraryShowUpdatableLabel');
+    const libraryRefreshBtn = document.getElementById('libraryRefresh');
+    const libraryHeaderName = document.getElementById('libraryHeaderName');
+    const libraryHeaderLatest = document.getElementById('libraryHeaderLatest');
+    const libraryHeaderInstalled = document.getElementById('libraryHeaderInstalled');
+    const libraryHeaderVersion = document.getElementById('libraryHeaderVersion');
+    const libraryHeaderActions = document.getElementById('libraryHeaderActions');
+    const libraryTable = document.getElementById('libraryTable');
+    const libraryEmpty = document.getElementById('libraryEmpty');
     const configDump = document.getElementById('configDump');
     const refreshBtn = document.getElementById('refreshConfig');
     const urlInput = document.getElementById('urlInput');
@@ -623,24 +778,37 @@
       document.documentElement.lang = locale;
       applyStaticTexts();
       renderCommands();
+      renderCores();
+      renderLibraries();
       renderConfig();
     }
 
     function applyStaticTexts() {
       tabButtons.commands.textContent = text('tabCommands');
-      tabButtons.cores.textContent = text('tabCores');
       tabButtons.config.textContent = text('tabConfig');
-      filterInput.placeholder = text('filterPlaceholder');
-      coreFilterInput.placeholder = text('coreFilterPlaceholder');
-      coreShowInstalledLabel.textContent = text('coreShowInstalled');
-      coreShowUpdatableLabel.textContent = text('coreShowUpdatable');
-      coreRefreshBtn.textContent = text('coreRefresh');
-      coreNotice.textContent = text('coreNotice');
-      coreHeaderName.textContent = text('coreHeaderName');
-      coreHeaderLatest.textContent = text('coreHeaderLatest');
-      coreHeaderInstalled.textContent = text('coreHeaderInstalled');
-      coreHeaderVersion.textContent = text('coreHeaderVersion');
-      coreHeaderActions.textContent = text('coreHeaderActions');
+      tabButtons.cores.textContent = text('tabCores');
+      tabButtons.libraries.textContent = text('tabLibraries');
+      if (filterInput) filterInput.placeholder = text('filterPlaceholder');
+      if (coreFilterInput) coreFilterInput.placeholder = text('coreFilterPlaceholder');
+      if (coreShowInstalledLabel) coreShowInstalledLabel.textContent = text('coreShowInstalled');
+      if (coreShowUpdatableLabel) coreShowUpdatableLabel.textContent = text('coreShowUpdatable');
+      if (coreRefreshBtn) coreRefreshBtn.textContent = text('coreRefresh');
+      if (coreNotice) coreNotice.textContent = text('coreNotice');
+      if (coreHeaderName) coreHeaderName.textContent = text('coreHeaderName');
+      if (coreHeaderLatest) coreHeaderLatest.textContent = text('coreHeaderLatest');
+      if (coreHeaderInstalled) coreHeaderInstalled.textContent = text('coreHeaderInstalled');
+      if (coreHeaderVersion) coreHeaderVersion.textContent = text('coreHeaderVersion');
+      if (coreHeaderActions) coreHeaderActions.textContent = text('coreHeaderActions');
+      if (libraryFilterInput) libraryFilterInput.placeholder = text('libraryFilterPlaceholder');
+      if (libraryShowInstalledLabel) libraryShowInstalledLabel.textContent = text('libraryShowInstalled');
+      if (libraryShowUpdatableLabel) libraryShowUpdatableLabel.textContent = text('libraryShowUpdatable');
+      if (libraryRefreshBtn) libraryRefreshBtn.textContent = text('libraryRefresh');
+      if (libraryNotice) libraryNotice.textContent = text('libraryNotice');
+      if (libraryHeaderName) libraryHeaderName.textContent = text('libraryHeaderName');
+      if (libraryHeaderLatest) libraryHeaderLatest.textContent = text('libraryHeaderLatest');
+      if (libraryHeaderInstalled) libraryHeaderInstalled.textContent = text('libraryHeaderInstalled');
+      if (libraryHeaderVersion) libraryHeaderVersion.textContent = text('libraryHeaderVersion');
+      if (libraryHeaderActions) libraryHeaderActions.textContent = text('libraryHeaderActions');
       refreshBtn.textContent = text('refreshConfig');
       addUrlBtn.textContent = text('addUrl');
       urlInput.placeholder = text('urlPlaceholder');
@@ -678,6 +846,14 @@
       if (tab === 'cores') {
         renderCores();
         requestCores(false);
+      }
+      if (tab !== 'libraries' && state.libraryPendingAction) {
+        state.libraryPendingAction = null;
+        renderLibraries();
+      }
+      if (tab === 'libraries') {
+        renderLibraries();
+        requestLibraries(false);
       }
     }
 
@@ -951,6 +1127,166 @@
       }
     }
 
+    function requestLibraries(force = false) {
+      if (state.libraryBusy) return;
+      if (!force && state.libraries && state.libraries.length > 0) return;
+      state.libraryBusy = true;
+      renderLibraries();
+      vscode.postMessage({ type: 'loadLibraries' });
+    }
+
+    function renderLibraries() {
+      if (!libraryTable) return;
+      if (libraryNotice) libraryNotice.textContent = text('libraryNotice');
+      if (libraryFilterInput && libraryFilterInput.value !== state.libraryFilter) libraryFilterInput.value = state.libraryFilter;
+      if (libraryShowInstalledToggle) libraryShowInstalledToggle.checked = !!state.libraryShowInstalled;
+      if (libraryShowUpdatableToggle) libraryShowUpdatableToggle.checked = !!state.libraryShowUpdatable;
+      const controlsLocked = state.libraryBusy || !!state.libraryPendingAction;
+      if (libraryFilterInput) libraryFilterInput.disabled = controlsLocked;
+      if (libraryShowInstalledToggle) libraryShowInstalledToggle.disabled = controlsLocked;
+      if (libraryShowUpdatableToggle) libraryShowUpdatableToggle.disabled = controlsLocked;
+      if (libraryRefreshBtn) libraryRefreshBtn.disabled = controlsLocked;
+      const libraries = Array.isArray(state.libraries) ? state.libraries : [];
+      const filterText = (state.libraryFilter || '').trim().toLowerCase();
+      const showInstalled = !!state.libraryShowInstalled;
+      const showUpdatable = !!state.libraryShowUpdatable;
+      const filtered = libraries.filter((lib) => {
+        if (showInstalled && !lib.installed) return false;
+        if (showUpdatable && !lib.updateAvailable) return false;
+        if (filterText) {
+          const haystack = [
+            lib.title,
+            lib.name,
+            lib.author,
+            lib.maintainer,
+            lib.sentence,
+            lib.paragraph,
+            lib.latestVersion,
+            lib.installedVersion,
+          ].map((s) => (s || '').toString().toLowerCase()).join(' ');
+          if (!haystack.includes(filterText)) return false;
+        }
+        return true;
+      });
+      libraryTable.innerHTML = '';
+      filtered.forEach((lib) => {
+        const tr = document.createElement('tr');
+        tr.className = 'library-row';
+        const pending = state.libraryPendingAction && state.libraryPendingAction.name === lib.name;
+        if (pending) tr.classList.add('pending');
+        const infoCell = document.createElement('td');
+        const nameParts = [escapeHtml(lib.title || lib.name)];
+        if (lib.updateAvailable) nameParts.push(`<span class="library-tag">${escapeHtml(text('libraryUpdateTag'))}</span>`);
+        if (!lib.installed && !lib.updateAvailable && lib.latestVersion) nameParts.push(`<span class="library-tag">${escapeHtml(text('libraryLatestTag'))}</span>`);
+        infoCell.innerHTML = `<div class="library-name">${nameParts.join(' ')}</div>`;
+        const metaParts = [];
+        if (lib.author) metaParts.push(escapeHtml(lib.author));
+        if (lib.maintainer && lib.maintainer !== lib.author) metaParts.push(escapeHtml(lib.maintainer));
+        if (lib.sentence) metaParts.push(escapeHtml(lib.sentence));
+        if (lib.paragraph && metaParts.length < 3) metaParts.push(escapeHtml(lib.paragraph));
+        if (metaParts.length > 0) infoCell.innerHTML += `<div class="library-meta">${metaParts.join(' · ')}</div>`;
+        tr.appendChild(infoCell);
+
+        const latestCell = document.createElement('td');
+        latestCell.className = 'library-status-cell';
+        latestCell.textContent = lib.latestVersion ? lib.latestVersion : '—';
+        tr.appendChild(latestCell);
+
+        const installedCell = document.createElement('td');
+        installedCell.className = 'library-status-cell';
+        if (lib.installed) {
+          const label = text('libraryInstalledLabel', { version: lib.installedVersion || '-' });
+          installedCell.innerHTML = `<span class="library-installed">${escapeHtml(label)}</span>`;
+          if (lib.updateAvailable) installedCell.innerHTML += `<span class="library-tag">${escapeHtml(text('libraryUpdateTag'))}</span>`;
+        } else {
+          installedCell.innerHTML = `<span class="library-not-installed">${escapeHtml(text('libraryNotInstalledLabel'))}</span>`;
+        }
+        tr.appendChild(installedCell);
+
+        const versionCell = document.createElement('td');
+        const select = document.createElement('select');
+        const versions = Array.isArray(lib.versions) ? lib.versions.slice() : [];
+        const defaultSelection = state.librarySelections[lib.name] || lib.installedVersion || lib.latestVersion || versions[0] || '';
+        if (defaultSelection && !versions.includes(defaultSelection)) versions.push(defaultSelection);
+        const uniqueVersions = Array.from(new Set(versions.filter(Boolean)));
+        uniqueVersions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+        state.librarySelections[lib.name] = defaultSelection;
+        uniqueVersions.forEach((version) => {
+          const option = document.createElement('option');
+          let label = version;
+          if (lib.installedVersion && version === lib.installedVersion) label += text('libraryOptionInstalled');
+          if (lib.latestVersion && version === lib.latestVersion) label += text('libraryOptionLatest');
+          option.value = version;
+          option.textContent = label;
+          select.appendChild(option);
+        });
+        select.value = defaultSelection;
+        select.disabled = controlsLocked;
+        select.addEventListener('change', (event) => {
+          state.librarySelections[lib.name] = event.target.value || '';
+          renderLibraries();
+        });
+        versionCell.appendChild(select);
+        tr.appendChild(versionCell);
+
+        const actionsCell = document.createElement('td');
+        const actionsWrap = document.createElement('div');
+        actionsWrap.className = 'library-action-buttons';
+        const selectedVersion = state.librarySelections[lib.name] || '';
+        const installBtn = document.createElement('button');
+        installBtn.className = 'primary';
+        let installLabel = text('libraryInstall');
+        if (!lib.installed && selectedVersion && selectedVersion !== lib.latestVersion) installLabel = text('libraryInstallSelected');
+        else if (lib.installed) installLabel = selectedVersion === lib.installedVersion ? text('libraryReinstall') : text('libraryInstallSelected');
+        installBtn.textContent = installLabel;
+        installBtn.disabled = controlsLocked || !selectedVersion;
+        installBtn.addEventListener('click', () => {
+          if (controlsLocked || !selectedVersion) return;
+          vscode.postMessage({ type: 'installLibrary', name: lib.name, version: selectedVersion });
+        });
+        actionsWrap.appendChild(installBtn);
+
+        if (lib.updateAvailable && lib.latestVersion) {
+          const updateBtn = document.createElement('button');
+          updateBtn.className = 'primary';
+          updateBtn.textContent = text('libraryUpdate');
+          updateBtn.disabled = controlsLocked;
+          updateBtn.addEventListener('click', () => {
+            if (controlsLocked) return;
+            state.librarySelections[lib.name] = lib.latestVersion;
+            renderLibraries();
+            vscode.postMessage({ type: 'installLibrary', name: lib.name, version: lib.latestVersion });
+          });
+          actionsWrap.appendChild(updateBtn);
+        }
+
+        if (lib.installed) {
+          const uninstallBtn = document.createElement('button');
+          uninstallBtn.className = 'subtle';
+          uninstallBtn.textContent = text('libraryUninstall');
+          uninstallBtn.disabled = controlsLocked;
+          uninstallBtn.addEventListener('click', () => {
+            if (controlsLocked) return;
+            vscode.postMessage({ type: 'uninstallLibrary', name: lib.name });
+          });
+          actionsWrap.appendChild(uninstallBtn);
+        }
+
+        actionsCell.appendChild(actionsWrap);
+        tr.appendChild(actionsCell);
+        libraryTable.appendChild(tr);
+      });
+
+      if (filtered.length === 0) {
+        libraryEmpty.classList.remove('hidden');
+        if (state.libraryBusy) libraryEmpty.textContent = text('libraryLoading');
+        else if (!libraries.length) libraryEmpty.textContent = text('libraryNoData');
+        else libraryEmpty.textContent = text('libraryNoMatch');
+      } else {
+        libraryEmpty.classList.add('hidden');
+      }
+    }
+
     function renderConfig() {
       if (!configDump) return;
       configDump.textContent = state.configDump || text('configDumpPlaceholder');
@@ -996,6 +1332,7 @@
     }
 
     tabButtons.commands.addEventListener('click', () => switchTab('commands'));
+    tabButtons.libraries.addEventListener('click', () => switchTab('libraries'));
     tabButtons.cores.addEventListener('click', () => switchTab('cores'));
     tabButtons.config.addEventListener('click', () => switchTab('config'));
 
@@ -1032,6 +1369,34 @@
       });
     }
 
+    if (libraryFilterInput) {
+      libraryFilterInput.addEventListener('input', (event) => {
+        state.libraryFilter = event.target.value || '';
+        renderLibraries();
+      });
+    }
+
+    if (libraryShowInstalledToggle) {
+      libraryShowInstalledToggle.addEventListener('change', (event) => {
+        state.libraryShowInstalled = !!event.target.checked;
+        renderLibraries();
+      });
+    }
+
+    if (libraryShowUpdatableToggle) {
+      libraryShowUpdatableToggle.addEventListener('change', (event) => {
+        state.libraryShowUpdatable = !!event.target.checked;
+        renderLibraries();
+      });
+    }
+
+    if (libraryRefreshBtn) {
+      libraryRefreshBtn.addEventListener('click', () => {
+        if (state.libraryBusy || state.libraryPendingAction) return;
+        requestLibraries(true);
+      });
+    }
+
     refreshBtn.addEventListener('click', () => {
       if (state.configBusy) return;
       vscode.postMessage({ type: 'refreshConfig' });
@@ -1062,9 +1427,14 @@
           state.coreSelections = {};
           state.coreBusy = false;
           state.corePendingAction = null;
+          state.libraries = Array.isArray(message.libraries) ? message.libraries : [];
+          state.librarySelections = {};
+          state.libraryBusy = false;
+          state.libraryPendingAction = null;
           applyStaticTexts();
           renderCommands();
           renderCores();
+          renderLibraries();
           renderConfig();
           break;
         case 'profileState':
@@ -1112,6 +1482,46 @@
             }
           }
           renderCores();
+          break;
+        case 'librariesBusy':
+          state.libraryBusy = !!message.value;
+          if (state.libraryBusy) {
+            setStatus(text('statusBusy'), true);
+          } else if (!state.commandRunning && !state.configBusy && !state.libraryPendingAction) {
+            setStatus('');
+          }
+          renderLibraries();
+          break;
+        case 'librariesData':
+          state.libraries = Array.isArray(message.libraries) ? message.libraries : [];
+          state.libraryBusy = false;
+          {
+            const nextSelections = {};
+            state.libraries.forEach((lib) => {
+              const versions = Array.isArray(lib.versions) ? lib.versions : [];
+              const existing = state.librarySelections ? state.librarySelections[lib.name] : '';
+              if (existing && versions.includes(existing)) {
+                nextSelections[lib.name] = existing;
+              } else {
+                nextSelections[lib.name] = lib.installedVersion || lib.latestVersion || versions[0] || '';
+              }
+            });
+            state.librarySelections = nextSelections;
+          }
+          state.libraryPendingAction = null;
+          renderLibraries();
+          break;
+        case 'libraryCommandState':
+          if (message.running) {
+            state.libraryPendingAction = { name: message.name, action: message.action || '' };
+            setStatus(text('statusBusy'), true);
+          } else {
+            state.libraryPendingAction = null;
+            if (!state.libraryBusy && !state.commandRunning && !state.configBusy) {
+              setStatus('');
+            }
+          }
+          renderLibraries();
           break;
         case 'commandState':
           setCommandRunning(message.command || '', !!message.running);

@@ -581,6 +581,12 @@ const MSG = {
     commandCenterCoreInstallFail: 'Failed to install {name}@{version}: {msg}',
     commandCenterCoreUninstallFail: 'Failed to uninstall {name}: {msg}',
     commandCenterCoreUpdateWarn: 'Core index update failed ({msg}); displaying cached results.',
+    commandCenterLibraryFetchFail: 'Failed to refresh library index: {msg}',
+    commandCenterLibraryInstallDone: 'Installed {name}@{version}.',
+    commandCenterLibraryUninstallDone: 'Uninstalled {name}.',
+    commandCenterLibraryInstallFail: 'Failed to install {name}@{version}: {msg}',
+    commandCenterLibraryUninstallFail: 'Failed to uninstall {name}: {msg}',
+    commandCenterLibraryUpdateWarn: 'Library index update failed ({msg}); displaying cached results.',
   },
   ja: {
     missingCli: 'Arduino CLI が見つかりませんでした: {exe}',
@@ -784,6 +790,12 @@ const MSG = {
     commandCenterCoreInstallFail: '{name}@{version} のインストールに失敗しました: {msg}',
     commandCenterCoreUninstallFail: '{name} のアンインストールに失敗しました: {msg}',
     commandCenterCoreUpdateWarn: 'コアインデックスの更新に失敗しました ({msg})。キャッシュ済みの情報を表示します。',
+    commandCenterLibraryFetchFail: 'ライブラリ一覧の取得に失敗しました: {msg}',
+    commandCenterLibraryInstallDone: '{name}@{version} をインストールしました。',
+    commandCenterLibraryUninstallDone: '{name} をアンインストールしました。',
+    commandCenterLibraryInstallFail: '{name}@{version} のインストールに失敗しました: {msg}',
+    commandCenterLibraryUninstallFail: '{name} のアンインストールに失敗しました: {msg}',
+    commandCenterLibraryUpdateWarn: 'ライブラリインデックスの更新に失敗しました ({msg})。キャッシュ済みの情報を表示します。',
     defaultProfileSet: '[sketch.yaml] default_profile を設定: {name}',
     setFqbnPickTitle: 'FQBN を選択してください',
     setFqbnManual: 'FQBN を手入力…',
@@ -7934,6 +7946,7 @@ async function sendCommandCenterInit(panel) {
     configDump: configText,
     additionalUrls,
     cores: [],
+    libraries: [],
   });
   panel.webview.postMessage({ type: 'configBusy', value: false });
 }
@@ -8328,6 +8341,260 @@ async function uninstallCommandCenterCore(panel, coreName) {
   }
 }
 
+function buildCommandCenterLibraryList(searchText, installedText) {
+  const libraryMap = new Map();
+  const installedMap = new Map();
+  const normalizeName = (entry) => {
+    if (!entry) return '';
+    if (typeof entry.name === 'string' && entry.name.trim()) return entry.name.trim();
+    if (typeof entry.library === 'string' && entry.library.trim()) return entry.library.trim();
+    const libObj = entry.library && typeof entry.library === 'object' ? entry.library : undefined;
+    if (libObj && typeof libObj.name === 'string' && libObj.name.trim()) return libObj.name.trim();
+    return '';
+  };
+  const addVersion = (info, version) => {
+    if (!version) return;
+    info.versionSet.add(String(version));
+  };
+  try {
+    const parsedInstalled = JSON.parse(installedText || '[]');
+    const installedArray = Array.isArray(parsedInstalled)
+      ? parsedInstalled
+      : Array.isArray(parsedInstalled.installed_libraries)
+        ? parsedInstalled.installed_libraries
+        : [];
+    for (const item of installedArray) {
+      const libObj = item.library && typeof item.library === 'object' ? item.library : item;
+      const name = normalizeName(libObj);
+      if (!name) continue;
+      installedMap.set(name, {
+        version: libObj.version || item.version || '',
+        latest: libObj.latest_version || item.latest_version || '',
+      });
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    const parsed = JSON.parse(searchText || '[]');
+    const entries = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed.libraries)
+        ? parsed.libraries
+        : [];
+    for (const entry of entries) {
+      const name = normalizeName(entry);
+      if (!name) continue;
+      let info = libraryMap.get(name);
+      if (!info) {
+        info = {
+          name,
+          title: entry.name || name,
+          author: entry.author || '',
+          maintainer: entry.maintainer || '',
+          sentence: entry.sentence || '',
+          paragraph: entry.paragraph || '',
+          url: entry.website || entry.url || '',
+          versionSet: new Set(),
+          latestCandidates: new Set(),
+          installedFromSearch: entry.installed_version || entry.installed || '',
+        };
+        libraryMap.set(name, info);
+      }
+      const releases = entry.releases && typeof entry.releases === 'object' ? entry.releases : {};
+      for (const key of Object.keys(releases)) {
+        const rel = releases[key];
+        const version = rel && rel.version ? rel.version : key;
+        addVersion(info, version);
+        if (rel && rel.version) info.latestCandidates.add(String(rel.version));
+        if (rel && rel.name && !info.title) info.title = rel.name;
+        if (rel && rel.author && !info.author) info.author = rel.author;
+        if (rel && rel.maintainer && !info.maintainer) info.maintainer = rel.maintainer;
+        if (rel && rel.sentence && !info.sentence) info.sentence = rel.sentence;
+        if (rel && rel.paragraph && !info.paragraph) info.paragraph = rel.paragraph;
+        if (rel && rel.homepage && !info.url) info.url = rel.homepage;
+      }
+      const latestObj = entry.latest && typeof entry.latest === 'object' ? entry.latest : undefined;
+      const latestValue = latestObj && latestObj.version
+        ? latestObj.version
+        : (typeof entry.latest === 'string' ? entry.latest : '') || entry.latest_version || '';
+      if (latestValue) info.latestCandidates.add(String(latestValue));
+      if (Array.isArray(entry.available_versions)) {
+        for (const ver of entry.available_versions) addVersion(info, ver);
+      }
+      if (Array.isArray(entry.versions)) {
+        for (const ver of entry.versions) addVersion(info, ver);
+      }
+    }
+  } catch (_) { /* ignore */ }
+  const output = [];
+  libraryMap.forEach((info, name) => {
+    const versionsArray = sortVersionsDesc(Array.from(info.versionSet));
+    let latestVersion = '';
+    if (info.latestCandidates.size > 0) {
+      latestVersion = sortVersionsDesc(Array.from(info.latestCandidates))[0] || '';
+    } else if (versionsArray.length > 0) {
+      latestVersion = versionsArray[0];
+    }
+    const installedEntry = installedMap.get(name);
+    const installedVersion = installedEntry?.version || info.installedFromSearch || '';
+    const versions = versionsArray.slice();
+    if (installedVersion && !versions.includes(installedVersion)) versions.push(installedVersion);
+    if (installedEntry?.latest && !versions.includes(installedEntry.latest)) versions.push(installedEntry.latest);
+    if (latestVersion && !versions.includes(latestVersion)) versions.push(latestVersion);
+    const normalizedVersions = sortVersionsDesc(versions);
+    const normalizedLatest = latestVersion || installedEntry?.latest || normalizedVersions[0] || '';
+    const installed = !!installedVersion;
+    const updateAvailable = installed && normalizedLatest && compareVersionStrings(installedVersion, normalizedLatest) < 0;
+    output.push({
+      name,
+      title: info.title || name,
+      author: info.author || '',
+      maintainer: info.maintainer || '',
+      sentence: info.sentence || '',
+      paragraph: info.paragraph || '',
+      url: info.url || '',
+      versions: normalizedVersions,
+      latestVersion: normalizedLatest,
+      installedVersion,
+      installed,
+      updateAvailable,
+    });
+  });
+  output.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+  return output;
+}
+
+async function loadCommandCenterLibraries(panel) {
+  panel.webview.postMessage({ type: 'librariesBusy', value: true });
+  try {
+    const ready = await ensureCliReady();
+    if (!ready) throw new Error(t('cliCheckFail'));
+    let updateError = null;
+    try {
+      await runCliCaptureOutput(['update']);
+    } catch (err) {
+      updateError = err;
+    }
+    const channel = getOutput();
+    const logPreview = (label, text) => {
+      const str = String(text || '');
+      const trunc = str.length > 500 ? `${str.slice(0, 500)}…` : str;
+      channel.appendLine(`[command-center] ${label} length=${str.length}`);
+      channel.appendLine(`[command-center] ${label} preview=${trunc}`);
+    };
+    let searchStdout = '[]';
+    try {
+      const searchResult = await runCliCaptureOutput(['lib', 'search', '--format', 'json'], { logStdout: false });
+      searchStdout = searchResult.stdout || '[]';
+    } catch (err) {
+      const msg = commandCenterErrorMessage(err).toLowerCase();
+      try {
+        if (msg.includes('unknown flag') || msg.includes('unknown shorthand') || msg.includes('flag provided') || msg.includes('unrecognized option')) {
+          const fallback = await runCliCaptureOutput(['lib', 'search', '--json'], { logStdout: false });
+          searchStdout = fallback.stdout || '[]';
+        } else {
+          throw err;
+        }
+      } catch (fallbackErr) {
+        throw fallbackErr;
+      }
+    }
+    logPreview('library search json', searchStdout);
+    let listStdout = '[]';
+    try {
+      let listResult;
+      try {
+        listResult = await runCliCaptureOutput(['lib', 'list', '--format', 'json'], { logStdout: false });
+      } catch (err) {
+        const msg = commandCenterErrorMessage(err).toLowerCase();
+        if (msg.includes('unknown flag') || msg.includes('unknown shorthand') || msg.includes('flag provided') || msg.includes('unrecognized option')) {
+          listResult = await runCliCaptureOutput(['lib', 'list', '--json'], { logStdout: false });
+        } else {
+          throw err;
+        }
+      }
+      listStdout = listResult.stdout || '[]';
+    } catch (_) {
+      listStdout = '[]';
+    }
+    logPreview('library list json', listStdout);
+    const libraries = buildCommandCenterLibraryList(searchStdout, listStdout);
+    channel.appendLine(`[command-center] parsed libraries: ${libraries.length}`);
+    libraries.slice(0, 10).forEach((lib) => {
+      channel.appendLine(`[command-center] library ${lib.name} versions (${lib.versions.length}): ${lib.versions.slice(0, 10).join(', ')}`);
+    });
+    panel.webview.postMessage({
+      type: 'librariesData',
+      libraries,
+      raw: {
+        search: searchStdout,
+        list: listStdout
+      }
+    });
+    if (updateError) {
+      const msg = t('commandCenterLibraryUpdateWarn', { msg: commandCenterErrorMessage(updateError) });
+      panel.webview.postMessage({ type: 'status', message: msg });
+    }
+  } catch (err) {
+    const msg = t('commandCenterLibraryFetchFail', { msg: commandCenterErrorMessage(err) });
+    panel.webview.postMessage({ type: 'status', error: msg });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'librariesBusy', value: false });
+  }
+}
+
+async function installCommandCenterLibrary(panel, name, version) {
+  if (!name) return;
+  const selectedVersion = version || '';
+  const ready = await ensureCliReady();
+  if (!ready) {
+    panel.webview.postMessage({ type: 'status', error: t('cliCheckFail') });
+    return;
+  }
+  panel.webview.postMessage({ type: 'libraryCommandState', name, action: 'install', running: true });
+  let succeeded = false;
+  try {
+    const target = selectedVersion ? `${name}@${selectedVersion}` : name;
+    await runCliCaptureOutput(['lib', 'install', target]);
+    const versionLabel = selectedVersion || (_isJa ? '最新' : 'latest');
+    panel.webview.postMessage({ type: 'status', message: t('commandCenterLibraryInstallDone', { name, version: versionLabel }) });
+    succeeded = true;
+  } catch (err) {
+    const versionLabel = selectedVersion || (_isJa ? '最新' : 'latest');
+    panel.webview.postMessage({ type: 'status', error: t('commandCenterLibraryInstallFail', { name, version: versionLabel, msg: commandCenterErrorMessage(err) }) });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'libraryCommandState', name, action: 'install', running: false });
+    if (succeeded) {
+      await loadCommandCenterLibraries(panel);
+    }
+  }
+}
+
+async function uninstallCommandCenterLibrary(panel, name) {
+  if (!name) return;
+  const ready = await ensureCliReady();
+  if (!ready) {
+    panel.webview.postMessage({ type: 'status', error: t('cliCheckFail') });
+    return;
+  }
+  panel.webview.postMessage({ type: 'libraryCommandState', name, action: 'uninstall', running: true });
+  let succeeded = false;
+  try {
+    await runCliCaptureOutput(['lib', 'uninstall', name]);
+    panel.webview.postMessage({ type: 'status', message: t('commandCenterLibraryUninstallDone', { name }) });
+    succeeded = true;
+  } catch (err) {
+    panel.webview.postMessage({ type: 'status', error: t('commandCenterLibraryUninstallFail', { name, msg: commandCenterErrorMessage(err) }) });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'libraryCommandState', name, action: 'uninstall', running: false });
+    if (succeeded) {
+      await loadCommandCenterLibraries(panel);
+    }
+  }
+}
+
 async function commandOpenCommandCenter() {
   const panel = vscode.window.createWebviewPanel(
     'arduinoCommandCenter',
@@ -8369,6 +8636,15 @@ async function commandOpenCommandCenter() {
           return;
         case 'uninstallCore':
           await uninstallCommandCenterCore(panel, msg.name);
+          return;
+        case 'loadLibraries':
+          await loadCommandCenterLibraries(panel);
+          return;
+        case 'installLibrary':
+          await installCommandCenterLibrary(panel, msg.name, msg.version);
+          return;
+        case 'uninstallLibrary':
+          await uninstallCommandCenterLibrary(panel, msg.name);
           return;
         default:
           break;
