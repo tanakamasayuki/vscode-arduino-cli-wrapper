@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Build Check and the sketch.yaml Version Check now trigger `arduino-cli update` right before they run so both commands always work with the latest core and library indexes.
 - (JA) Build Check と sketch.yaml バージョンチェックの実行直前に `arduino-cli update` を必ず走らせ、常に最新のコア／ライブラリインデックスで処理するようにしました。
+- (EN) The sketch.yaml Version Check also forces a fresh download of the board/library metadata JSON so the comparison always reflects the newest upstream definitions.
+- (JA) sketch.yaml バージョンチェックではボード／ライブラリ用メタデータ JSON を毎回強制的に再取得し、常に最新の定義を基に比較できるようにしました。
 
 ## 1.7.1
 - (EN) Automatically re-run `arduino-cli update` before major commands when 24 hours have elapsed since the previous run, keeping cached package data fresh across sessions.

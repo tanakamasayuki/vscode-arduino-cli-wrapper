@@ -6449,7 +6449,7 @@ async function commandVersionCheck() {
 
   let metadata;
   try {
-    metadata = await fetchVersionCheckMetadata(channel);
+    metadata = await fetchVersionCheckMetadata(channel, { forceRefresh: true });
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);
     channel.appendLine(`[warn] ${msg}`);
@@ -8355,7 +8355,7 @@ async function openVersionCheckReport({ initialReport, initialMetadata, initialS
   }
 }
 
-async function fetchVersionCheckMetadata(channel) {
+async function fetchVersionCheckMetadata(channel, options = {}) {
   const boardsUrl = 'https://tanakamasayuki.github.io/arduino-cli-helper/board_details.json';
   const librariesUrl = 'https://tanakamasayuki.github.io/arduino-cli-helper/libraries.json';
   const metadata = {
@@ -8366,8 +8366,9 @@ async function fetchVersionCheckMetadata(channel) {
     warnings: []
   };
   const now = Date.now();
+  const forceRefresh = !!(options && options.forceRefresh);
 
-  const useCachedBoards = cachedBoardDetailsJson && (now - cachedBoardDetailsFetchedAt) < THREE_HOURS_MS;
+  const useCachedBoards = !forceRefresh && cachedBoardDetailsJson && (now - cachedBoardDetailsFetchedAt) < THREE_HOURS_MS;
   if (useCachedBoards) {
     metadata.platforms = buildPlatformLatestMap(cachedBoardDetailsJson);
   } else {
@@ -8386,7 +8387,7 @@ async function fetchVersionCheckMetadata(channel) {
     }
   }
 
-  const useCachedLibraries = cachedLibraryDetailsJson && (now - cachedLibraryDetailsFetchedAt) < THREE_HOURS_MS;
+  const useCachedLibraries = !forceRefresh && cachedLibraryDetailsJson && (now - cachedLibraryDetailsFetchedAt) < THREE_HOURS_MS;
   if (useCachedLibraries) {
     metadata.libraries = buildLibraryLatestMap(cachedLibraryDetailsJson);
   } else {
