@@ -15,6 +15,8 @@
 - (JA) コマンドセンターにコアタブを追加し、`arduino-cli update` と `core search`/`core list` の結果から既定バージョンとインストール状況を表示、絞り込みやバージョン選択付きでインストール・更新・アンインストールを行えるようにしました。
 - (EN) Added a Libraries tab to the Command Center that syncs `arduino-cli lib search/list`, explains default usage vs. sketch.yaml pinning, and exposes install/update/uninstall controls with filters and version pickers.
 - (JA) コマンドセンターにライブラリタブを追加し、`arduino-cli lib search/list` の情報を基に既定バージョンとインストール状況を表示、sketch.yaml での指定を推奨する注意文やフィルター付きでインストール・更新・アンインストールを操作できるようにしました。
+- (EN) Simplified the global commands in the Arduino CLI view by removing rarely used entries (List Boards / List All Boards / Run Command) since the new Command Center covers those workflows.
+- (JA) Command Center 側で代替できるため、左メニュー上部のグローバルコマンドから「List Boards」「List All Boards」「Run Command」を削除してシンプルな構成にしました。
 
 ## 1.7.1
 - (EN) Automatically re-run `arduino-cli update` before major commands when 24 hours have elapsed since the previous run, keeping cached package data fresh across sessions.

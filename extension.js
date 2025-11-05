@@ -6052,15 +6052,12 @@ function globalCommandItems() {
   return [
     new CommandItem('Command Center', 'commandCenter', '', '', undefined, t('treeCommandCenter')),
     new CommandItem('CLI Version', 'version', '', '', undefined, t('treeCliVersion')),
-    new CommandItem('List Boards', 'listBoards', '', '', undefined, t('treeListBoards')),
-    new CommandItem('List All Boards', 'listAllBoards', '', '', undefined, t('treeListAllBoards')),
     new CommandItem('Sketch.yaml Helper', 'helper', '', '', undefined, t('treeHelper')),
     new CommandItem('Open Inspector', 'inspect', '', '', undefined, t('treeInspectorOpen')),
     new CommandItem('Sketch.yaml Versions', 'versionCheck', '', '', undefined, t('treeVersionCheck')),
     new CommandItem('Build Check', 'buildCheck', '', '', undefined, t('treeBuildCheck')),
-    new CommandItem('Refresh View', 'refreshView', '', '', undefined, t('treeRefresh')),
     new CommandItem('New Sketch', 'sketchNew', '', '', undefined, t('treeNewSketch')),
-    new CommandItem('Run Command', 'runArbitrary', '', '', undefined, t('treeRunCommand')),
+    new CommandItem('Refresh View', 'refreshView', '', '', undefined, t('treeRefresh')),
   ];
 }
 
