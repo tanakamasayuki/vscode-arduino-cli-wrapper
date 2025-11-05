@@ -8218,13 +8218,7 @@ async function loadCommandCenterCores(panel) {
     } catch (err) {
       updateError = err;
     }
-    const channel = getOutput();
-    const logPreview = (label, text) => {
-      const str = String(text || '');
-      const trunc = str.length > 500 ? `${str.slice(0, 500)}…` : str;
-      channel.appendLine(`[command-center] ${label} length=${str.length}`);
-      channel.appendLine(`[command-center] ${label} preview=${trunc}`);
-    };
+    const logPreview = () => { /* debug removed */ };
     let searchStdout = '[]';
     try {
       const searchResult = await runCliCaptureOutput(['core', 'search', '--format', 'json'], { logStdout: false });
@@ -8264,10 +8258,6 @@ async function loadCommandCenterCores(panel) {
     }
     logPreview('core list json', listStdout);
     const cores = buildCommandCenterCoreList(searchStdout, listStdout);
-    channel.appendLine(`[command-center] parsed cores: ${cores.length}`);
-    cores.slice(0, 10).forEach((core) => {
-      channel.appendLine(`[command-center] core ${core.name} versions (${core.versions.length}): ${core.versions.slice(0, 10).join(', ')}`);
-    });
     panel.webview.postMessage({
       type: 'coresData',
       cores,
@@ -8474,13 +8464,7 @@ async function loadCommandCenterLibraries(panel) {
     } catch (err) {
       updateError = err;
     }
-    const channel = getOutput();
-    const logPreview = (label, text) => {
-      const str = String(text || '');
-      const trunc = str.length > 500 ? `${str.slice(0, 500)}…` : str;
-      channel.appendLine(`[command-center] ${label} length=${str.length}`);
-      channel.appendLine(`[command-center] ${label} preview=${trunc}`);
-    };
+    const logPreview = () => { /* debug removed */ };
     let searchStdout = '[]';
     try {
       const searchResult = await runCliCaptureOutput(['lib', 'search', '--format', 'json'], { logStdout: false });
@@ -8518,10 +8502,6 @@ async function loadCommandCenterLibraries(panel) {
     }
     logPreview('library list json', listStdout);
     const libraries = buildCommandCenterLibraryList(searchStdout, listStdout);
-    channel.appendLine(`[command-center] parsed libraries: ${libraries.length}`);
-    libraries.slice(0, 10).forEach((lib) => {
-      channel.appendLine(`[command-center] library ${lib.name} versions (${lib.versions.length}): ${lib.versions.slice(0, 10).join(', ')}`);
-    });
     panel.webview.postMessage({
       type: 'librariesData',
       libraries,
