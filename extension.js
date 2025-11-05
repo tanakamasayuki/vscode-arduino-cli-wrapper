@@ -6090,6 +6090,11 @@ async function commandExpandAllTree() {
  */
 async function commandBuildCheck() {
   if (!(await ensureCliReady())) return;
+  try {
+    await runArduinoCliUpdate({ auto: false, skipEnsure: true });
+  } catch (err) {
+    showError(err);
+  }
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
     vscode.window.showWarningMessage(t('buildCheckNoWorkspace'));
@@ -6417,6 +6422,12 @@ async function commandBuildCheck() {
  * online metadata without invoking the compiler.
  */
 async function commandVersionCheck() {
+  if (!(await ensureCliReady())) return;
+  try {
+    await runArduinoCliUpdate({ auto: false, skipEnsure: true });
+  } catch (err) {
+    showError(err);
+  }
   const channel = getOutput();
   channel.show();
 
