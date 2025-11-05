@@ -7943,15 +7943,47 @@ async function addCommandCenterUrl(panel, urlValue) {
   }
 }
 
-async function removeCommandCenterUrl(panel, urlValue) {
+async function removeCommandCenterUrl(panel, urlValue, indexValue) {
   const value = typeof urlValue === 'string' ? urlValue.trim() : '';
-  if (!value) return;
+  const index = typeof indexValue === 'number' && Number.isFinite(indexValue) ? indexValue : -1;
+  if (!value && index < 0) return;
   panel.webview.postMessage({ type: 'configBusy', value: true });
   try {
-    await runCliCaptureOutput(['config', 'remove', 'board_manager.additional_urls', value]);
-    const data = await fetchCommandCenterConfigDump();
+    let removedByIndex = false;
+    let removedByValue = false;
+    let lastError = null;
+    if (index >= 0) {
+      try {
+        await runCliCaptureOutput(['config', 'remove', 'board_manager.additional_urls', String(index)]);
+        removedByIndex = true;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    let data = await fetchCommandCenterConfigDump();
+    const stillPresent = value ? data.additionalUrls.includes(value) : false;
+    const shouldTryValue = value && (!removedByIndex || stillPresent);
+    if (shouldTryValue) {
+      try {
+        await runCliCaptureOutput(['config', 'remove', 'board_manager.additional_urls', value]);
+        removedByValue = true;
+        data = await fetchCommandCenterConfigDump();
+      } catch (err) {
+        if (!lastError) lastError = err;
+        data = await fetchCommandCenterConfigDump();
+      }
+    }
+    const valueStillPresent = value ? data.additionalUrls.includes(value) : false;
+    if (!removedByIndex && !removedByValue && lastError) {
+      throw lastError;
+    }
     panel.webview.postMessage({ type: 'configDump', text: data.text, additionalUrls: data.additionalUrls });
-    panel.webview.postMessage({ type: 'status', key: 'remove' });
+    if (value && valueStillPresent) {
+      const msg = t('commandCenterConfigRemoveFail', { msg: 'URL still present after removal attempt.' });
+      panel.webview.postMessage({ type: 'status', error: msg });
+    } else {
+      panel.webview.postMessage({ type: 'status', key: 'remove' });
+    }
   } catch (err) {
     const msg = t('commandCenterConfigRemoveFail', { msg: commandCenterErrorMessage(err) });
     panel.webview.postMessage({ type: 'status', error: msg });
@@ -7992,7 +8024,7 @@ async function commandOpenCommandCenter() {
           await addCommandCenterUrl(panel, msg.url);
           return;
         case 'removeUrl':
-          await removeCommandCenterUrl(panel, msg.url);
+          await removeCommandCenterUrl(panel, msg.url, msg.index);
           return;
         default:
           break;

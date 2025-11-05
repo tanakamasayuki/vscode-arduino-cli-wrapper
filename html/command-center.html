@@ -303,6 +303,7 @@
       configBusy: false,
       configDump: '',
       additionalUrls: [],
+      pendingRemoveIndex: -1,
     };
 
     const STR = {
@@ -326,12 +327,13 @@
         deleting: '削除中…',
         adding: '追加中…',
         profileMissing: 'プロファイルが未設定のため実行できません。',
+        confirmRemovePrompt: 'もう一度押すと削除します。',
+        confirmRemoveNow: '削除する',
         statusRefresh: '設定を更新しました。',
         statusAdd: 'URL を追加しました。',
         statusRemove: 'URL を削除しました。',
         statusError: 'エラー: {msg}',
         statusBusy: '処理中…',
-        confirmRemove: 'URL を削除しますか？',
         invalidUrl: '有効な URL を入力してください。',
       },
       en: {
@@ -354,12 +356,13 @@
         deleting: 'Removing…',
         adding: 'Adding…',
         profileMissing: 'Cannot run because no profile is selected.',
+        confirmRemovePrompt: 'Click again to delete.',
+        confirmRemoveNow: 'Confirm Delete',
         statusRefresh: 'Configuration refreshed.',
         statusAdd: 'URL added.',
         statusRemove: 'URL removed.',
         statusError: 'Error: {msg}',
         statusBusy: 'Working…',
-        confirmRemove: 'Remove this URL?',
         invalidUrl: 'Enter a valid URL.',
       }
     };
@@ -459,6 +462,7 @@
 
     function setConfigBusy(busy) {
       state.configBusy = !!busy;
+      if (busy) state.pendingRemoveIndex = -1;
       const disabled = state.configBusy;
       refreshBtn.disabled = disabled;
       addUrlBtn.disabled = disabled;
@@ -551,6 +555,7 @@
       configDump.textContent = state.configDump || text('configDumpPlaceholder');
       urlTable.innerHTML = '';
       const urls = Array.isArray(state.additionalUrls) ? state.additionalUrls : [];
+      if (state.pendingRemoveIndex >= urls.length) state.pendingRemoveIndex = -1;
       urls.forEach((url, index) => {
         const tr = document.createElement('tr');
         const idx = document.createElement('td');
@@ -564,13 +569,23 @@
         actions.className = 'url-actions';
         const removeBtn = document.createElement('button');
         removeBtn.className = 'subtle';
-        removeBtn.textContent = state.configBusy ? text('deleting') : text('delete');
+        const isPending = state.pendingRemoveIndex === index;
+        removeBtn.textContent = state.configBusy
+          ? text('deleting')
+          : isPending
+            ? text('confirmRemoveNow')
+            : text('delete');
         removeBtn.disabled = state.configBusy;
         removeBtn.addEventListener('click', () => {
           if (state.configBusy) return;
-          const confirmed = window.confirm(text('confirmRemove'));
-          if (!confirmed) return;
-          vscode.postMessage({ type: 'removeUrl', url });
+          if (state.pendingRemoveIndex === index) {
+            state.pendingRemoveIndex = -1;
+            vscode.postMessage({ type: 'removeUrl', url, index });
+          } else {
+            state.pendingRemoveIndex = index;
+            setStatus(text('confirmRemovePrompt'));
+            renderConfig();
+          }
         });
         actions.appendChild(removeBtn);
         actionCell.appendChild(actions);
@@ -612,6 +627,7 @@
           state.profileLabel = message.profileLabel || '';
           state.configDump = message.configDump || '';
           state.additionalUrls = Array.isArray(message.additionalUrls) ? message.additionalUrls : [];
+          state.pendingRemoveIndex = -1;
           applyStaticTexts();
           renderCommands();
           renderConfig();
@@ -638,6 +654,7 @@
         case 'configDump':
           state.configDump = message.text || '';
           state.additionalUrls = Array.isArray(message.additionalUrls) ? message.additionalUrls : [];
+          state.pendingRemoveIndex = -1;
           applyStaticTexts();
           renderConfig();
           break;
