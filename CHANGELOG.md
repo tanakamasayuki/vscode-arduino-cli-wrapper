@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Automatically re-run `arduino-cli update` before major commands when 24 hours have elapsed since the previous run, keeping cached package data fresh across sessions.
+- (JA) 主要コマンドの実行前に前回から24時間経過していれば `arduino-cli update` を自動再実行し、セッションをまたいでもパッケージ情報を最新に保つようにしました。
 
 ## 1.7.0
 - (EN) Build Check now shows a notification progress spinner for each profile compile so long-running builds surface activity in the bottom-right notification area. If another progress is already active the build-check run is aborted to avoid overlapping operations.

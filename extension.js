@@ -8,6 +8,7 @@ const path = require('path');
 const https = require('https');
 
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+const AUTO_UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let cachedLatestArduinoCliTag = '';
 let cachedLatestArduinoCliTagFetchedAt = 0;
 let cachedBoardDetailsJson = null;
@@ -165,6 +166,7 @@ const STATE_FQBN = 'arduino-cli.selectedFqbn';
 const STATE_PORT = 'arduino-cli.selectedPort';
 const STATE_BAUD = 'arduino-cli.selectedBaud';
 const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
+const STATE_LAST_AUTO_UPDATE = 'arduino-cli.lastAutoUpdateAt';
 const STATE_SELECTED_SKETCH = 'arduino-cli.selectedSketchDir';
 const STATE_SELECTED_PROFILE = 'arduino-cli.selectedProfile';
 const PORT_NONE_SENTINEL = '__arduino-cli-port-none__';
@@ -182,7 +184,8 @@ let monitorTerminal;
 let logTerminal;
 let logTermWriteEmitter;
 let timezoneDefineCache;
-let autoUpdateTriggered = false;
+let autoUpdateInFlight = false;
+let lastAutoUpdateAt = 0;
 
 // Simple i18n without external deps.
 // Note: We intentionally avoid bundling any library to keep
@@ -2001,11 +2004,15 @@ const cliReadyCache = new Map();
 // Shows guidance and returns false if not ready.
 async function ensureCliReady(options = {}) {
   const force = options && options.force;
+  const skipAutoUpdate = options && options.skipAutoUpdate;
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const cacheKey = `${process.platform}|${exe}`;
   const cacheEntry = cliReadyCache.get(cacheKey);
   if (!force && cacheEntry && cacheEntry.ok) {
+    if (!skipAutoUpdate) {
+      try { await maybeRunAutoUpdate(); } catch (_) { }
+    }
     return true;
   }
 
@@ -2030,6 +2037,9 @@ async function ensureCliReady(options = {}) {
     if (!version) version = (stdout || '').trim().replace(/\s+/g, ' ');
     channel.appendLine(t('cliCheckOk', { version }));
     cliReadyCache.set(cacheKey, { ok: true, version });
+    if (!skipAutoUpdate) {
+      try { await maybeRunAutoUpdate(); } catch (_) { }
+    }
     return true;
   } catch (e) {
     cliReadyCache.delete(cacheKey);
@@ -2472,9 +2482,11 @@ async function pickBoardOrFqbn(requirePort) {
 
 async function runArduinoCliUpdate(options = {}) {
   const auto = !!options.auto;
-  if (!(await ensureCliReady())) return false;
+  const skipEnsure = !!options.skipEnsure;
+  if (!skipEnsure && !(await ensureCliReady({ skipAutoUpdate: true }))) return false;
   try {
     await runCli(['update']);
+    await storeAutoUpdateTimestamp(Date.now());
     return true;
   } catch (err) {
     if (auto) {
@@ -2495,15 +2507,34 @@ async function commandUpdate() {
   }
 }
 
-async function maybeRunAutoUpdate() {
-  if (autoUpdateTriggered) return;
-  autoUpdateTriggered = true;
+async function storeAutoUpdateTimestamp(timestamp) {
+  lastAutoUpdateAt = timestamp;
+  if (!extContext) return;
   try {
-    await runArduinoCliUpdate({ auto: true });
+    await extContext.globalState.update(STATE_LAST_AUTO_UPDATE, timestamp);
+  } catch (_) { /* ignore persistence failures */ }
+}
+
+async function maybeRunAutoUpdate() {
+  if (!extContext) return;
+  const now = Date.now();
+  if (lastAutoUpdateAt && (now - lastAutoUpdateAt) < AUTO_UPDATE_INTERVAL_MS) {
+    return;
+  }
+  if (autoUpdateInFlight) return;
+  autoUpdateInFlight = true;
+  try {
+    const ok = await runArduinoCliUpdate({ auto: true, skipEnsure: true });
+    if (!ok) {
+      await storeAutoUpdateTimestamp(Date.now());
+    }
   } catch (err) {
     const channel = getOutput();
     const msg = (err && err.message) ? err.message : String(err || 'unknown');
     channel.appendLine(`[warn] arduino-cli update failed: ${msg}`);
+    try { await storeAutoUpdateTimestamp(Date.now()); } catch (_) { }
+  } finally {
+    autoUpdateInFlight = false;
   }
 }
 
@@ -5473,6 +5504,12 @@ async function handleWokwiArtifacts(sketchDir, profileName, buildPath) {
  */
 function activate(context) {
   extContext = context;
+  try {
+    const storedTs = Number(context.globalState.get(STATE_LAST_AUTO_UPDATE, 0));
+    if (!Number.isNaN(storedTs) && storedTs > 0) {
+      lastAutoUpdateAt = storedTs;
+    }
+  } catch (_) { lastAutoUpdateAt = 0; }
   setupIncludeOrderLint(context);
   setupArduinoSecretsSupport(context);
   setupBuildOptSupport(context);
