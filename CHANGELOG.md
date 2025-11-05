@@ -7,6 +7,10 @@
 - (JA) sketch.yaml バージョンチェックではボード／ライブラリ用メタデータ JSON を毎回強制的に再取得し、常に最新の定義を基に比較できるようにしました。
 - (EN) Added an Arduino CLI: Clean Cache command (runs `arduino-cli cache clean`) so you can purge cached index data without leaving VS Code.
 - (JA) `arduino-cli cache clean` を実行する "Arduino CLI: キャッシュをクリア" コマンドを追加し、VS Code からキャッシュを手軽に削除できるようにしました。
+- (EN) Introduced the Arduino CLI Command Center webview (Command palette & left tree) with a tabbed layout that lists every extension command alongside localized descriptions and run buttons.
+- (JA) コマンドパレット／左ツリーから開ける Arduino CLI コマンドセンター Webview を追加し、全コマンドをローカライズされた解説と実行ボタン付きでタブ表示できるようにしました。
+- (EN) The Command Center configuration tab now mirrors `arduino-cli config dump`, lets you add or delete `board_manager.additional_urls`, and refreshes the dump automatically after each change with a two-click confirmation to avoid accidental removals.
+- (JA) コマンドセンターの設定タブで `arduino-cli config dump` の結果を表示し、`board_manager.additional_urls` の追加・削除・再読込を自動化しました。削除は二度押し確認に変更し、誤操作を防いでから一覧を再更新します。
 
 ## 1.7.1
 - (EN) Automatically re-run `arduino-cli update` before major commands when 24 hours have elapsed since the previous run, keeping cached package data fresh across sessions.
