@@ -131,19 +131,16 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 
 ### コマンドパレットから始める（初心者ガイド）
 
-**Ctrl+Shift+P**（macOS は **Cmd+Shift+P**）でコマンドパレットを開き、「Arduino CLI」と入力すると下記のコマンドが並びます。それぞれのコマンドに何が起きるのかを、初めての方でも分かるようにまとめました。
+**Ctrl+Shift+P**（macOS は **Cmd+Shift+P**）でコマンドパレットを開き、「Arduino CLI」と入力するとよく使うコマンドが並びます。主なものは次のとおりです。
 
+- **Command Center を開く** – コマンドの一覧タブ、`arduino-cli config` を扱う設定タブ、コア／ライブラリ管理タブ（インストール・更新・削除と絞り込み付き）を備えた Webview を開きます。拡張機能でできることを一度に俯瞰するのに最適です。
 - **CLI バージョン確認** – `arduino-cli` がインストールされているかチェックします。未設定なら手順付きのガイドが表示されます。
 - **インデックスを更新 (Update Index)** – `arduino-cli update` でボード／ライブラリのインデックスを更新します。このコマンドは VS Code を起動して最初に CLI バージョンを確認したタイミングでも自動実行されます。
-- **コア/ライブラリをアップグレード (Upgrade Cores/Libraries)** – `arduino-cli upgrade` を実行し、更新されたインデックスに基づいてインストール済みのプラットフォームやライブラリを最新化します。
-- **List Connected Boards** – PC に接続されている Arduino ボードを一覧表示し、書き込み前に接続状況を確認できます。
-- **List All Boards** – すべてのボードを検索できます。フィルター欄にキーワードを入力すると `arduino-cli board listall <filter>` と同じ結果が得られます。
+- **コア/ライブラリをアップグレード (Upgrade Cores/Libraries)** – `arduino-cli upgrade` を実行し、インストール済みのプラットフォームやライブラリを最新化します。
 - **Board Details** – 現在選択中のプロファイル/FQBN の詳細情報を表示し、使用しているボード設定を再確認できます。
-- **Compile Sketch** – アクティブなスケッチをビルドします。複数の `.ino` があるときは選択ダイアログが開き、`sketch.yaml` があればプロファイル設定が自動で適用されます。
-- **Clean Compile** – `--clean` 付きで再ビルドし、IntelliSense 用の includePath もリフレッシュします。ライブラリ更新後の再計算に便利です。
-- **Upload Sketch** – コンパイルから書き込みまでを一度に実行します。未設定のシリアルポートは実行中に選択できます。
+- **Compile Sketch / Clean Compile / Upload Sketch** – 日常的なビルド／書き込みコマンドです。Clean Compile は `--clean` 付きで再ビルドし、IntelliSense の includePath を更新します。
 - **Build Check** – `sketch.yaml` 内の全プロファイルをまとめてビルドし、警告とエラーを一覧に集約します。
-- **Debug Sketch** – プロファイルごとのデバッグ設定を自動生成し、詳細手順は「デバッグを始める（上級者向け）」セクションで説明しています。
+- **Debug Sketch** – プロファイルごとのデバッグ設定を自動生成します（詳しくは「デバッグを始める（上級者向け）」を参照）。
 
 ### ステータスバー
 
@@ -164,7 +161,7 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 - スケッチフォルダーを一覧表示し、`sketch.yaml` があればプロファイルも表示。
 - プロジェクト/プロファイルごとのアクション: Compile / Upload / Debug / Upload Data / Monitor / Sketch.yaml Helper / Open Examples。
   - Debug はプロファイルノードにのみ表示され、選択したプロファイル向けに自動生成された設定で即座にデバッグを開始できます。
-- 先頭にグローバルアクション: CLI Version / List Boards / List All Boards / Sketch.yaml Helper / Refresh View / New Sketch / Run Command。
+- 先頭にグローバルアクション: Command Center / CLI Version / Sketch.yaml Helper / Open Inspector / Sketch.yaml Versions / Build Check / Refresh View / New Sketch。
 - スケッチ項目はワークスペースからの相対パスで表示され、ノードは既定で展開状態です。
 
 ## ビルドとアップロードの基本
@@ -323,4 +320,3 @@ clangd などの設定で `<ワークスペース>/.vscode/compile_commands.json
 ## ライセンス
 
 CC0 1.0 Universal (Public Domain Dedication)。詳細は `LICENSE` を参照してください。
-

@@ -127,17 +127,14 @@ In addition, the extension injects the following preprocessor macros by default 
 
 ### Getting started with commands (Command Palette)
 
-Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:” to see the commands below. Each one carries a short description in the palette, but the summaries here walk through what to expect on your very first run.
+Press **Ctrl+Shift+P** (or **Cmd+Shift+P** on macOS) and type “Arduino CLI:” to see the most common commands. Highlights:
 
+- **Open Command Center** – Launches the dedicated webview with three tabs: a command overview, a configuration view for `arduino-cli config`, and management panels for cores and libraries (complete with install/update/uninstall buttons and filters). This is the fastest way to explore everything the extension exposes.
 - **Check CLI Version** – Confirms that `arduino-cli` is installed and reachable. If it is missing, the extension shows a friendly setup guide.
-- **Update Index** – Runs `arduino-cli update` to refresh board and library package metadata. This command also runs automatically the first time you check the CLI version during a VS Code session.
+- **Update Index** – Runs `arduino-cli update` to refresh board and library metadata. The command also runs automatically the first time you check the CLI version during a VS Code session.
 - **Upgrade Cores/Libraries** – Executes `arduino-cli upgrade` so installed platforms and libraries pick up the latest releases from the refreshed index.
-- **List Connected Boards** – Scans USB/serial ports and shows the detected boards so you can double‑check the connection before you upload.
-- **List All Boards** – Displays the complete board index. You can type a search word (for example `nano`) to narrow the list, just like running `arduino-cli board listall <filter>` manually.
 - **Board Details** – Shows the technical info for the currently selected profile/FQBN, making it easy to verify you picked the right board package.
-- **Compile Sketch** – Builds the active sketch. If multiple `.ino` files live in the folder you will be prompted to pick one, and any profile data from `sketch.yaml` is applied automatically.
-- **Clean Compile** – Rebuilds with `--clean`, refreshing IntelliSense include paths so swapped libraries or platforms are reflected immediately.
-- **Upload Sketch** – Compiles and flashes in a single step. You can pick the serial port during the command if one is not already configured.
+- **Compile Sketch / Clean Compile / Upload Sketch** – Everyday build and upload automation. Clean Compile rebuilds with `--clean`, refreshing IntelliSense include paths so swapped libraries or platforms are reflected immediately.
 - **Build Check** – Runs through every profile declared in `sketch.yaml`, compiling each with full warnings and presenting a consolidated summary of errors and warnings.
 - **Debug Sketch** – Generates profile-aware debug assets; see “Debug your sketch (advanced)” for the full walkthrough before running it the first time.
 
@@ -160,7 +157,7 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 - Lists detected sketch folders; shows profiles from `sketch.yaml` when available.
 - Per project/profile actions: Compile, Upload, Debug, Upload Data, Monitor, Sketch.yaml Helper, Open Examples.
   - Debug appears on profile nodes only so you can launch the generated debug configuration for the selected profile in one click.
-- Global actions at the top: CLI Version, List Boards, List All Boards, Sketch.yaml Helper, Refresh View, New Sketch, Run Command.
+- Global actions at the top: Command Center, CLI Version, Sketch.yaml Helper, Open Inspector, Sketch.yaml Versions, Build Check, Refresh View, New Sketch.
 - Sketch items display workspace-relative paths, and nodes are expanded by default.
 
 ## Build and upload fundamentals
