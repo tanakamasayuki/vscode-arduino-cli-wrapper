@@ -78,6 +78,10 @@
         "title": "%cmd.sketchYamlHelper%"
       },
       {
+        "command": "arduino-cli.commandCenter",
+        "title": "%cmd.commandCenter%"
+      },
+      {
         "command": "arduino-cli.runArbitrary",
         "title": "%cmd.runArbitrary%"
       },

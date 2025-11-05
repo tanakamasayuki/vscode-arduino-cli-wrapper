@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arduino CLI Command Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border-bottom: 1px solid #2d2d2d;
+      background: #252526;
+    }
+
+    header button {
+      background: transparent;
+      color: #d4d4d4;
+      border: 1px solid transparent;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    header button.active {
+      background: #0e639c;
+      border-color: #0e639c;
+      color: #fff;
+    }
+
+    header button:hover:not(.active) {
+      background: #2a2d2e;
+      border-color: #2a2d2e;
+    }
+
+    .status {
+      margin-left: auto;
+      font-size: 12px;
+      color: #9cdcfe;
+      white-space: nowrap;
+    }
+
+    main {
+      flex: 1;
+      overflow: auto;
+    }
+
+    .tab-panel {
+      display: none;
+      padding: 12px;
+      gap: 12px;
+    }
+
+    .tab-panel.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input[type="text"] {
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: 1px solid #3c3c3c;
+      background: #2d2d2d;
+      color: #d4d4d4;
+      flex: 1;
+      min-width: 180px;
+    }
+
+    input[type="text"]:disabled {
+      opacity: 0.6;
+    }
+
+    button.primary {
+      background: #0e639c;
+      border: 0;
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.primary:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    button.subtle {
+      background: transparent;
+      border: 1px solid #3c3c3c;
+      color: #d4d4d4;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    button.subtle:hover:not(:disabled) {
+      background: #2a2d2e;
+    }
+
+    button.subtle:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .command-list {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      margin-top: 12px;
+      width: 100%;
+    }
+
+    .command-card {
+      border: 1px solid #2d2d2d;
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      background: #252526;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .command-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .command-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      align-self: stretch;
+      min-width: 110px;
+    }
+
+    .command-actions button {
+      min-width: 110px;
+    }
+
+    .command-title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .command-id {
+      font-size: 11px;
+      color: #808080;
+      word-break: break-all;
+    }
+
+    .command-desc {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .command-note {
+      font-size: 12px;
+      color: #d19a66;
+    }
+
+    .command-footer {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .note {
+      font-size: 12px;
+      color: #d19a66;
+    }
+
+    .empty {
+      font-size: 13px;
+      color: #808080;
+      margin-top: 24px;
+      text-align: center;
+    }
+
+    pre.config-dump {
+      background: #1b1b1b;
+      border: 1px solid #2d2d2d;
+      border-radius: 6px;
+      padding: 12px;
+      overflow: auto;
+      font-size: 12px;
+      max-height: 320px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th,
+    td {
+      border: 1px solid #2d2d2d;
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    th {
+      background: #2a2d2e;
+    }
+
+    .url-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .badge {
+      font-size: 11px;
+      color: #9cdcfe;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <button id="tabCommands" class="active" data-tab="commands"></button>
+    <button id="tabConfig" data-tab="config"></button>
+    <span id="status" class="status"></span>
+  </header>
+  <main>
+    <section id="panelCommands" class="tab-panel active">
+      <div class="toolbar">
+        <input id="filterInput" type="text" />
+        <span id="profileBadge" class="badge hidden"></span>
+      </div>
+      <div id="commandList" class="command-list"></div>
+      <div id="emptyCommands" class="empty hidden"></div>
+    </section>
+    <section id="panelConfig" class="tab-panel">
+      <div class="toolbar">
+        <button id="refreshConfig" class="primary"></button>
+      </div>
+      <pre id="configDump" class="config-dump"></pre>
+      <div class="toolbar">
+        <input id="urlInput" type="text" />
+        <button id="addUrl" class="primary"></button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th id="urlHeader"></th>
+            <th id="actionHeader"></th>
+          </tr>
+        </thead>
+        <tbody id="urlTable"></tbody>
+      </table>
+    </section>
+  </main>
+  <script>
+    const vscode = acquireVsCodeApi();
+    const defaultLocale = ((navigator.language || navigator.userLanguage || 'en') + '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
+    const state = {
+      locale: defaultLocale,
+      commands: [],
+      filter: '',
+      hasProfile: false,
+      profileLabel: '',
+      commandRunning: '',
+      configBusy: false,
+      configDump: '',
+      additionalUrls: [],
+    };
+
+    const STR = {
+      ja: {
+        tabCommands: 'コマンド',
+        tabConfig: '設定',
+        filterPlaceholder: 'コマンドを検索',
+        run: '実行',
+        running: '実行中…',
+        commandId: 'コマンド ID',
+        requiresProfile: 'プロファイルが必要です',
+        noCommands: '一致するコマンドはありません。',
+        activeProfile: (label) => label ? `選択中: ${label}` : '',
+        configDumpPlaceholder: 'arduino-cli config dump の結果がここに表示されます。',
+        refreshConfig: '設定を更新',
+        addUrl: 'URL を追加',
+        urlPlaceholder: '追加するボードマネージャー URL',
+        urlHeader: '追加 URL',
+        actionHeader: '操作',
+        delete: '削除',
+        deleting: '削除中…',
+        adding: '追加中…',
+        profileMissing: 'プロファイルが未設定のため実行できません。',
+        statusRefresh: '設定を更新しました。',
+        statusAdd: 'URL を追加しました。',
+        statusRemove: 'URL を削除しました。',
+        statusError: 'エラー: {msg}',
+        statusBusy: '処理中…',
+        confirmRemove: 'URL を削除しますか？',
+        invalidUrl: '有効な URL を入力してください。',
+      },
+      en: {
+        tabCommands: 'Commands',
+        tabConfig: 'Settings',
+        filterPlaceholder: 'Search commands',
+        run: 'Run',
+        running: 'Running…',
+        commandId: 'Command ID',
+        requiresProfile: 'Profile required',
+        noCommands: 'No commands match the filter.',
+        activeProfile: (label) => label ? `Profile: ${label}` : '',
+        configDumpPlaceholder: 'Output from `arduino-cli config dump` will appear here.',
+        refreshConfig: 'Refresh',
+        addUrl: 'Add URL',
+        urlPlaceholder: 'Board Manager URL to add',
+        urlHeader: 'Additional URL',
+        actionHeader: 'Action',
+        delete: 'Remove',
+        deleting: 'Removing…',
+        adding: 'Adding…',
+        profileMissing: 'Cannot run because no profile is selected.',
+        statusRefresh: 'Configuration refreshed.',
+        statusAdd: 'URL added.',
+        statusRemove: 'URL removed.',
+        statusError: 'Error: {msg}',
+        statusBusy: 'Working…',
+        confirmRemove: 'Remove this URL?',
+        invalidUrl: 'Enter a valid URL.',
+      }
+    };
+
+    const tabButtons = {
+      commands: document.getElementById('tabCommands'),
+      config: document.getElementById('tabConfig'),
+    };
+    const panels = {
+      commands: document.getElementById('panelCommands'),
+      config: document.getElementById('panelConfig'),
+    };
+    const statusEl = document.getElementById('status');
+    const filterInput = document.getElementById('filterInput');
+    const commandList = document.getElementById('commandList');
+    const emptyCommands = document.getElementById('emptyCommands');
+    const profileBadge = document.getElementById('profileBadge');
+    const configDump = document.getElementById('configDump');
+    const refreshBtn = document.getElementById('refreshConfig');
+    const urlInput = document.getElementById('urlInput');
+    const addUrlBtn = document.getElementById('addUrl');
+    const urlTable = document.getElementById('urlTable');
+    const urlHeader = document.getElementById('urlHeader');
+    const actionHeader = document.getElementById('actionHeader');
+
+    let activeTab = 'commands';
+
+    function getLocale() {
+      return state.locale === 'ja' ? 'ja' : 'en';
+    }
+
+    function text(key, vars) {
+      const lang = getLocale();
+      const str = STR[lang][key];
+      if (typeof str === 'function') return str(vars);
+      if (typeof str === 'string') {
+        if (!vars) return str;
+        return str.replace(/\{(\w+)\}/g, (_, k) => vars && vars[k] != null ? String(vars[k]) : '');
+      }
+      return '';
+    }
+
+    function setLocale(locale) {
+      if (locale !== 'ja' && locale !== 'en') return;
+      state.locale = locale;
+      document.documentElement.lang = locale;
+      applyStaticTexts();
+      renderCommands();
+      renderConfig();
+    }
+
+    function applyStaticTexts() {
+      tabButtons.commands.textContent = text('tabCommands');
+      tabButtons.config.textContent = text('tabConfig');
+      filterInput.placeholder = text('filterPlaceholder');
+      refreshBtn.textContent = text('refreshConfig');
+      addUrlBtn.textContent = text('addUrl');
+      urlInput.placeholder = text('urlPlaceholder');
+      configDump.textContent = state.configDump ? state.configDump : text('configDumpPlaceholder');
+      urlHeader.textContent = text('urlHeader');
+      actionHeader.textContent = text('actionHeader');
+      updateProfileBadge();
+    }
+
+    function setStatus(message, sticky = false) {
+      statusEl.textContent = message || '';
+      if (!message) return;
+      if (!sticky) {
+        window.setTimeout(() => {
+          statusEl.textContent = '';
+        }, 3000);
+      }
+    }
+
+    function switchTab(tab) {
+      if (!panels[tab]) return;
+      activeTab = tab;
+      Object.entries(tabButtons).forEach(([key, btn]) => {
+        if (!btn) return;
+        btn.classList.toggle('active', key === tab);
+      });
+      Object.entries(panels).forEach(([key, panel]) => {
+        if (!panel) return;
+        panel.classList.toggle('active', key === tab);
+      });
+    }
+
+    function setCommandRunning(id, running) {
+      if (running) {
+        state.commandRunning = id;
+        setStatus(text('statusBusy'), true);
+      } else if (state.commandRunning === id) {
+        state.commandRunning = '';
+      }
+      renderCommands();
+    }
+
+    function setConfigBusy(busy) {
+      state.configBusy = !!busy;
+      const disabled = state.configBusy;
+      refreshBtn.disabled = disabled;
+      addUrlBtn.disabled = disabled;
+      filterInput.disabled = state.commandRunning && activeTab === 'commands';
+      if (disabled) {
+        setStatus(text('statusBusy'), true);
+      } else if (!state.commandRunning) {
+        setStatus('');
+      }
+      renderConfig();
+    }
+
+    function updateProfileBadge() {
+      const label = state.hasProfile ? text('activeProfile', state.profileLabel) : '';
+      if (label) {
+        profileBadge.textContent = label;
+        profileBadge.classList.remove('hidden');
+      } else {
+        profileBadge.textContent = '';
+        profileBadge.classList.add('hidden');
+      }
+    }
+
+    function renderCommands() {
+      if (!commandList) return;
+      const filter = (state.filter || '').toLowerCase();
+      commandList.innerHTML = '';
+      let visibleCount = 0;
+      state.commands.forEach((cmd) => {
+        const haystack = `${cmd.title} ${cmd.description} ${cmd.command}`.toLowerCase();
+        if (filter && !haystack.includes(filter)) return;
+        visibleCount += 1;
+        const card = document.createElement('div');
+        card.className = 'command-card';
+
+        const info = document.createElement('div');
+        info.className = 'command-info';
+        const title = document.createElement('div');
+        title.className = 'command-title';
+        title.textContent = cmd.title;
+        info.appendChild(title);
+
+        const commandId = document.createElement('div');
+        commandId.className = 'command-id';
+        commandId.textContent = `${text('commandId')}: ${cmd.command}`;
+        info.appendChild(commandId);
+
+        const desc = document.createElement('div');
+        desc.className = 'command-desc';
+        desc.textContent = cmd.description;
+        info.appendChild(desc);
+
+        const requiresProfile = !!cmd.requiresProfile;
+        const hasProfile = !!state.hasProfile;
+
+        if (requiresProfile && !hasProfile) {
+          const note = document.createElement('div');
+          note.className = 'command-note';
+          note.textContent = text('profileMissing');
+          info.appendChild(note);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'command-actions';
+        const runButton = document.createElement('button');
+        runButton.className = 'primary';
+        const isDisabled = (requiresProfile && !hasProfile) || !!state.commandRunning;
+        runButton.disabled = isDisabled;
+        runButton.textContent = state.commandRunning === cmd.command ? text('running') : text('run');
+        runButton.addEventListener('click', () => {
+          if (state.commandRunning) return;
+          if (requiresProfile && !hasProfile) {
+            setStatus(text('profileMissing'));
+            return;
+          }
+          vscode.postMessage({ type: 'runCommand', command: cmd.command });
+        });
+        actions.appendChild(runButton);
+
+        card.appendChild(info);
+        card.appendChild(actions);
+        commandList.appendChild(card);
+      });
+      emptyCommands.classList.toggle('hidden', visibleCount > 0);
+      emptyCommands.textContent = visibleCount === 0 ? text('noCommands') : '';
+    }
+
+    function renderConfig() {
+      if (!configDump) return;
+      configDump.textContent = state.configDump || text('configDumpPlaceholder');
+      urlTable.innerHTML = '';
+      const urls = Array.isArray(state.additionalUrls) ? state.additionalUrls : [];
+      urls.forEach((url, index) => {
+        const tr = document.createElement('tr');
+        const idx = document.createElement('td');
+        idx.textContent = String(index + 1);
+        tr.appendChild(idx);
+        const urlCell = document.createElement('td');
+        urlCell.textContent = url;
+        tr.appendChild(urlCell);
+        const actionCell = document.createElement('td');
+        const actions = document.createElement('div');
+        actions.className = 'url-actions';
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'subtle';
+        removeBtn.textContent = state.configBusy ? text('deleting') : text('delete');
+        removeBtn.disabled = state.configBusy;
+        removeBtn.addEventListener('click', () => {
+          if (state.configBusy) return;
+          const confirmed = window.confirm(text('confirmRemove'));
+          if (!confirmed) return;
+          vscode.postMessage({ type: 'removeUrl', url });
+        });
+        actions.appendChild(removeBtn);
+        actionCell.appendChild(actions);
+        tr.appendChild(actionCell);
+        urlTable.appendChild(tr);
+      });
+    }
+
+    tabButtons.commands.addEventListener('click', () => switchTab('commands'));
+    tabButtons.config.addEventListener('click', () => switchTab('config'));
+
+    filterInput.addEventListener('input', (event) => {
+      state.filter = event.target.value || '';
+      renderCommands();
+    });
+
+    refreshBtn.addEventListener('click', () => {
+      if (state.configBusy) return;
+      vscode.postMessage({ type: 'refreshConfig' });
+    });
+
+    addUrlBtn.addEventListener('click', () => {
+      if (state.configBusy) return;
+      const value = (urlInput.value || '').trim();
+      if (!value || !/^https?:\/\//i.test(value)) {
+        setStatus(text('invalidUrl'));
+        return;
+      }
+      vscode.postMessage({ type: 'addUrl', url: value });
+    });
+
+    window.addEventListener('message', (event) => {
+      const message = event.data || {};
+      switch (message.type) {
+        case 'init':
+          if (message.locale) setLocale(message.locale);
+          if (Array.isArray(message.commands)) state.commands = message.commands;
+          state.hasProfile = !!message.hasProfile;
+          state.profileLabel = message.profileLabel || '';
+          state.configDump = message.configDump || '';
+          state.additionalUrls = Array.isArray(message.additionalUrls) ? message.additionalUrls : [];
+          applyStaticTexts();
+          renderCommands();
+          renderConfig();
+          break;
+        case 'profileState':
+          state.hasProfile = !!message.hasProfile;
+          state.profileLabel = message.profileLabel || '';
+          updateProfileBadge();
+          renderCommands();
+          break;
+        case 'commandState':
+          setCommandRunning(message.command || '', !!message.running);
+          if (!message.running) {
+            if (message.success) {
+              setStatus('');
+            } else if (message.error) {
+              setStatus(text('statusError', { msg: message.error }));
+            }
+          }
+          break;
+        case 'configBusy':
+          setConfigBusy(!!message.value);
+          break;
+        case 'configDump':
+          state.configDump = message.text || '';
+          state.additionalUrls = Array.isArray(message.additionalUrls) ? message.additionalUrls : [];
+          applyStaticTexts();
+          renderConfig();
+          break;
+        case 'status':
+          if (message.key) {
+            if (message.key === 'refresh') setStatus(text('statusRefresh'));
+            else if (message.key === 'add') setStatus(text('statusAdd'));
+            else if (message.key === 'remove') setStatus(text('statusRemove'));
+          } else if (message.error) {
+            setStatus(text('statusError', { msg: message.error }));
+          } else if (message.message) {
+            setStatus(message.message);
+          }
+          break;
+        case 'setLocale':
+          if (message.locale) setLocale(message.locale);
+          break;
+      }
+    });
+
+    vscode.postMessage({ type: 'ready' });
+    applyStaticTexts();
+    renderCommands();
+    renderConfig();
+  </script>
+</body>
+
+</html>

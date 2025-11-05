@@ -333,6 +333,7 @@ const MSG = {
     buildCheckParseError: '[build-check] Failed to parse JSON output for {sketch} ({profile}): {msg}',
     buildCheckCliError: '[build-check] Compile failed to run for {sketch} ({profile}): exit {code}',
     buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
+    treeCommandCenter: 'Command Center',
     treeBuildCheck: 'Build Check',
     treeCompile: 'Compile',
     treeCleanCompile: 'Clean Compile',
@@ -504,6 +505,76 @@ const MSG = {
     buildReportLibraryColumnSource: 'Source',
     buildReportSummaryWarnings: 'Warnings',
     buildReportSummaryErrors: 'Errors',
+    commandCenterPanelTitle: 'Arduino CLI Command Center',
+    commandCenterCliExit: 'arduino-cli exited with code {code}',
+    commandCenterConfigDumpFail: 'Failed to load Arduino CLI config: {msg}',
+    commandCenterConfigAddFail: 'Failed to add URL: {msg}',
+    commandCenterConfigRemoveFail: 'Failed to remove URL: {msg}',
+    commandCenterInvalidCommand: 'Unsupported command: {id}',
+    commandCenterSetProfileTitle: 'Set Profile',
+    commandCenterSetProfileDesc: 'Pick a sketch.yaml profile so compile and upload commands use it automatically.',
+    commandCenterSetFqbnTitle: 'Set FQBN',
+    commandCenterSetFqbnDesc: 'Choose a board FQBN for sketches that do not use profiles.',
+    commandCenterSetPortTitle: 'Set Serial Port',
+    commandCenterSetPortDesc: 'Select or enter the serial port used for upload and monitor commands.',
+    commandCenterSetBaudTitle: 'Set Baudrate',
+    commandCenterSetBaudDesc: 'Choose the serial monitor baudrate.',
+    commandCenterCompileTitle: 'Compile Sketch',
+    commandCenterCompileDesc: 'Build the active sketch using the selected profile or FQBN.',
+    commandCenterCleanCompileTitle: 'Clean Compile',
+    commandCenterCleanCompileDesc: 'Delete the build cache and run a fresh compile.',
+    commandCenterUploadTitle: 'Upload Sketch',
+    commandCenterUploadDesc: 'Build and upload the sketch to the connected board.',
+    commandCenterUploadDataTitle: 'Upload Data (FS)',
+    commandCenterUploadDataDesc: 'Build and flash the filesystem image for the selected profile.',
+    commandCenterMonitorTitle: 'Open Serial Monitor',
+    commandCenterMonitorDesc: 'Open the Arduino CLI serial monitor using the selected port.',
+    commandCenterDebugTitle: 'Start Debug Session',
+    commandCenterDebugDesc: 'Prepare and run the VS Code debug configuration for the selected profile.',
+    commandCenterConfigureWarningsTitle: 'Configure Warnings & Verbose',
+    commandCenterConfigureWarningsDesc: 'Adjust compiler warnings and verbose flags in settings.',
+    commandCenterConfigureIntelliSenseTitle: 'Configure C/C++ IntelliSense',
+    commandCenterConfigureIntelliSenseDesc: 'Regenerate compile_commands.json for IntelliSense.',
+    commandCenterBuildCheckTitle: 'Build Check',
+    commandCenterBuildCheckDesc: 'Run compile for all sketch.yaml profiles and summarize results.',
+    commandCenterVersionCheckTitle: 'Check sketch.yaml Versions',
+    commandCenterVersionCheckDesc: 'Scan sketch.yaml for outdated core and library versions.',
+    commandCenterInspectorTitle: 'Open Sketch Inspector',
+    commandCenterInspectorDesc: 'Inspect build artifacts, memory usage, and warnings.',
+    commandCenterExamplesTitle: 'Open Examples Browser',
+    commandCenterExamplesDesc: 'Browse platform and library example sketches.',
+    commandCenterSketchYamlHelperTitle: 'Sketch.yaml Profile Helper',
+    commandCenterSketchYamlHelperDesc: 'Generate profile entries from compile --dump-profile and apply settings.',
+    commandCenterEmbedAssetsTitle: 'Embed Assets',
+    commandCenterEmbedAssetsDesc: 'Convert files under assets/ into a generated assets_embed.h header.',
+    commandCenterRunWokwiTitle: 'Run in Wokwi',
+    commandCenterRunWokwiDesc: 'Copy firmware artifacts and open the Wokwi simulator for the profile.',
+    commandCenterRunArbitraryTitle: 'Run Arduino CLI Command',
+    commandCenterRunArbitraryDesc: 'Execute a custom Arduino CLI command line.',
+    commandCenterVersionTitle: 'Check CLI Version',
+    commandCenterVersionDesc: 'Display the installed Arduino CLI version.',
+    commandCenterUpdateTitle: 'Update Index',
+    commandCenterUpdateDesc: 'Run arduino-cli core update-index.',
+    commandCenterUpgradeTitle: 'Upgrade Cores/Libraries',
+    commandCenterUpgradeDesc: 'Upgrade installed cores and libraries to their latest versions.',
+    commandCenterCacheCleanTitle: 'Clean Cache',
+    commandCenterCacheCleanDesc: 'Remove Arduino CLI cache data.',
+    commandCenterListBoardsTitle: 'List Connected Boards',
+    commandCenterListBoardsDesc: 'List boards currently connected to the host.',
+    commandCenterListAllBoardsTitle: 'List All Boards',
+    commandCenterListAllBoardsDesc: 'Show every board available in installed platforms.',
+    commandCenterBoardDetailsTitle: 'Board Details',
+    commandCenterBoardDetailsDesc: 'Fetch board-specific information such as supported FQBNs.',
+    commandCenterSketchNewTitle: 'Create New Sketch',
+    commandCenterSketchNewDesc: 'Create a new sketch folder and starter files.',
+    commandCenterRefreshViewTitle: 'Refresh Tree View',
+    commandCenterRefreshViewDesc: 'Rebuild the Arduino CLI view contents.',
+    commandCenterExpandAllTitle: 'Expand All Tree Nodes',
+    commandCenterExpandAllDesc: 'Expand every group in the Arduino CLI view.',
+    commandCenterOpenSecretsTitle: 'Open arduino_secrets.h',
+    commandCenterOpenSecretsDesc: 'Open the arduino_secrets.h helper file if it exists.',
+    commandCenterCreateSecretsTitle: 'Create arduino_secrets.h',
+    commandCenterCreateSecretsDesc: 'Generate arduino_secrets.h with placeholder entries.',
   },
   ja: {
     missingCli: 'Arduino CLI が見つかりませんでした: {exe}',
@@ -631,6 +702,76 @@ const MSG = {
     buildReportLibraryColumnSource: '取得元',
     buildReportSummaryWarnings: '警告',
     buildReportSummaryErrors: 'エラー',
+    commandCenterPanelTitle: 'Arduino CLI コマンドセンター',
+    commandCenterCliExit: 'arduino-cli がコード {code} で終了しました',
+    commandCenterConfigDumpFail: 'arduino-cli config dump の取得に失敗しました: {msg}',
+    commandCenterConfigAddFail: 'URL の追加に失敗しました: {msg}',
+    commandCenterConfigRemoveFail: 'URL の削除に失敗しました: {msg}',
+    commandCenterInvalidCommand: '未対応のコマンドです: {id}',
+    commandCenterSetProfileTitle: 'プロファイルを設定',
+    commandCenterSetProfileDesc: 'sketch.yaml のプロファイルを選択し、コンパイルやアップロードで自動利用できるようにします。',
+    commandCenterSetFqbnTitle: 'FQBN を設定',
+    commandCenterSetFqbnDesc: 'プロファイルを使わないスケッチ向けに使用するボード FQBN を選択します。',
+    commandCenterSetPortTitle: 'シリアルポートを設定',
+    commandCenterSetPortDesc: 'アップロードやシリアルモニターで使うシリアルポートを選択または入力します。',
+    commandCenterSetBaudTitle: 'ボーレートを設定',
+    commandCenterSetBaudDesc: 'シリアルモニター用のボーレートを選択します。',
+    commandCenterCompileTitle: 'スケッチをコンパイル',
+    commandCenterCompileDesc: '選択したプロファイルまたは FQBN を使ってスケッチをビルドします。',
+    commandCenterCleanCompileTitle: 'クリーンビルド',
+    commandCenterCleanCompileDesc: 'ビルドキャッシュを削除してからスケッチを再コンパイルします。',
+    commandCenterUploadTitle: 'スケッチを書き込み',
+    commandCenterUploadDesc: 'スケッチをビルドして接続中のボードへ書き込みます。',
+    commandCenterUploadDataTitle: 'data を書き込み (FS)',
+    commandCenterUploadDataDesc: '選択したプロファイル用にファイルシステムイメージを生成して書き込みます。',
+    commandCenterMonitorTitle: 'シリアルモニターを開く',
+    commandCenterMonitorDesc: '選択したポートで Arduino CLI のシリアルモニターを開始します。',
+    commandCenterDebugTitle: 'デバッグを開始',
+    commandCenterDebugDesc: '選択したプロファイル向けの VS Code デバッグ構成を準備して起動します。',
+    commandCenterConfigureWarningsTitle: '警告/詳細ログを設定',
+    commandCenterConfigureWarningsDesc: 'コンパイラの警告レベルと verbose オプションを設定します。',
+    commandCenterConfigureIntelliSenseTitle: 'C/C++ IntelliSense を再設定',
+    commandCenterConfigureIntelliSenseDesc: 'IntelliSense 用の compile_commands.json を再生成します。',
+    commandCenterBuildCheckTitle: 'ビルドチェック',
+    commandCenterBuildCheckDesc: 'sketch.yaml の全プロファイルでコンパイルを実行し結果をまとめます。',
+    commandCenterVersionCheckTitle: 'sketch.yaml のバージョン確認',
+    commandCenterVersionCheckDesc: 'sketch.yaml を走査してコア/ライブラリの更新状況を確認します。',
+    commandCenterInspectorTitle: 'スケッチインスペクター',
+    commandCenterInspectorDesc: 'ビルド成果物やメモリ使用量、警告を確認します。',
+    commandCenterExamplesTitle: 'サンプルブラウザー',
+    commandCenterExamplesDesc: 'プラットフォームおよびライブラリのサンプルスケッチを参照します。',
+    commandCenterSketchYamlHelperTitle: 'sketch.yaml ヘルパー',
+    commandCenterSketchYamlHelperDesc: 'compile --dump-profile の結果からプロファイル設定を生成します。',
+    commandCenterEmbedAssetsTitle: 'アセットを埋め込む',
+    commandCenterEmbedAssetsDesc: 'assets/ 以下のファイルを assets_embed.h に変換します。',
+    commandCenterRunWokwiTitle: 'Wokwi で実行',
+    commandCenterRunWokwiDesc: 'プロファイルの成果物をコピーして Wokwi シミュレーターを起動します。',
+    commandCenterRunArbitraryTitle: 'Arduino CLI コマンドを実行',
+    commandCenterRunArbitraryDesc: '任意の Arduino CLI コマンドラインを実行します。',
+    commandCenterVersionTitle: 'CLI バージョンを確認',
+    commandCenterVersionDesc: 'インストール済みの Arduino CLI バージョンを表示します。',
+    commandCenterUpdateTitle: 'インデックスを更新',
+    commandCenterUpdateDesc: 'arduino-cli core update-index を実行します。',
+    commandCenterUpgradeTitle: 'コア/ライブラリをアップグレード',
+    commandCenterUpgradeDesc: 'インストール済みのコアとライブラリを最新版へ更新します。',
+    commandCenterCacheCleanTitle: 'キャッシュをクリア',
+    commandCenterCacheCleanDesc: 'Arduino CLI のキャッシュデータを削除します。',
+    commandCenterListBoardsTitle: '接続中のボードを一覧表示',
+    commandCenterListBoardsDesc: 'ホストに接続されているボードを一覧します。',
+    commandCenterListAllBoardsTitle: '全ボードを一覧表示',
+    commandCenterListAllBoardsDesc: 'インストール済みプラットフォームの全ボードを表示します。',
+    commandCenterBoardDetailsTitle: 'ボード詳細を取得',
+    commandCenterBoardDetailsDesc: '選択したボードの詳細情報や対応 FQBN を表示します。',
+    commandCenterSketchNewTitle: '新しいスケッチを作成',
+    commandCenterSketchNewDesc: '新規のスケッチフォルダーと初期ファイルを作成します。',
+    commandCenterRefreshViewTitle: 'ビューを更新',
+    commandCenterRefreshViewDesc: 'Arduino CLI ビューの内容を再読み込みします。',
+    commandCenterExpandAllTitle: 'すべて展開',
+    commandCenterExpandAllDesc: 'Arduino CLI ビュー内のすべてのグループを展開します。',
+    commandCenterOpenSecretsTitle: 'arduino_secrets.h を開く',
+    commandCenterOpenSecretsDesc: '既存の arduino_secrets.h を開きます。',
+    commandCenterCreateSecretsTitle: 'arduino_secrets.h を作成',
+    commandCenterCreateSecretsDesc: 'arduino_secrets.h をテンプレート付きで生成します。',
     defaultProfileSet: '[sketch.yaml] default_profile を設定: {name}',
     setFqbnPickTitle: 'FQBN を選択してください',
     setFqbnManual: 'FQBN を手入力…',
@@ -721,6 +862,7 @@ const MSG = {
     buildCheckParseError: '[build-check] {sketch} ({profile}) の JSON 出力解析に失敗しました: {msg}',
     buildCheckCliError: '[build-check] {sketch} ({profile}) のコンパイル実行に失敗しました (終了コード {code})。',
     buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
+    treeCommandCenter: 'コマンドセンター',
     treeBuildCheck: 'ビルドチェック',
     treeCompile: 'コンパイル',
     treeCleanCompile: 'クリーンコンパイル',
@@ -809,6 +951,43 @@ function t(key, vars) {
   if (!vars) return str;
   return str.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : ''));
 }
+
+const COMMAND_CENTER_ITEMS = Object.freeze([
+  { command: 'arduino-cli.setProfile', titleKey: 'commandCenterSetProfileTitle', descKey: 'commandCenterSetProfileDesc', requiresProfile: false },
+  { command: 'arduino-cli.setFqbn', titleKey: 'commandCenterSetFqbnTitle', descKey: 'commandCenterSetFqbnDesc', requiresProfile: false },
+  { command: 'arduino-cli.setPort', titleKey: 'commandCenterSetPortTitle', descKey: 'commandCenterSetPortDesc', requiresProfile: false },
+  { command: 'arduino-cli.setBaud', titleKey: 'commandCenterSetBaudTitle', descKey: 'commandCenterSetBaudDesc', requiresProfile: false },
+  { command: 'arduino-cli.compile', titleKey: 'commandCenterCompileTitle', descKey: 'commandCenterCompileDesc', requiresProfile: true },
+  { command: 'arduino-cli.cleanCompile', titleKey: 'commandCenterCleanCompileTitle', descKey: 'commandCenterCleanCompileDesc', requiresProfile: true },
+  { command: 'arduino-cli.upload', titleKey: 'commandCenterUploadTitle', descKey: 'commandCenterUploadDesc', requiresProfile: true },
+  { command: 'arduino-cli.uploadData', titleKey: 'commandCenterUploadDataTitle', descKey: 'commandCenterUploadDataDesc', requiresProfile: true },
+  { command: 'arduino-cli.monitor', titleKey: 'commandCenterMonitorTitle', descKey: 'commandCenterMonitorDesc', requiresProfile: false },
+  { command: 'arduino-cli.debug', titleKey: 'commandCenterDebugTitle', descKey: 'commandCenterDebugDesc', requiresProfile: true },
+  { command: 'arduino-cli.configureWarnings', titleKey: 'commandCenterConfigureWarningsTitle', descKey: 'commandCenterConfigureWarningsDesc', requiresProfile: false },
+  { command: 'arduino-cli.configureIntelliSense', titleKey: 'commandCenterConfigureIntelliSenseTitle', descKey: 'commandCenterConfigureIntelliSenseDesc', requiresProfile: true },
+  { command: 'arduino-cli.buildCheck', titleKey: 'commandCenterBuildCheckTitle', descKey: 'commandCenterBuildCheckDesc', requiresProfile: false },
+  { command: 'arduino-cli.versionCheck', titleKey: 'commandCenterVersionCheckTitle', descKey: 'commandCenterVersionCheckDesc', requiresProfile: false },
+  { command: 'arduino-cli.inspector', titleKey: 'commandCenterInspectorTitle', descKey: 'commandCenterInspectorDesc', requiresProfile: true },
+  { command: 'arduino-cli.examples', titleKey: 'commandCenterExamplesTitle', descKey: 'commandCenterExamplesDesc', requiresProfile: false },
+  { command: 'arduino-cli.sketchYamlHelper', titleKey: 'commandCenterSketchYamlHelperTitle', descKey: 'commandCenterSketchYamlHelperDesc', requiresProfile: false },
+  { command: 'arduino-cli.embedAssets', titleKey: 'commandCenterEmbedAssetsTitle', descKey: 'commandCenterEmbedAssetsDesc', requiresProfile: false },
+  { command: 'arduino-cli.runWokwi', titleKey: 'commandCenterRunWokwiTitle', descKey: 'commandCenterRunWokwiDesc', requiresProfile: true },
+  { command: 'arduino-cli.runArbitrary', titleKey: 'commandCenterRunArbitraryTitle', descKey: 'commandCenterRunArbitraryDesc', requiresProfile: false },
+  { command: 'arduino-cli.version', titleKey: 'commandCenterVersionTitle', descKey: 'commandCenterVersionDesc', requiresProfile: false },
+  { command: 'arduino-cli.update', titleKey: 'commandCenterUpdateTitle', descKey: 'commandCenterUpdateDesc', requiresProfile: false },
+  { command: 'arduino-cli.upgrade', titleKey: 'commandCenterUpgradeTitle', descKey: 'commandCenterUpgradeDesc', requiresProfile: false },
+  { command: 'arduino-cli.cacheClean', titleKey: 'commandCenterCacheCleanTitle', descKey: 'commandCenterCacheCleanDesc', requiresProfile: false },
+  { command: 'arduino-cli.listBoards', titleKey: 'commandCenterListBoardsTitle', descKey: 'commandCenterListBoardsDesc', requiresProfile: false },
+  { command: 'arduino-cli.listAllBoards', titleKey: 'commandCenterListAllBoardsTitle', descKey: 'commandCenterListAllBoardsDesc', requiresProfile: false },
+  { command: 'arduino-cli.boardDetails', titleKey: 'commandCenterBoardDetailsTitle', descKey: 'commandCenterBoardDetailsDesc', requiresProfile: false },
+  { command: 'arduino-cli.sketchNew', titleKey: 'commandCenterSketchNewTitle', descKey: 'commandCenterSketchNewDesc', requiresProfile: false },
+  { command: 'arduino-cli.refreshView', titleKey: 'commandCenterRefreshViewTitle', descKey: 'commandCenterRefreshViewDesc', requiresProfile: false },
+  { command: 'arduino-cli.expandAll', titleKey: 'commandCenterExpandAllTitle', descKey: 'commandCenterExpandAllDesc', requiresProfile: false },
+  { command: 'arduino-cli.openSecretsHeader', titleKey: 'commandCenterOpenSecretsTitle', descKey: 'commandCenterOpenSecretsDesc', requiresProfile: false },
+  { command: 'arduino-cli.createSecretsHeader', titleKey: 'commandCenterCreateSecretsTitle', descKey: 'commandCenterCreateSecretsDesc', requiresProfile: false },
+]);
+
+const COMMAND_CENTER_COMMAND_SET = new Set(COMMAND_CENTER_ITEMS.map((item) => item.command));
 
 function formatStoredPortValue(port, host) {
   const trimmed = typeof port === 'string' ? port.trim() : '';
@@ -2236,6 +2415,34 @@ function runWindowsCli(args, opts = {}) {
       else reject(new Error(`arduino-cli.exe exited with code ${code}`));
     });
   });
+}
+
+async function runCliCaptureOutput(args, opts = {}) {
+  const cfg = getConfig();
+  const exe = cfg.exe || 'arduino-cli';
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const finalArgs = [...baseArgs, ...args];
+  const channel = getOutput();
+  const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
+  channel.show();
+  channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
+  if (opts.cwd) channel.appendLine(`${ANSI.dim}(cwd: ${opts.cwd})${ANSI.reset}`);
+  const result = await runCommandCapture(exe, finalArgs, opts.cwd);
+  const stdout = result.stdout || '';
+  const stderr = result.stderr || '';
+  if (stdout) channel.append(stdout);
+  if (stderr) channel.append(stderr);
+  if (typeof result.code === 'number') {
+    channel.appendLine(`${ANSI.bold}${ANSI.green}[exit ${result.code}]${ANSI.reset}`);
+  }
+  if (result.error) {
+    throw result.error;
+  }
+  if (typeof result.code === 'number' && result.code !== 0) {
+    const errMsg = stderr.trim() ? stderr.trim() : t('commandCenterCliExit', { code: result.code });
+    throw new Error(errMsg);
+  }
+  return result;
 }
 
 /**
@@ -5578,6 +5785,7 @@ function activate(context) {
         if (action === 'wokwiRun') return commandRunWokwi(sketchDir, profile);
         if (action === 'versionCheck') return vscode.commands.executeCommand('arduino-cli.versionCheck');
         if (action === 'buildCheck') return vscode.commands.executeCommand('arduino-cli.buildCheck');
+        if (action === 'commandCenter') return vscode.commands.executeCommand('arduino-cli.commandCenter');
         if (action === 'refreshView') return vscode.commands.executeCommand('arduino-cli.refreshView');
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
         if (action === 'setBaud') return vscode.commands.executeCommand('arduino-cli.setBaud');
@@ -5589,6 +5797,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.examples', () => commandOpenExamplesBrowser({})),
     vscode.commands.registerCommand('arduino-cli.inspector', () => commandOpenInspector({})),
     vscode.commands.registerCommand('arduino-cli.sketchYamlHelper', commandOpenSketchYamlHelper),
+    vscode.commands.registerCommand('arduino-cli.commandCenter', commandOpenCommandCenter),
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
     vscode.commands.registerCommand('arduino-cli.update', commandUpdate),
     vscode.commands.registerCommand('arduino-cli.upgrade', commandUpgrade),
@@ -5778,6 +5987,7 @@ function defaultCommandItems(dir, profile, parent, features = {}) {
 // Commands at the root level (not tied to a specific sketch/profile)
 function globalCommandItems() {
   return [
+    new CommandItem('Command Center', 'commandCenter', '', '', undefined, t('treeCommandCenter')),
     new CommandItem('CLI Version', 'version', '', '', undefined, t('treeCliVersion')),
     new CommandItem('List Boards', 'listBoards', '', '', undefined, t('treeListBoards')),
     new CommandItem('List All Boards', 'listAllBoards', '', '', undefined, t('treeListAllBoards')),
@@ -7553,6 +7763,248 @@ function replaceMonitorBaud(text, baud) {
 /**
  * Open a webview for the sketch.yaml helper and wire apply action.
  */
+function buildCommandCenterCommandList() {
+  return COMMAND_CENTER_ITEMS.map((item) => ({
+    command: item.command,
+    title: t(item.titleKey),
+    description: t(item.descKey),
+    requiresProfile: !!item.requiresProfile,
+  }));
+}
+
+async function buildCommandCenterProfileState() {
+  let sketchDir = '';
+  let profile = '';
+  try {
+    const stored = getSelectedProfileState();
+    sketchDir = stored?.sketchDir || '';
+    profile = stored?.profile || '';
+    if (sketchDir) {
+      try {
+        await vscode.workspace.fs.stat(vscode.Uri.file(sketchDir));
+      } catch (_) {
+        sketchDir = '';
+        profile = '';
+      }
+    }
+  } catch (_) {
+    sketchDir = '';
+    profile = '';
+  }
+  let profileLabel = '';
+  if (sketchDir && profile) {
+    const sketchName = path.basename(sketchDir) || sketchDir;
+    profileLabel = `${sketchName}/${profile}`;
+  } else if (profile) {
+    profileLabel = profile;
+  }
+  return { hasProfile: !!(sketchDir && profile), profileLabel };
+}
+
+function extractAdditionalUrlsFromConfigDump(text) {
+  const urls = [];
+  const lines = String(text || '').replace(/\t/g, '  ').split(/\r?\n/);
+  let inBoardManager = false;
+  let boardIndent = 0;
+  let inUrls = false;
+  let urlsIndent = 0;
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const indent = raw.length - trimmed.length;
+    if (!inBoardManager) {
+      if (trimmed.startsWith('board_manager:')) {
+        inBoardManager = true;
+        boardIndent = indent;
+        inUrls = false;
+      }
+      continue;
+    }
+    if (indent <= boardIndent && !trimmed.startsWith('-')) {
+      inBoardManager = false;
+      inUrls = false;
+    }
+    if (!inBoardManager) continue;
+    if (!inUrls) {
+      if (trimmed.startsWith('additional_urls:')) {
+        inUrls = true;
+        urlsIndent = indent;
+      }
+      continue;
+    }
+    if (indent <= urlsIndent && !trimmed.startsWith('-')) {
+      inUrls = false;
+      continue;
+    }
+    if (trimmed.startsWith('-')) {
+      let value = trimmed.slice(1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      if (value) urls.push(value);
+    }
+  }
+  return urls;
+}
+
+async function fetchCommandCenterConfigDump() {
+  const result = await runCliCaptureOutput(['config', 'dump']);
+  const stdout = result.stdout || '';
+  return {
+    text: stdout.trim(),
+    additionalUrls: extractAdditionalUrlsFromConfigDump(stdout),
+  };
+}
+
+function commandCenterErrorMessage(err) {
+  return (err && err.message) ? err.message : String(err || 'unknown');
+}
+
+async function sendCommandCenterInit(panel) {
+  const commands = buildCommandCenterCommandList();
+  const profileState = await buildCommandCenterProfileState();
+  let configText = '';
+  let additionalUrls = [];
+  panel.webview.postMessage({ type: 'configBusy', value: true });
+  try {
+    const data = await fetchCommandCenterConfigDump();
+    configText = data.text;
+    additionalUrls = data.additionalUrls;
+  } catch (err) {
+    const msg = t('commandCenterConfigDumpFail', { msg: commandCenterErrorMessage(err) });
+    panel.webview.postMessage({ type: 'status', error: msg });
+  }
+  panel.webview.postMessage({
+    type: 'init',
+    locale: _isJa ? 'ja' : 'en',
+    commands,
+    hasProfile: profileState.hasProfile,
+    profileLabel: profileState.profileLabel,
+    configDump: configText,
+    additionalUrls,
+  });
+  panel.webview.postMessage({ type: 'configBusy', value: false });
+}
+
+async function handleCommandCenterRun(panel, commandId) {
+  if (typeof commandId !== 'string' || !commandId) return;
+  if (!COMMAND_CENTER_COMMAND_SET.has(commandId)) {
+    panel.webview.postMessage({ type: 'status', error: t('commandCenterInvalidCommand', { id: commandId }) });
+    return;
+  }
+  panel.webview.postMessage({ type: 'commandState', command: commandId, running: true });
+  try {
+    await vscode.commands.executeCommand(commandId);
+    panel.webview.postMessage({ type: 'commandState', command: commandId, running: false, success: true });
+  } catch (err) {
+    panel.webview.postMessage({
+      type: 'commandState',
+      command: commandId,
+      running: false,
+      success: false,
+      error: commandCenterErrorMessage(err),
+    });
+  }
+  const profileState = await buildCommandCenterProfileState();
+  panel.webview.postMessage({ type: 'profileState', ...profileState });
+}
+
+async function refreshCommandCenterConfig(panel, options = {}) {
+  const silent = !!options.silent;
+  panel.webview.postMessage({ type: 'configBusy', value: true });
+  try {
+    const data = await fetchCommandCenterConfigDump();
+    panel.webview.postMessage({ type: 'configDump', text: data.text, additionalUrls: data.additionalUrls });
+    if (!silent) panel.webview.postMessage({ type: 'status', key: 'refresh' });
+  } catch (err) {
+    const msg = t('commandCenterConfigDumpFail', { msg: commandCenterErrorMessage(err) });
+    panel.webview.postMessage({ type: 'status', error: msg });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'configBusy', value: false });
+  }
+}
+
+async function addCommandCenterUrl(panel, urlValue) {
+  const value = typeof urlValue === 'string' ? urlValue.trim() : '';
+  if (!value) return;
+  panel.webview.postMessage({ type: 'configBusy', value: true });
+  try {
+    await runCliCaptureOutput(['config', 'add', 'board_manager.additional_urls', value]);
+    const data = await fetchCommandCenterConfigDump();
+    panel.webview.postMessage({ type: 'configDump', text: data.text, additionalUrls: data.additionalUrls });
+    panel.webview.postMessage({ type: 'status', key: 'add' });
+  } catch (err) {
+    const msg = t('commandCenterConfigAddFail', { msg: commandCenterErrorMessage(err) });
+    panel.webview.postMessage({ type: 'status', error: msg });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'configBusy', value: false });
+  }
+}
+
+async function removeCommandCenterUrl(panel, urlValue) {
+  const value = typeof urlValue === 'string' ? urlValue.trim() : '';
+  if (!value) return;
+  panel.webview.postMessage({ type: 'configBusy', value: true });
+  try {
+    await runCliCaptureOutput(['config', 'remove', 'board_manager.additional_urls', value]);
+    const data = await fetchCommandCenterConfigDump();
+    panel.webview.postMessage({ type: 'configDump', text: data.text, additionalUrls: data.additionalUrls });
+    panel.webview.postMessage({ type: 'status', key: 'remove' });
+  } catch (err) {
+    const msg = t('commandCenterConfigRemoveFail', { msg: commandCenterErrorMessage(err) });
+    panel.webview.postMessage({ type: 'status', error: msg });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'configBusy', value: false });
+  }
+}
+
+async function commandOpenCommandCenter() {
+  const panel = vscode.window.createWebviewPanel(
+    'arduinoCommandCenter',
+    t('commandCenterPanelTitle'),
+    vscode.ViewColumn.Active,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  try {
+    const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'command-center.html');
+    const html = await readTextFile(htmlUri);
+    panel.webview.html = html;
+  } catch (err) {
+    showError(err);
+  }
+  panel.webview.onDidReceiveMessage(async (msg) => {
+    try {
+      if (!msg || typeof msg !== 'object') return;
+      switch (msg.type) {
+        case 'ready':
+          await sendCommandCenterInit(panel);
+          return;
+        case 'runCommand':
+          await handleCommandCenterRun(panel, msg.command);
+          return;
+        case 'refreshConfig':
+          await refreshCommandCenterConfig(panel);
+          return;
+        case 'addUrl':
+          await addCommandCenterUrl(panel, msg.url);
+          return;
+        case 'removeUrl':
+          await removeCommandCenterUrl(panel, msg.url);
+          return;
+        default:
+          break;
+      }
+    } catch (err) {
+      const errorText = commandCenterErrorMessage(err);
+      panel.webview.postMessage({ type: 'status', error: errorText });
+      showError(err);
+    }
+  });
+}
+
 async function commandOpenSketchYamlHelper(ctx) {
   const panel = vscode.window.createWebviewPanel(
     'sketchYamlHelper',
