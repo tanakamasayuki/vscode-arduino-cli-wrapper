@@ -67,8 +67,7 @@ If Arduino CLI builds feel slow on Windows, you can offload compilation to a Lin
    ```bash
    # Inside your WSL terminal (Ubuntu)
    sudo apt update
-   curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-   sudo mv bin/arduino-cli /usr/local/bin/
+   curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=~/.local/bin sh
    arduino-cli config init
    arduino-cli core update-index
    ```

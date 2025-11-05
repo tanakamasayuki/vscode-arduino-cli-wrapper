@@ -67,8 +67,7 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
    ```bash
    # WSL (Ubuntu) ターミナル内
    sudo apt update
-   curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-   sudo mv bin/arduino-cli /usr/local/bin/
+   curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=~/.local/bin sh
    arduino-cli config init
    arduino-cli core update-index
    ```
