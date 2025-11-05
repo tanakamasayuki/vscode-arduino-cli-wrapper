@@ -57,6 +57,7 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 1. **WSL と Linux ディストリビューションをインストール**
    ```powershell
    # PowerShell (管理者) で実行
+   wsl --update
    wsl --install -d Ubuntu-24.04
    wsl --set-default-version 2
    ```

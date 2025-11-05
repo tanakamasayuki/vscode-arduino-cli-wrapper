@@ -57,6 +57,7 @@ If Arduino CLI builds feel slow on Windows, you can offload compilation to a Lin
 1. **Install WSL and a Linux distribution**
    ```powershell
    # PowerShell (Admin)
+   wsl --update
    wsl --install -d Ubuntu-24.04
    wsl --set-default-version 2
    ```
