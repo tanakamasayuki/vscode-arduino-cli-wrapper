@@ -575,6 +575,12 @@ const MSG = {
     commandCenterOpenSecretsDesc: 'Open the arduino_secrets.h helper file if it exists.',
     commandCenterCreateSecretsTitle: 'Create arduino_secrets.h',
     commandCenterCreateSecretsDesc: 'Generate arduino_secrets.h with placeholder entries.',
+    commandCenterCoreFetchFail: 'Failed to refresh core index: {msg}',
+    commandCenterCoreInstallDone: 'Installed {name}@{version}.',
+    commandCenterCoreUninstallDone: 'Uninstalled {name}.',
+    commandCenterCoreInstallFail: 'Failed to install {name}@{version}: {msg}',
+    commandCenterCoreUninstallFail: 'Failed to uninstall {name}: {msg}',
+    commandCenterCoreUpdateWarn: 'Core index update failed ({msg}); displaying cached results.',
   },
   ja: {
     missingCli: 'Arduino CLI が見つかりませんでした: {exe}',
@@ -772,6 +778,12 @@ const MSG = {
     commandCenterOpenSecretsDesc: '既存の arduino_secrets.h を開きます。',
     commandCenterCreateSecretsTitle: 'arduino_secrets.h を作成',
     commandCenterCreateSecretsDesc: 'arduino_secrets.h をテンプレート付きで生成します。',
+    commandCenterCoreFetchFail: 'コア一覧の取得に失敗しました: {msg}',
+    commandCenterCoreInstallDone: '{name}@{version} をインストールしました。',
+    commandCenterCoreUninstallDone: '{name} をアンインストールしました。',
+    commandCenterCoreInstallFail: '{name}@{version} のインストールに失敗しました: {msg}',
+    commandCenterCoreUninstallFail: '{name} のアンインストールに失敗しました: {msg}',
+    commandCenterCoreUpdateWarn: 'コアインデックスの更新に失敗しました ({msg})。キャッシュ済みの情報を表示します。',
     defaultProfileSet: '[sketch.yaml] default_profile を設定: {name}',
     setFqbnPickTitle: 'FQBN を選択してください',
     setFqbnManual: 'FQBN を手入力…',
@@ -988,6 +1000,44 @@ const COMMAND_CENTER_ITEMS = Object.freeze([
 ]);
 
 const COMMAND_CENTER_COMMAND_SET = new Set(COMMAND_CENTER_ITEMS.map((item) => item.command));
+
+function compareVersionStrings(a, b) {
+  if (a === b) return 0;
+  const parse = (value) => {
+    if (value === undefined || value === null) return [];
+    return String(value)
+      .trim()
+      .split(/[\.-]/)
+      .map((part) => (/^-?\d+$/.test(part) ? Number(part) : part.toLowerCase()));
+  };
+  const av = parse(a);
+  const bv = parse(b);
+  const len = Math.max(av.length, bv.length);
+  for (let i = 0; i < len; i += 1) {
+    const ai = av[i];
+    const bi = bv[i];
+    if (ai === undefined && bi === undefined) return 0;
+    if (ai === undefined) return -1;
+    if (bi === undefined) return 1;
+    if (typeof ai === 'number' && typeof bi === 'number') {
+      if (ai !== bi) return ai - bi;
+    } else if (typeof ai === 'number') {
+      return -1;
+    } else if (typeof bi === 'number') {
+      return 1;
+    } else {
+      if (ai < bi) return -1;
+      if (ai > bi) return 1;
+    }
+  }
+  return 0;
+}
+
+function sortVersionsDesc(list) {
+  const unique = Array.from(new Set((list || []).map((v) => String(v))));
+  unique.sort((a, b) => compareVersionStrings(b, a));
+  return unique;
+}
 
 function formatStoredPortValue(port, host) {
   const trimmed = typeof port === 'string' ? port.trim() : '';
@@ -2418,6 +2468,7 @@ function runWindowsCli(args, opts = {}) {
 }
 
 async function runCliCaptureOutput(args, opts = {}) {
+  const logStdout = opts.logStdout !== false;
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
@@ -2430,7 +2481,7 @@ async function runCliCaptureOutput(args, opts = {}) {
   const result = await runCommandCapture(exe, finalArgs, opts.cwd);
   const stdout = result.stdout || '';
   const stderr = result.stderr || '';
-  if (stdout) channel.append(stdout);
+  if (stdout && logStdout) channel.append(stdout);
   if (stderr) channel.append(stderr);
   if (typeof result.code === 'number') {
     channel.appendLine(`${ANSI.bold}${ANSI.green}[exit ${result.code}]${ANSI.reset}`);
@@ -7882,6 +7933,7 @@ async function sendCommandCenterInit(panel) {
     profileLabel: profileState.profileLabel,
     configDump: configText,
     additionalUrls,
+    cores: [],
   });
   panel.webview.postMessage({ type: 'configBusy', value: false });
 }
@@ -7993,6 +8045,289 @@ async function removeCommandCenterUrl(panel, urlValue, indexValue) {
   }
 }
 
+function buildCommandCenterCoreList(searchText, installedText) {
+  const coreMap = new Map();
+  const installedMap = new Map();
+  const normalizeName = (entry) => {
+    if (!entry) return '';
+    if (typeof entry.name === 'string' && entry.name.includes(':')) return entry.name;
+    if (typeof entry.id === 'string' && entry.id.includes(':')) return entry.id;
+    if (typeof entry.fqbn === 'string' && entry.fqbn.includes(':')) return entry.fqbn;
+    if (typeof entry.ID === 'string' && entry.ID.includes(':')) return entry.ID;
+    const pkg = entry.package || entry.packager || entry.packages || entry.pkg;
+    const arch = entry.architecture || entry.arch || entry.platform;
+    if (pkg && arch) return `${pkg}:${arch}`;
+    return '';
+  };
+  try {
+    const parsedInstalled = JSON.parse(installedText || '[]');
+    const installedArray = Array.isArray(parsedInstalled)
+      ? parsedInstalled
+      : Array.isArray(parsedInstalled.cores)
+        ? parsedInstalled.cores
+        : Array.isArray(parsedInstalled.platforms)
+          ? parsedInstalled.platforms
+          : [];
+    for (const item of installedArray) {
+      const name = normalizeName(item);
+      if (!name) continue;
+      installedMap.set(name, {
+        version: item.version || item.installed_version || item.installedVersion || '',
+        latest: item.latest_version || item.latestVersion || '',
+      });
+    }
+  } catch (_) { /* ignore */ }
+  const addVersion = (info, version) => {
+    if (!version) return;
+    info.versionSet.add(String(version));
+  };
+  try {
+    const parsed = JSON.parse(searchText || '[]');
+    const entries = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed.cores)
+        ? parsed.cores
+        : Array.isArray(parsed.platforms)
+          ? parsed.platforms
+          : Array.isArray(parsed.items)
+            ? parsed.items
+            : [];
+    for (const entry of entries) {
+      const name = normalizeName(entry);
+      if (!name) continue;
+      let info = coreMap.get(name);
+      if (!info) {
+        info = {
+          name,
+          title: entry.name || entry.title || '',
+          maintainer: '',
+          description: '',
+          category: '',
+          versionSet: new Set(),
+          latestCandidates: new Set(),
+          installedFromSearch: typeof entry.installed === 'string' ? entry.installed : (entry.installed_version || ''),
+        };
+        coreMap.set(name, info);
+      }
+      if (!info.title) {
+        const platform = Array.isArray(entry.platforms) ? entry.platforms.find((p) => p && p.name) : undefined;
+        info.title = (platform && platform.name) || entry.name || entry.title || entry.label || entry.displayName || '';
+      }
+      if (!info.maintainer && entry.maintainer) info.maintainer = entry.maintainer;
+      if (!info.description) {
+        const platform = Array.isArray(entry.platforms) ? entry.platforms.find((p) => p && p.description) : undefined;
+        if (platform && platform.description) info.description = platform.description;
+        else if (entry.description) info.description = entry.description;
+      }
+      if (!info.category && entry.category) info.category = entry.category;
+      const latestCandidate = (entry.latest && (entry.latest.version || entry.latest)) || entry.latestVersion || entry.version;
+      if (latestCandidate) info.latestCandidates.add(String(latestCandidate));
+      if (Array.isArray(entry.versions)) {
+        for (const ver of entry.versions) addVersion(info, ver);
+      }
+      if (entry.releases && typeof entry.releases === 'object') {
+        for (const key of Object.keys(entry.releases)) {
+          const rel = entry.releases[key];
+          addVersion(info, rel && rel.version ? rel.version : key);
+          if (rel && rel.latest) info.latestCandidates.add(String(rel.latest));
+          if (!info.title && rel && rel.name) info.title = rel.name;
+        }
+      }
+      if (Array.isArray(entry.platforms)) {
+        for (const platform of entry.platforms) {
+          addVersion(info, platform && (platform.version || platform.release_version));
+          if (!info.description && platform && platform.category) info.description = platform.category;
+        }
+      }
+    }
+  } catch (_) { /* ignore */ }
+  const output = [];
+  coreMap.forEach((info, name) => {
+    const versionsArray = sortVersionsDesc(Array.from(info.versionSet));
+    let latestVersion = '';
+    if (info.latestCandidates.size > 0) {
+      latestVersion = sortVersionsDesc(Array.from(info.latestCandidates))[0] || '';
+    } else if (versionsArray.length > 0) {
+      latestVersion = versionsArray[0];
+    }
+    const installedEntry = installedMap.get(name);
+    const installedVersion = installedEntry?.version || info.installedFromSearch || '';
+    const versions = versionsArray.slice();
+    if (installedVersion && !versions.includes(installedVersion)) versions.push(installedVersion);
+    if (installedEntry?.latest && !versions.includes(installedEntry.latest)) versions.push(installedEntry.latest);
+    if (latestVersion && !versions.includes(latestVersion)) versions.push(latestVersion);
+    const normalizedVersions = sortVersionsDesc(versions);
+    const normalizedLatest = latestVersion || installedEntry?.latest || normalizedVersions[0] || '';
+    const installed = !!installedVersion;
+    const updateAvailable = installed && normalizedLatest && compareVersionStrings(installedVersion, normalizedLatest) < 0;
+    output.push({
+      name,
+      title: info.title || name,
+      maintainer: info.maintainer || '',
+      description: info.description || info.category || '',
+      versions: normalizedVersions,
+      latestVersion: normalizedLatest,
+      installedVersion,
+      installed,
+      updateAvailable,
+    });
+  });
+  installedMap.forEach((inst, name) => {
+    if (output.some((core) => core.name === name)) return;
+    const versions = sortVersionsDesc([inst.version, inst.latest].filter(Boolean));
+    const latestVersion = inst.latest || versions[0] || inst.version || '';
+    const installedVersion = inst.version || '';
+    const updateAvailable = installedVersion && latestVersion && compareVersionStrings(installedVersion, latestVersion) < 0;
+    output.push({
+      name,
+      title: name,
+      maintainer: '',
+      description: '',
+      versions: versions.length > 0 ? versions : (installedVersion ? [installedVersion] : []),
+      latestVersion,
+      installedVersion,
+      installed: !!installedVersion,
+      updateAvailable,
+    });
+  });
+  output.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+  return output;
+}
+
+async function loadCommandCenterCores(panel) {
+  panel.webview.postMessage({ type: 'coresBusy', value: true });
+  try {
+    const ready = await ensureCliReady();
+    if (!ready) throw new Error(t('cliCheckFail'));
+    let updateError = null;
+    try {
+      await runCliCaptureOutput(['update']);
+    } catch (err) {
+      updateError = err;
+    }
+    const channel = getOutput();
+    const logPreview = (label, text) => {
+      const str = String(text || '');
+      const trunc = str.length > 500 ? `${str.slice(0, 500)}…` : str;
+      channel.appendLine(`[command-center] ${label} length=${str.length}`);
+      channel.appendLine(`[command-center] ${label} preview=${trunc}`);
+    };
+    let searchStdout = '[]';
+    try {
+      const searchResult = await runCliCaptureOutput(['core', 'search', '--format', 'json'], { logStdout: false });
+      searchStdout = searchResult.stdout || '[]';
+    } catch (err) {
+      const msg = commandCenterErrorMessage(err).toLowerCase();
+      try {
+        if (msg.includes('unknown flag') || msg.includes('unknown shorthand') || msg.includes('flag provided') || msg.includes('unrecognized option')) {
+          const fallback = await runCliCaptureOutput(['core', 'search', '--json'], { logStdout: false });
+          searchStdout = fallback.stdout || '[]';
+        } else {
+          const fallback = await runCliCaptureOutput(['core', 'list', '--all', '--format', 'json'], { logStdout: false });
+          searchStdout = fallback.stdout || '[]';
+          panel.webview.postMessage({ type: 'status', message: t('commandCenterCoreUpdateWarn', { msg: commandCenterErrorMessage(err) }) });
+        }
+      } catch (fallbackErr) {
+        throw fallbackErr;
+      }
+    }
+    logPreview('core search json', searchStdout);
+    let listStdout = '[]';
+    try {
+      let listResult;
+      try {
+        listResult = await runCliCaptureOutput(['core', 'list', '--format', 'json'], { logStdout: false });
+      } catch (err) {
+        const msg = commandCenterErrorMessage(err).toLowerCase();
+        if (msg.includes('unknown flag') || msg.includes('unknown shorthand') || msg.includes('flag provided') || msg.includes('unrecognized option')) {
+          listResult = await runCliCaptureOutput(['core', 'list', '--json'], { logStdout: false });
+        } else {
+          throw err;
+        }
+      }
+      listStdout = listResult.stdout || '[]';
+    } catch (_) {
+      listStdout = '[]';
+    }
+    logPreview('core list json', listStdout);
+    const cores = buildCommandCenterCoreList(searchStdout, listStdout);
+    channel.appendLine(`[command-center] parsed cores: ${cores.length}`);
+    cores.slice(0, 10).forEach((core) => {
+      channel.appendLine(`[command-center] core ${core.name} versions (${core.versions.length}): ${core.versions.slice(0, 10).join(', ')}`);
+    });
+    panel.webview.postMessage({
+      type: 'coresData',
+      cores,
+      raw: {
+        search: searchStdout,
+        list: listStdout
+      }
+    });
+    if (updateError) {
+      const msg = t('commandCenterCoreUpdateWarn', { msg: commandCenterErrorMessage(updateError) });
+      panel.webview.postMessage({ type: 'status', message: msg });
+    }
+  } catch (err) {
+    const msg = t('commandCenterCoreFetchFail', { msg: commandCenterErrorMessage(err) });
+    panel.webview.postMessage({ type: 'status', error: msg });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'coresBusy', value: false });
+  }
+}
+
+async function installCommandCenterCore(panel, coreName, version) {
+  if (!coreName) return;
+  const selectedVersion = version || '';
+  const ready = await ensureCliReady();
+  if (!ready) {
+    panel.webview.postMessage({ type: 'status', error: t('cliCheckFail') });
+    return;
+  }
+  panel.webview.postMessage({ type: 'coreCommandState', name: coreName, action: 'install', running: true });
+  let succeeded = false;
+  try {
+    const target = selectedVersion ? `${coreName}@${selectedVersion}` : coreName;
+    await runCliCaptureOutput(['core', 'install', target]);
+    const versionLabel = selectedVersion || (_isJa ? '最新' : 'latest');
+    panel.webview.postMessage({ type: 'status', message: t('commandCenterCoreInstallDone', { name: coreName, version: versionLabel }) });
+    succeeded = true;
+  } catch (err) {
+    const versionLabel = selectedVersion || (_isJa ? '最新' : 'latest');
+    panel.webview.postMessage({ type: 'status', error: t('commandCenterCoreInstallFail', { name: coreName, version: versionLabel, msg: commandCenterErrorMessage(err) }) });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'coreCommandState', name: coreName, action: 'install', running: false });
+    if (succeeded) {
+      await loadCommandCenterCores(panel);
+    }
+  }
+}
+
+async function uninstallCommandCenterCore(panel, coreName) {
+  if (!coreName) return;
+  const ready = await ensureCliReady();
+  if (!ready) {
+    panel.webview.postMessage({ type: 'status', error: t('cliCheckFail') });
+    return;
+  }
+  panel.webview.postMessage({ type: 'coreCommandState', name: coreName, action: 'uninstall', running: true });
+  let succeeded = false;
+  try {
+    await runCliCaptureOutput(['core', 'uninstall', coreName]);
+    panel.webview.postMessage({ type: 'status', message: t('commandCenterCoreUninstallDone', { name: coreName }) });
+    succeeded = true;
+  } catch (err) {
+    panel.webview.postMessage({ type: 'status', error: t('commandCenterCoreUninstallFail', { name: coreName, msg: commandCenterErrorMessage(err) }) });
+    showError(err);
+  } finally {
+    panel.webview.postMessage({ type: 'coreCommandState', name: coreName, action: 'uninstall', running: false });
+    if (succeeded) {
+      await loadCommandCenterCores(panel);
+    }
+  }
+}
+
 async function commandOpenCommandCenter() {
   const panel = vscode.window.createWebviewPanel(
     'arduinoCommandCenter',
@@ -8025,6 +8360,15 @@ async function commandOpenCommandCenter() {
           return;
         case 'removeUrl':
           await removeCommandCenterUrl(panel, msg.url, msg.index);
+          return;
+        case 'loadCores':
+          await loadCommandCenterCores(panel);
+          return;
+        case 'installCore':
+          await installCommandCenterCore(panel, msg.name, msg.version);
+          return;
+        case 'uninstallCore':
+          await uninstallCommandCenterCore(panel, msg.name);
           return;
         default:
           break;

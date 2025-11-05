@@ -11,6 +11,8 @@
 - (JA) コマンドパレット／左ツリーから開ける Arduino CLI コマンドセンター Webview を追加し、全コマンドをローカライズされた解説と実行ボタン付きでタブ表示できるようにしました。
 - (EN) The Command Center configuration tab now mirrors `arduino-cli config dump`, lets you add or delete `board_manager.additional_urls`, and refreshes the dump automatically after each change with a two-click confirmation to avoid accidental removals.
 - (JA) コマンドセンターの設定タブで `arduino-cli config dump` の結果を表示し、`board_manager.additional_urls` の追加・削除・再読込を自動化しました。削除は二度押し確認に変更し、誤操作を防いでから一覧を再更新します。
+- (EN) Added a Cores tab to the Command Center that runs `arduino-cli update` + `core search`/`core list`, shows installed/default versions with filters, and provides install/update/uninstall actions with version pickers.
+- (JA) コマンドセンターにコアタブを追加し、`arduino-cli update` と `core search`/`core list` の結果から既定バージョンとインストール状況を表示、絞り込みやバージョン選択付きでインストール・更新・アンインストールを行えるようにしました。
 
 ## 1.7.1
 - (EN) Automatically re-run `arduino-cli update` before major commands when 24 hours have elapsed since the previous run, keeping cached package data fresh across sessions.

@@ -169,6 +169,109 @@
       min-width: 110px;
     }
 
+    .checkbox {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #ccc;
+    }
+
+    .checkbox input {
+      margin: 0;
+    }
+
+    .core-note {
+      font-size: 12px;
+      color: #ccc;
+      background: #1f1f1f;
+      border: 1px solid #2d2d2d;
+      border-radius: 6px;
+      padding: 10px 12px;
+      line-height: 1.5;
+    }
+
+    .core-note strong {
+      color: #fff;
+    }
+
+    .core-toolbar {
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .core-toolbar input[type="text"] {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .core-table select {
+      padding: 5px 8px;
+      background: #2d2d2d;
+      color: #d4d4d4;
+      border: 1px solid #3d3d3d;
+      border-radius: 4px;
+    }
+
+    .core-name {
+      font-weight: 600;
+    }
+
+    .core-meta {
+      color: #999;
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .core-status-cell {
+      font-size: 12px;
+      color: #ddd;
+    }
+
+    .core-action-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .core-empty {
+      font-size: 13px;
+      color: #808080;
+      text-align: center;
+      margin-top: 16px;
+    }
+
+    .core-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #094771;
+      color: #fff;
+      font-size: 11px;
+      margin-left: 6px;
+    }
+
+    .core-row.pending {
+      opacity: 0.6;
+    }
+
+    .core-installed {
+      color: #4ec9b0;
+      font-weight: 600;
+    }
+
+    .core-not-installed {
+      color: #bbb;
+    }
+
     .command-title {
       font-weight: 600;
       font-size: 14px;
@@ -258,6 +361,7 @@
   <header>
     <button id="tabCommands" class="active" data-tab="commands"></button>
     <button id="tabConfig" data-tab="config"></button>
+    <button id="tabCores" data-tab="cores"></button>
     <span id="status" class="status"></span>
   </header>
   <main>
@@ -289,6 +393,36 @@
         <tbody id="urlTable"></tbody>
       </table>
     </section>
+    <section id="panelCores" class="tab-panel">
+      <div class="core-note" id="coreNotice"></div>
+      <div class="toolbar core-toolbar">
+        <input id="coreFilter" type="text" />
+        <div class="checkbox-group">
+          <label class="checkbox">
+            <input type="checkbox" id="coreShowInstalled" />
+            <span id="coreShowInstalledLabel"></span>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="coreShowUpdatable" />
+            <span id="coreShowUpdatableLabel"></span>
+          </label>
+        </div>
+        <button id="coreRefresh" class="primary"></button>
+      </div>
+      <table class="core-table">
+        <thead>
+          <tr>
+            <th id="coreHeaderName"></th>
+            <th id="coreHeaderLatest"></th>
+            <th id="coreHeaderInstalled"></th>
+            <th id="coreHeaderVersion"></th>
+            <th id="coreHeaderActions"></th>
+          </tr>
+        </thead>
+        <tbody id="coreTable"></tbody>
+      </table>
+      <div id="coreEmpty" class="core-empty hidden"></div>
+    </section>
   </main>
   <script>
     const vscode = acquireVsCodeApi();
@@ -304,11 +438,19 @@
       configDump: '',
       additionalUrls: [],
       pendingRemoveIndex: -1,
+      cores: [],
+      coreFilter: '',
+      coreShowInstalled: false,
+      coreShowUpdatable: false,
+      coreBusy: false,
+      coreSelections: {},
+      corePendingAction: null,
     };
 
     const STR = {
       ja: {
         tabCommands: 'コマンド',
+        tabCores: 'コア',
         tabConfig: '設定',
         filterPlaceholder: 'コマンドを検索',
         run: '実行',
@@ -335,9 +477,34 @@
         statusError: 'エラー: {msg}',
         statusBusy: '処理中…',
         invalidUrl: '有効な URL を入力してください。',
+        coreNotice: 'この一覧では sketch.yaml でバージョンを固定していない場合に使用される Arduino コアの既定バージョンを管理します。推奨は各プロジェクトでバージョンを指定することであり、ここでインストールしたコアは Arduino IDE でも利用できます。',
+        coreFilterPlaceholder: 'コア名／プラットフォーム／メンテナーで絞り込み',
+        coreShowInstalled: 'インストール済みのみ',
+        coreShowUpdatable: 'アップデート可能のみ',
+        coreHeaderName: 'コア',
+        coreHeaderLatest: '最新バージョン',
+        coreHeaderInstalled: 'インストール済み',
+        coreHeaderVersion: '選択バージョン',
+        coreHeaderActions: '操作',
+        coreRefresh: '一覧を更新',
+        coreInstall: 'インストール',
+        coreInstallSelected: '選択をインストール',
+        coreReinstall: '再インストール',
+        coreUpdate: '最新に更新',
+        coreUninstall: 'アンインストール',
+        coreLoading: 'コア情報を取得しています…',
+        coreNoData: 'コア情報が未取得です。更新ボタンで取得してください。',
+        coreNoMatch: 'フィルター条件に一致するコアがありません。',
+        coreInstalledLabel: 'バージョン {version}',
+        coreNotInstalledLabel: '未インストール',
+        coreUpdateTag: '更新可能',
+        coreLatestTag: '最新',
+        coreOptionInstalled: ' (インストール済み)',
+        coreOptionLatest: ' (最新)',
       },
       en: {
         tabCommands: 'Commands',
+        tabCores: 'Cores',
         tabConfig: 'Settings',
         filterPlaceholder: 'Search commands',
         run: 'Run',
@@ -364,15 +531,41 @@
         statusError: 'Error: {msg}',
         statusBusy: 'Working…',
         invalidUrl: 'Enter a valid URL.',
+        coreNotice: 'Manage default Arduino core versions used when sketch.yaml does not pin an explicit release. Projects should prefer pinning versions inside sketch.yaml; any core installed here is also available to the Arduino IDE.',
+        coreFilterPlaceholder: 'Filter cores (name/platform/maintainer)',
+        coreShowInstalled: 'Installed only',
+        coreShowUpdatable: 'Update available',
+        coreHeaderName: 'Core',
+        coreHeaderLatest: 'Latest',
+        coreHeaderInstalled: 'Installed',
+        coreHeaderVersion: 'Selected version',
+        coreHeaderActions: 'Actions',
+        coreRefresh: 'Refresh List',
+        coreInstall: 'Install',
+        coreInstallSelected: 'Install Selected',
+        coreReinstall: 'Reinstall',
+        coreUpdate: 'Update to Latest',
+        coreUninstall: 'Uninstall',
+        coreLoading: 'Loading cores…',
+        coreNoData: 'Core data has not been loaded yet. Use Refresh to retrieve it.',
+        coreNoMatch: 'No cores match the current filters.',
+        coreInstalledLabel: 'Version {version}',
+        coreNotInstalledLabel: 'Not installed',
+        coreUpdateTag: 'Update available',
+        coreLatestTag: 'Latest',
+        coreOptionInstalled: ' (installed)',
+        coreOptionLatest: ' (latest)',
       }
     };
 
     const tabButtons = {
       commands: document.getElementById('tabCommands'),
+      cores: document.getElementById('tabCores'),
       config: document.getElementById('tabConfig'),
     };
     const panels = {
       commands: document.getElementById('panelCommands'),
+      cores: document.getElementById('panelCores'),
       config: document.getElementById('panelConfig'),
     };
     const statusEl = document.getElementById('status');
@@ -380,6 +573,20 @@
     const commandList = document.getElementById('commandList');
     const emptyCommands = document.getElementById('emptyCommands');
     const profileBadge = document.getElementById('profileBadge');
+    const coreNotice = document.getElementById('coreNotice');
+    const coreFilterInput = document.getElementById('coreFilter');
+    const coreShowInstalledToggle = document.getElementById('coreShowInstalled');
+    const coreShowInstalledLabel = document.getElementById('coreShowInstalledLabel');
+    const coreShowUpdatableToggle = document.getElementById('coreShowUpdatable');
+    const coreShowUpdatableLabel = document.getElementById('coreShowUpdatableLabel');
+    const coreRefreshBtn = document.getElementById('coreRefresh');
+    const coreHeaderName = document.getElementById('coreHeaderName');
+    const coreHeaderLatest = document.getElementById('coreHeaderLatest');
+    const coreHeaderInstalled = document.getElementById('coreHeaderInstalled');
+    const coreHeaderVersion = document.getElementById('coreHeaderVersion');
+    const coreHeaderActions = document.getElementById('coreHeaderActions');
+    const coreTable = document.getElementById('coreTable');
+    const coreEmpty = document.getElementById('coreEmpty');
     const configDump = document.getElementById('configDump');
     const refreshBtn = document.getElementById('refreshConfig');
     const urlInput = document.getElementById('urlInput');
@@ -405,6 +612,11 @@
       return '';
     }
 
+    function escapeHtml(s) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return String(s ?? '').replace(/[&<>"']/g, (ch) => map[ch]);
+    }
+
     function setLocale(locale) {
       if (locale !== 'ja' && locale !== 'en') return;
       state.locale = locale;
@@ -416,8 +628,19 @@
 
     function applyStaticTexts() {
       tabButtons.commands.textContent = text('tabCommands');
+      tabButtons.cores.textContent = text('tabCores');
       tabButtons.config.textContent = text('tabConfig');
       filterInput.placeholder = text('filterPlaceholder');
+      coreFilterInput.placeholder = text('coreFilterPlaceholder');
+      coreShowInstalledLabel.textContent = text('coreShowInstalled');
+      coreShowUpdatableLabel.textContent = text('coreShowUpdatable');
+      coreRefreshBtn.textContent = text('coreRefresh');
+      coreNotice.textContent = text('coreNotice');
+      coreHeaderName.textContent = text('coreHeaderName');
+      coreHeaderLatest.textContent = text('coreHeaderLatest');
+      coreHeaderInstalled.textContent = text('coreHeaderInstalled');
+      coreHeaderVersion.textContent = text('coreHeaderVersion');
+      coreHeaderActions.textContent = text('coreHeaderActions');
       refreshBtn.textContent = text('refreshConfig');
       addUrlBtn.textContent = text('addUrl');
       urlInput.placeholder = text('urlPlaceholder');
@@ -448,6 +671,14 @@
         if (!panel) return;
         panel.classList.toggle('active', key === tab);
       });
+      if (tab !== 'config' && state.pendingRemoveIndex !== -1) {
+        state.pendingRemoveIndex = -1;
+        renderConfig();
+      }
+      if (tab === 'cores') {
+        renderCores();
+        requestCores(false);
+      }
     }
 
     function setCommandRunning(id, running) {
@@ -550,6 +781,176 @@
       emptyCommands.textContent = visibleCount === 0 ? text('noCommands') : '';
     }
 
+    function requestCores(force = false) {
+      if (state.coreBusy) {
+        return;
+      }
+      if (!force && state.cores && state.cores.length > 0) return;
+      state.coreBusy = true;
+      renderCores();
+      vscode.postMessage({ type: 'loadCores' });
+    }
+
+    function renderCores() {
+      if (!coreTable) return;
+      if (coreNotice) coreNotice.textContent = text('coreNotice');
+      if (coreFilterInput && coreFilterInput.value !== state.coreFilter) coreFilterInput.value = state.coreFilter;
+      if (coreShowInstalledToggle) coreShowInstalledToggle.checked = !!state.coreShowInstalled;
+      if (coreShowUpdatableToggle) coreShowUpdatableToggle.checked = !!state.coreShowUpdatable;
+      const controlsLocked = state.coreBusy || !!state.corePendingAction;
+      if (coreFilterInput) coreFilterInput.disabled = controlsLocked;
+      if (coreShowInstalledToggle) coreShowInstalledToggle.disabled = controlsLocked;
+      if (coreShowUpdatableToggle) coreShowUpdatableToggle.disabled = controlsLocked;
+      if (coreRefreshBtn) coreRefreshBtn.disabled = controlsLocked;
+      const cores = Array.isArray(state.cores) ? state.cores : [];
+      const filterText = (state.coreFilter || '').trim().toLowerCase();
+      const showInstalled = !!state.coreShowInstalled;
+      const showUpdatable = !!state.coreShowUpdatable;
+      const filtered = cores.filter((core) => {
+        if (showInstalled && !core.installed) return false;
+        if (showUpdatable && !core.updateAvailable) return false;
+        if (filterText) {
+          const haystack = [
+            core.title,
+            core.name,
+            core.maintainer,
+            core.description,
+            core.latestVersion,
+            core.installedVersion,
+          ].map((s) => (s || '').toString().toLowerCase()).join(' ');
+          if (!haystack.includes(filterText)) return false;
+        }
+        return true;
+      });
+      coreTable.innerHTML = '';
+      filtered.forEach((core) => {
+        const tr = document.createElement('tr');
+        tr.className = 'core-row';
+        const pending = state.corePendingAction && state.corePendingAction.name === core.name;
+        if (pending) tr.classList.add('pending');
+        const infoCell = document.createElement('td');
+        const nameParts = [escapeHtml(core.title || core.name)];
+        if (core.updateAvailable) {
+          nameParts.push(`<span class="core-tag">${escapeHtml(text('coreUpdateTag'))}</span>`);
+        }
+        if (!core.installed && !core.updateAvailable && core.latestVersion) {
+          nameParts.push(`<span class="core-tag">${escapeHtml(text('coreLatestTag'))}</span>`);
+        }
+        infoCell.innerHTML = `<div class="core-name">${nameParts.join(' ')}</div>`;
+        const metaParts = [];
+        if (core.maintainer) metaParts.push(escapeHtml(core.maintainer));
+        if (core.description) metaParts.push(escapeHtml(core.description));
+        if (metaParts.length > 0) {
+          infoCell.innerHTML += `<div class="core-meta">${metaParts.join(' · ')}</div>`;
+        }
+        tr.appendChild(infoCell);
+
+        const latestCell = document.createElement('td');
+        latestCell.className = 'core-status-cell';
+        latestCell.textContent = core.latestVersion ? core.latestVersion : '—';
+        tr.appendChild(latestCell);
+
+        const installedCell = document.createElement('td');
+        installedCell.className = 'core-status-cell';
+        if (core.installed) {
+          const installedLabel = text('coreInstalledLabel', { version: core.installedVersion || '-' });
+          installedCell.innerHTML = `<span class="core-installed">${escapeHtml(installedLabel)}</span>`;
+          if (core.updateAvailable) {
+            installedCell.innerHTML += `<span class="core-tag">${escapeHtml(text('coreUpdateTag'))}</span>`;
+          }
+        } else {
+          installedCell.innerHTML = `<span class="core-not-installed">${escapeHtml(text('coreNotInstalledLabel'))}</span>`;
+        }
+        tr.appendChild(installedCell);
+
+        const versionCell = document.createElement('td');
+        const select = document.createElement('select');
+        const versions = Array.isArray(core.versions) ? core.versions.slice() : [];
+        const defaultSelectionRaw = state.coreSelections[core.name] || core.installedVersion || core.latestVersion || versions[0] || '';
+        if (defaultSelectionRaw && !versions.includes(defaultSelectionRaw)) versions.push(defaultSelectionRaw);
+        const uniqueVersions = Array.from(new Set(versions.filter((v) => v)));
+        uniqueVersions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+        state.coreSelections[core.name] = defaultSelectionRaw;
+        uniqueVersions.forEach((version) => {
+          const option = document.createElement('option');
+          let label = version;
+          if (core.installedVersion && version === core.installedVersion) label += text('coreOptionInstalled');
+          if (core.latestVersion && version === core.latestVersion) label += text('coreOptionLatest');
+          option.value = version;
+          option.textContent = label;
+          select.appendChild(option);
+        });
+        select.value = defaultSelectionRaw;
+        select.disabled = controlsLocked;
+        select.addEventListener('change', (event) => {
+          state.coreSelections[core.name] = event.target.value || '';
+          renderCores();
+        });
+        versionCell.appendChild(select);
+        tr.appendChild(versionCell);
+
+        const actionsCell = document.createElement('td');
+        const actionsWrap = document.createElement('div');
+        actionsWrap.className = 'core-action-buttons';
+        const selectedVersion = state.coreSelections[core.name] || '';
+        const installBtn = document.createElement('button');
+        installBtn.className = 'primary';
+        let installLabel = text('coreInstall');
+        if (!core.installed && selectedVersion && selectedVersion !== core.latestVersion) {
+          installLabel = text('coreInstallSelected');
+        } else if (core.installed) {
+          installLabel = selectedVersion === core.installedVersion ? text('coreReinstall') : text('coreInstallSelected');
+        }
+        installBtn.textContent = installLabel;
+        installBtn.disabled = controlsLocked || !selectedVersion;
+        installBtn.addEventListener('click', () => {
+          if (controlsLocked) return;
+          if (!selectedVersion) return;
+          vscode.postMessage({ type: 'installCore', name: core.name, version: selectedVersion });
+        });
+        actionsWrap.appendChild(installBtn);
+
+        if (core.updateAvailable && core.latestVersion) {
+          const updateBtn = document.createElement('button');
+          updateBtn.className = 'primary';
+          updateBtn.textContent = text('coreUpdate');
+          updateBtn.disabled = controlsLocked;
+          updateBtn.addEventListener('click', () => {
+            if (controlsLocked) return;
+            state.coreSelections[core.name] = core.latestVersion;
+            renderCores();
+            vscode.postMessage({ type: 'installCore', name: core.name, version: core.latestVersion });
+          });
+          actionsWrap.appendChild(updateBtn);
+        }
+
+        if (core.installed) {
+          const uninstallBtn = document.createElement('button');
+          uninstallBtn.className = 'subtle';
+          uninstallBtn.textContent = text('coreUninstall');
+          uninstallBtn.disabled = controlsLocked;
+          uninstallBtn.addEventListener('click', () => {
+            if (controlsLocked) return;
+            vscode.postMessage({ type: 'uninstallCore', name: core.name });
+          });
+          actionsWrap.appendChild(uninstallBtn);
+        }
+
+        actionsCell.appendChild(actionsWrap);
+        tr.appendChild(actionsCell);
+        coreTable.appendChild(tr);
+      });
+
+      if (filtered.length === 0) {
+        coreEmpty.classList.remove('hidden');
+        if (state.coreBusy) coreEmpty.textContent = text('coreLoading');
+        else if (!cores.length) coreEmpty.textContent = text('coreNoData');
+        else coreEmpty.textContent = text('coreNoMatch');
+      } else {
+        coreEmpty.classList.add('hidden');
+      }
+    }
+
     function renderConfig() {
       if (!configDump) return;
       configDump.textContent = state.configDump || text('configDumpPlaceholder');
@@ -595,12 +996,41 @@
     }
 
     tabButtons.commands.addEventListener('click', () => switchTab('commands'));
+    tabButtons.cores.addEventListener('click', () => switchTab('cores'));
     tabButtons.config.addEventListener('click', () => switchTab('config'));
 
     filterInput.addEventListener('input', (event) => {
       state.filter = event.target.value || '';
       renderCommands();
     });
+
+    if (coreFilterInput) {
+      coreFilterInput.addEventListener('input', (event) => {
+        state.coreFilter = event.target.value || '';
+        renderCores();
+      });
+    }
+
+    if (coreShowInstalledToggle) {
+      coreShowInstalledToggle.addEventListener('change', (event) => {
+        state.coreShowInstalled = !!event.target.checked;
+        renderCores();
+      });
+    }
+
+    if (coreShowUpdatableToggle) {
+      coreShowUpdatableToggle.addEventListener('change', (event) => {
+        state.coreShowUpdatable = !!event.target.checked;
+        renderCores();
+      });
+    }
+
+    if (coreRefreshBtn) {
+      coreRefreshBtn.addEventListener('click', () => {
+        if (state.coreBusy || state.corePendingAction) return;
+        requestCores(true);
+      });
+    }
 
     refreshBtn.addEventListener('click', () => {
       if (state.configBusy) return;
@@ -628,8 +1058,13 @@
           state.configDump = message.configDump || '';
           state.additionalUrls = Array.isArray(message.additionalUrls) ? message.additionalUrls : [];
           state.pendingRemoveIndex = -1;
+          state.cores = Array.isArray(message.cores) ? message.cores : [];
+          state.coreSelections = {};
+          state.coreBusy = false;
+          state.corePendingAction = null;
           applyStaticTexts();
           renderCommands();
+          renderCores();
           renderConfig();
           break;
         case 'profileState':
@@ -637,6 +1072,46 @@
           state.profileLabel = message.profileLabel || '';
           updateProfileBadge();
           renderCommands();
+          break;
+        case 'coresBusy':
+          state.coreBusy = !!message.value;
+          if (state.coreBusy) {
+            setStatus(text('statusBusy'), true);
+          } else if (!state.commandRunning && !state.configBusy && !state.corePendingAction) {
+            setStatus('');
+          }
+          renderCores();
+          break;
+        case 'coresData':
+          state.cores = Array.isArray(message.cores) ? message.cores : [];
+          state.coreBusy = false;
+          {
+            const nextSelections = {};
+            state.cores.forEach((core) => {
+              const versions = Array.isArray(core.versions) ? core.versions : [];
+              const existing = state.coreSelections ? state.coreSelections[core.name] : '';
+              if (existing && versions.includes(existing)) {
+                nextSelections[core.name] = existing;
+              } else {
+                nextSelections[core.name] = core.installedVersion || core.latestVersion || versions[0] || '';
+              }
+            });
+            state.coreSelections = nextSelections;
+          }
+          state.corePendingAction = null;
+          renderCores();
+          break;
+        case 'coreCommandState':
+          if (message.running) {
+            state.corePendingAction = { name: message.name, action: message.action || '' };
+            setStatus(text('statusBusy'), true);
+          } else {
+            state.corePendingAction = null;
+            if (!state.coreBusy && !state.commandRunning && !state.configBusy) {
+              setStatus('');
+            }
+          }
+          renderCores();
           break;
         case 'commandState':
           setCommandRunning(message.command || '', !!message.running);
@@ -678,6 +1153,7 @@
     vscode.postMessage({ type: 'ready' });
     applyStaticTexts();
     renderCommands();
+    renderCores();
     renderConfig();
   </script>
 </body>
