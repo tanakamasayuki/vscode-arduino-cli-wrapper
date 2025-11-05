@@ -5,6 +5,7 @@
   "cmd.version": "Arduino CLI: CLI バージョン確認",
   "cmd.update": "Arduino CLI: コアインデックスを更新",
   "cmd.upgrade": "Arduino CLI: コア/ライブラリをアップグレード",
+  "cmd.cacheClean": "Arduino CLI: キャッシュをクリア",
   "cmd.sketchNew": "Arduino CLI: 新しいスケッチを作成",
   "cmd.listBoards": "Arduino CLI: 接続中のボードを一覧",
   "cmd.listAllBoards": "Arduino CLI: 全ボードを一覧 (listall)",

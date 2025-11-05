@@ -5,6 +5,7 @@
   "cmd.version": "Arduino CLI: Check CLI Version",
   "cmd.update": "Arduino CLI: Update Index",
   "cmd.upgrade": "Arduino CLI: Upgrade Cores/Libraries",
+  "cmd.cacheClean": "Arduino CLI: Clean Cache",
   "cmd.sketchNew": "Arduino CLI: New Sketch",
   "cmd.listBoards": "Arduino CLI: List Connected Boards",
   "cmd.listAllBoards": "Arduino CLI: List All Boards (listall)",

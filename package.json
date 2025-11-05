@@ -94,6 +94,10 @@
         "title": "%cmd.upgrade%"
       },
       {
+        "command": "arduino-cli.cacheClean",
+        "title": "%cmd.cacheClean%"
+      },
+      {
         "command": "arduino-cli.listBoards",
         "title": "%cmd.listBoards%"
       },

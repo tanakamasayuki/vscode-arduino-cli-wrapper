@@ -317,6 +317,8 @@ const MSG = {
     windowsSerialPortDetail: 'Detected via Windows arduino-cli.exe',
     cliWindowsPathConvertFail: '[cli][win] Failed to convert path for Windows upload: {msg}',
     cliWindowsUploadFallback: '[cli][win] Upload via arduino-cli.exe failed ({msg}). Falling back to WSL arduino-cli.',
+    cacheCleanStart: '[cli] Cleaning arduino-cli cache…',
+    cacheCleanDone: '[cli] Cache cleaned.',
     cliWindowsOnlyOperation: '[cli][win] This command does not support Windows-hosted serial ports from WSL. Use a port recognized inside WSL or run this command from Windows.',
     buildCheckStart: '[build-check] Scanning sketch.yaml files…',
     buildCheckProgressTitle: 'Build Check: Compiling…',
@@ -703,6 +705,8 @@ const MSG = {
     windowsSerialPortDetail: 'Windows 側の arduino-cli.exe で検出',
     cliWindowsPathConvertFail: '[cli][win] Windows 側アップロード用のパス変換に失敗しました: {msg}',
     cliWindowsUploadFallback: '[cli][win] arduino-cli.exe でのアップロードに失敗したため WSL 側の arduino-cli へフォールバックします ({msg})。',
+    cacheCleanStart: '[cli] arduino-cli のキャッシュをクリアしています…',
+    cacheCleanDone: '[cli] キャッシュを削除しました。',
     cliWindowsOnlyOperation: '[cli][win] このコマンドは WSL から Windows ホストのシリアルポートへは接続できません。WSL で認識されるポートを利用するか、Windows 側でコマンドを実行してください。',
     buildCheckStart: '[build-check] sketch.yaml を走査しています…',
     buildCheckProgressTitle: 'ビルドチェック: コンパイル中…',
@@ -2502,6 +2506,30 @@ async function runArduinoCliUpdate(options = {}) {
 async function commandUpdate() {
   try {
     await runArduinoCliUpdate({ auto: false });
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function commandCacheClean() {
+  if (!(await ensureCliReady())) return;
+  const channel = getOutput();
+  channel.appendLine(t('cacheCleanStart'));
+  try {
+    const cfg = getConfig();
+    const exe = cfg.exe || 'arduino-cli';
+    const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+    const finalArgs = [...baseArgs, 'cache', 'clean'];
+    const term = getAnsiLogTerminal();
+    const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
+    term.terminal.show(true);
+    term.write(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}
+`);
+    const result = await runCli(['cache', 'clean']);
+    term.write(`${ANSI.bold}${ANSI.green}[exit ${result.code}]${ANSI.reset}
+`);
+    channel.appendLine(t('cacheCleanDone'));
+    vscode.window.showInformationMessage(t('cacheCleanDone'));
   } catch (err) {
     showError(err);
   }
@@ -5564,6 +5592,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.version', commandVersion),
     vscode.commands.registerCommand('arduino-cli.update', commandUpdate),
     vscode.commands.registerCommand('arduino-cli.upgrade', commandUpgrade),
+    vscode.commands.registerCommand('arduino-cli.cacheClean', commandCacheClean),
     vscode.commands.registerCommand('arduino-cli.listBoards', commandListBoards),
     vscode.commands.registerCommand('arduino-cli.listAllBoards', commandListAllBoards),
     vscode.commands.registerCommand('arduino-cli.boardDetails', commandBoardDetails),
