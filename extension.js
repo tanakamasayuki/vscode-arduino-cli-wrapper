@@ -307,6 +307,14 @@ const MSG = {
     compileDurationGeneric: '[{label}] Completed in {seconds}s.',
     compileExportBinariesNotice: '[compile] Added --export-binaries and --json; binaries will be written under build/<target>/',
     compileExportBinariesDurationLabel: 'export-binaries',
+    compileExportManifestSkip: '[export-binaries] tools.esptool_py.upload.pattern_args not found; skipped manifest generation.',
+    compileExportManifestParseFailed: '[export-binaries] Failed to parse pattern_args: {msg}',
+    compileExportManifestSaved: '[export-binaries] Wrote manifest.json ({count} segments).',
+    compileExportManifestCopyMissing: '[export-binaries] Source binary for {file} was not found; leaving entry untouched.',
+    compileExportManifestCopied: '[export-binaries] Copied {file} into build folder.',
+    compileExportManifestCopyFailed: '[export-binaries] Failed to copy {file}: {msg}',
+    compileExportManifestWriteFailed: '[export-binaries] Failed to write manifest.json: {msg}',
+    compileExportManifestNoSegments: '[export-binaries] No flash segments detected in pattern_args; manifest still generated.',
     cliCheckStart: '[cli] Checking arduino-cli…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] Failed to run arduino-cli. Please configure arduino-cli-wrapper.path or install arduino-cli.',
@@ -905,6 +913,14 @@ const MSG = {
     compileDurationGeneric: '[{label}] {seconds}秒で完了しました。',
     compileExportBinariesNotice: '[compile] --export-binaries と --json を付与し、build/<target>/ にバイナリを出力します。',
     compileExportBinariesDurationLabel: 'バイナリエクスポート',
+    compileExportManifestSkip: '[export-binaries] tools.esptool_py.upload.pattern_args が見つからなかったため manifest.json の生成をスキップしました。',
+    compileExportManifestParseFailed: '[export-binaries] pattern_args の解析に失敗しました: {msg}',
+    compileExportManifestSaved: '[export-binaries] manifest.json を作成しました (セグメント {count} 件)。',
+    compileExportManifestCopyMissing: '[export-binaries] {file} の元ファイルが見つからなかったため、そのままにしました。',
+    compileExportManifestCopied: '[export-binaries] {file} を build フォルダーへコピーしました。',
+    compileExportManifestCopyFailed: '[export-binaries] {file} のコピーに失敗しました: {msg}',
+    compileExportManifestWriteFailed: '[export-binaries] manifest.json の書き込みに失敗しました: {msg}',
+    compileExportManifestNoSegments: '[export-binaries] pattern_args にフラッシュ対象が見つかりませんでしたが manifest.json を出力しました。',
     cliCheckStart: '[cli] arduino-cli を確認中…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] arduino-cli の実行に失敗しました。arduino-cli のインストールまたは設定 (arduino-cli-wrapper.path) を行ってください。',
@@ -3161,6 +3177,15 @@ async function commandCompile(options = {}) {
       : { fqbn: resolvedFqbn };
     const durationLabel = exportBinaries ? t('compileExportBinariesDurationLabel') : 'compile';
     const result = await compileWithIntelliSense(sketchDir, args, opts);
+    if (exportBinaries && result && result !== PROGRESS_BUSY) {
+      await handleExportBinariesArtifacts({
+        sketchDir,
+        channel,
+        compileResult: result,
+        profileName: selectedProfile,
+        fqbnHint: resolvedFqbn
+      });
+    }
     if (result && typeof result.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: durationLabel,
@@ -3169,6 +3194,17 @@ async function commandCompile(options = {}) {
     }
   } catch (e) {
     const durationLabel = exportBinaries ? t('compileExportBinariesDurationLabel') : 'compile';
+    if (exportBinaries && e && e.stdout && typeof e.stdout === 'string') {
+      try {
+        await handleExportBinariesArtifacts({
+          sketchDir,
+          channel,
+          compileResult: { stdout: e.stdout, stderr: e.stderr || '', durationMs: e.durationMs },
+          profileName: selectedProfile,
+          fqbnHint: resolvedFqbn
+        });
+      } catch (_) { /* ignore secondary errors */ }
+    }
     if (e && typeof e.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: durationLabel,
@@ -6267,6 +6303,15 @@ async function runExportBinariesFor(sketchDir, profile) {
   const durationLabel = t('compileExportBinariesDurationLabel');
   try {
     const result = await compileWithIntelliSense(sketchDir, args, opts);
+    if (result && result !== PROGRESS_BUSY) {
+      await handleExportBinariesArtifacts({
+        sketchDir,
+        channel,
+        compileResult: result,
+        profileName: profile,
+        fqbnHint: resolvedFqbn
+      });
+    }
     if (result && typeof result.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: durationLabel,
@@ -6274,6 +6319,17 @@ async function runExportBinariesFor(sketchDir, profile) {
       }));
     }
   } catch (e) {
+    if (e && e.stdout && typeof e.stdout === 'string') {
+      try {
+        await handleExportBinariesArtifacts({
+          sketchDir,
+          channel,
+          compileResult: { stdout: e.stdout, stderr: e.stderr || '', durationMs: e.durationMs },
+          profileName: profile,
+          fqbnHint: resolvedFqbn
+        });
+      } catch (_) { /* ignore secondary errors */ }
+    }
     if (e && typeof e.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: durationLabel,
@@ -6906,6 +6962,255 @@ function parseBuildCheckJson(raw) {
       }
     }
     return { data: null, error: err.message };
+  }
+}
+
+function getBuildPropertyValue(list, key) {
+  if (!Array.isArray(list) || !key) return '';
+  const prefix = `${key}=`;
+  for (const entry of list) {
+    if (typeof entry !== 'string') continue;
+    if (entry.startsWith(prefix)) {
+      return entry.slice(prefix.length);
+    }
+  }
+  return '';
+}
+
+function stripWrappingQuotes(value) {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith('\'') && trimmed.endsWith('\''))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function tokenizeCliArgs(text) {
+  const tokens = [];
+  if (typeof text !== 'string' || !text.trim()) return tokens;
+  const regex = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|(\S+)/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    let token = match[1] != null ? match[1] : (match[2] != null ? match[2] : match[3]);
+    if (typeof token === 'string') {
+      token = token.replace(/\\(["'\\])/g, '$1');
+    }
+    tokens.push(token);
+  }
+  return tokens;
+}
+
+function parseEsptoolPatternArgs(raw) {
+  const tokens = tokenizeCliArgs(raw);
+  if (!tokens.length) {
+    return { named: {}, shortFlags: [], commands: [], segments: [] };
+  }
+  const named = Object.create(null);
+  const shortFlags = [];
+  const commands = [];
+  const segments = [];
+  const hexOffset = /^0x[0-9a-fA-F]+$/;
+  const isFlag = (token) => typeof token === 'string' && token.startsWith('--') && token.length > 2;
+  const isShortFlag = (token) => typeof token === 'string' && token.startsWith('-') && !token.startsWith('--') && token.length > 1;
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (!token) continue;
+    if (isFlag(token)) {
+      const key = token.slice(2);
+      const next = tokens[i + 1];
+      if (next && !next.startsWith('-')) {
+        named[key] = next;
+        i += 1;
+      } else {
+        named[key] = true;
+      }
+      continue;
+    }
+    if (isShortFlag(token)) {
+      const next = tokens[i + 1];
+      if (next && !next.startsWith('-')) {
+        shortFlags.push({ flag: token, value: next });
+        i += 1;
+      } else {
+        shortFlags.push({ flag: token, value: true });
+      }
+      continue;
+    }
+    if (hexOffset.test(token)) {
+      const next = tokens[i + 1];
+      if (next) {
+        segments.push({
+          offset: token,
+          fileName: path.basename(next),
+          sourcePath: next
+        });
+        i += 1;
+      } else {
+        segments.push({
+          offset: token,
+          fileName: '',
+          sourcePath: ''
+        });
+      }
+      continue;
+    }
+    commands.push(token);
+  }
+  return { named, shortFlags, commands, segments };
+}
+
+function extractBaseFqbn(fqbn) {
+  if (!fqbn) return '';
+  const parts = String(fqbn).split(':').filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length <= 3) return parts.join(':');
+  return parts.slice(0, 3).join(':');
+}
+
+function deriveExportFolderName(fqbn, profileName) {
+  const baseFqbn = extractBaseFqbn(fqbn);
+  if (baseFqbn) {
+    const normalized = baseFqbn.replace(/:/g, '.');
+    return sanitizeProfileFolderName(normalized);
+  }
+  if (profileName && typeof profileName === 'string' && profileName.trim()) {
+    return sanitizeProfileFolderName(profileName);
+  }
+  return sanitizeProfileFolderName('default');
+}
+
+function normalizeHostFsPath(fsPath) {
+  if (typeof fsPath !== 'string' || !fsPath) return '';
+  if (_isWslEnv) {
+    return windowsDrivePathToWsl(fsPath);
+  }
+  return fsPath;
+}
+
+async function ensureExportArtifactsAvailability(segments, exportDir, buildPath, channel) {
+  if (!Array.isArray(segments) || !segments.length) return;
+  const normalizedBuildPath = buildPath ? normalizeHostFsPath(buildPath) : '';
+  for (const segment of segments) {
+    if (!segment || !segment.fileName) continue;
+    const destPath = path.join(exportDir, segment.fileName);
+    if (await pathExistsSafe(destPath)) continue;
+    const candidates = [];
+    if (segment.sourcePath) {
+      const normalizedSource = normalizeHostFsPath(segment.sourcePath);
+      if (normalizedSource && path.isAbsolute(normalizedSource)) {
+        candidates.push(normalizedSource);
+      }
+    }
+    if (normalizedBuildPath && path.isAbsolute(normalizedBuildPath)) {
+      candidates.push(path.join(normalizedBuildPath, segment.fileName));
+    }
+    let source = '';
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      if (await pathExistsSafe(candidate)) {
+        source = candidate;
+        break;
+      }
+    }
+    if (!source) {
+      channel.appendLine(t('compileExportManifestCopyMissing', { file: segment.fileName }));
+      continue;
+    }
+    try {
+      await vscode.workspace.fs.copy(vscode.Uri.file(source), vscode.Uri.file(destPath), { overwrite: false });
+      channel.appendLine(t('compileExportManifestCopied', { file: segment.fileName }));
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err || 'unknown');
+      channel.appendLine(t('compileExportManifestCopyFailed', { file: segment.fileName, msg }));
+    }
+  }
+}
+
+function buildExportManifestPayload({ fqbn, pattern, parsedArgs }) {
+  const namedFlags = parsedArgs && parsedArgs.named ? parsedArgs.named : {};
+  const shortFlags = parsedArgs && Array.isArray(parsedArgs.shortFlags) ? parsedArgs.shortFlags.slice() : [];
+  const commands = parsedArgs && Array.isArray(parsedArgs.commands) ? parsedArgs.commands.slice() : [];
+  const segments = parsedArgs && Array.isArray(parsedArgs.segments)
+    ? parsedArgs.segments.map((seg) => ({ offset: seg.offset, file: seg.fileName }))
+    : [];
+  const manifest = {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    fqbn: fqbn || '',
+    tool: 'esptool_py',
+    pattern: pattern || '',
+    flags: { ...namedFlags },
+    shortFlags: shortFlags.map((entry) => ({ flag: entry.flag, value: entry.value })),
+    commands,
+    segments
+  };
+  if (shortFlags.some((entry) => entry && entry.flag === '-z')) {
+    manifest.compress = true;
+  }
+  return manifest;
+}
+
+async function handleExportBinariesArtifacts({ sketchDir, channel, compileResult, profileName = '', fqbnHint = '' }) {
+  if (!compileResult || compileResult === PROGRESS_BUSY) return;
+  const parsed = parseBuildCheckJson(compileResult.stdout || '');
+  if (!parsed.data) {
+    if (parsed.error) {
+      channel.appendLine(t('compileExportManifestParseFailed', { msg: parsed.error }));
+    }
+    return;
+  }
+  const data = parsed.data;
+  const builder = data && typeof data === 'object' ? (data.builder_result || {}) : {};
+  const buildProps = Array.isArray(builder.build_properties) ? builder.build_properties : [];
+  const rawPatternArgs = getBuildPropertyValue(buildProps, 'tools.esptool_py.upload.pattern_args');
+  if (!rawPatternArgs) {
+    channel.appendLine(t('compileExportManifestSkip'));
+    return;
+  }
+  const patternArgs = stripWrappingQuotes(rawPatternArgs);
+  if (!patternArgs) {
+    channel.appendLine(t('compileExportManifestSkip'));
+    return;
+  }
+  const rawPattern = getBuildPropertyValue(buildProps, 'tools.esptool_py.upload.pattern');
+  const rawFqbn = stripWrappingQuotes(getBuildPropertyValue(buildProps, 'build.fqbn')) || fqbnHint || '';
+  const fqbn = extractBaseFqbn(rawFqbn);
+  const buildPath = typeof builder.build_path === 'string' ? stripWrappingQuotes(builder.build_path) : '';
+  let parsedArgs;
+  try {
+    parsedArgs = parseEsptoolPatternArgs(patternArgs);
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err || 'unknown');
+    channel.appendLine(t('compileExportManifestParseFailed', { msg }));
+    return;
+  }
+  const exportFolder = deriveExportFolderName(fqbn, profileName);
+  const exportDir = path.join(sketchDir, 'build', exportFolder);
+  try {
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(exportDir));
+  } catch (_) { /* ignore directory creation errors */ }
+  await ensureExportArtifactsAvailability(parsedArgs.segments, exportDir, buildPath, channel);
+  const manifest = buildExportManifestPayload({
+    fqbn,
+    pattern: stripWrappingQuotes(rawPattern),
+    parsedArgs
+  });
+  if (rawFqbn && fqbn && rawFqbn !== fqbn) {
+    manifest.originalFqbn = rawFqbn;
+  }
+  const manifestUri = vscode.Uri.file(path.join(exportDir, 'manifest.json'));
+  try {
+    await writeTextFile(manifestUri, JSON.stringify(manifest, null, 2) + '\n');
+    const count = Array.isArray(manifest.segments) ? manifest.segments.length : 0;
+    if (count > 0) {
+      channel.appendLine(t('compileExportManifestSaved', { count }));
+    } else {
+      channel.appendLine(t('compileExportManifestNoSegments'));
+    }
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err || 'unknown');
+    channel.appendLine(t('compileExportManifestWriteFailed', { msg }));
   }
 }
 

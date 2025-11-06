@@ -7,6 +7,8 @@
 - (JA) ステータスバーの冗長出力設定に関係なく `arduino-cli upload` で必ず `--verbose` を付与し、アップロード処理の進行が常に確認できるようにしました。
 - (EN) Added an Arduino CLI: Export Binaries command that runs compile with `--export-binaries --json`, placing build artifacts under `build/<target>/`.
 - (JA) `--export-binaries` と `--json` を付与して `build/<target>/` に成果物を出力する "Arduino CLI: バイナリを出力" コマンドを追加しました。
+- (EN) The Export Binaries flow now writes a `manifest.json` alongside the binaries, decoding `tools.esptool_py.upload.pattern_args`, copying any missing blobs (e.g., `boot_app0.bin`), and normalising FQBNs so board options (e.g., `PartitionScheme=minimal`) are stored separately from the core `vendor:arch:board` triplet.
+- (JA) バイナリエクスポート時に `tools.esptool_py.upload.pattern_args` を解析した `manifest.json` を同フォルダーへ出力し、`boot_app0.bin` など不足しているバイナリを自動コピーしつつ、`PartitionScheme=minimal` のようなボードオプションを除いた基本の `vendor:arch:board` 形式で FQBN を正規化するようにしました。
 
 ## 1.7.2
 - (EN) Build Check and the sketch.yaml Version Check now trigger `arduino-cli update` right before they run so both commands always work with the latest core and library indexes.
