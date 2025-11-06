@@ -122,6 +122,10 @@
         "title": "%cmd.compile%"
       },
       {
+        "command": "arduino-cli.compileExportBinaries",
+        "title": "%cmd.compileExportBinaries%"
+      },
+      {
         "command": "arduino-cli.buildCheck",
         "title": "%cmd.buildCheck%"
       },

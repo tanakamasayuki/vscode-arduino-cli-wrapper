@@ -305,6 +305,8 @@ const MSG = {
     updatedYaml: 'Updated sketch.yaml.',
     noChanges: 'No changes.',
     compileDurationGeneric: '[{label}] Completed in {seconds}s.',
+    compileExportBinariesNotice: '[compile] Added --export-binaries and --json; binaries will be written under build/<target>/',
+    compileExportBinariesDurationLabel: 'export-binaries',
     cliCheckStart: '[cli] Checking arduino-cli…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] Failed to run arduino-cli. Please configure arduino-cli-wrapper.path or install arduino-cli.',
@@ -336,6 +338,7 @@ const MSG = {
     treeCommandCenter: 'Command Center',
     treeBuildCheck: 'Build Check',
     treeCompile: 'Compile',
+    treeExportBinaries: 'Export Binaries',
     treeCleanCompile: 'Clean Compile',
     treeUpload: 'Upload',
     treeUploadData: 'Upload Data',
@@ -521,6 +524,8 @@ const MSG = {
     commandCenterSetBaudDesc: 'Choose the serial monitor baudrate.',
     commandCenterCompileTitle: 'Compile Sketch',
     commandCenterCompileDesc: 'Build the active sketch using the selected profile or FQBN.',
+    commandCenterCompileExportTitle: 'Export Binaries',
+    commandCenterCompileExportDesc: 'Compile with --export-binaries and --json to save binaries under build/<target>/',
     commandCenterCleanCompileTitle: 'Clean Compile',
     commandCenterCleanCompileDesc: 'Delete the build cache and run a fresh compile.',
     commandCenterUploadTitle: 'Upload Sketch',
@@ -562,6 +567,7 @@ const MSG = {
     commandCenterSketchNewCli: 'arduino-cli sketch new <sketch-path>',
     commandCenterBuildCheckCli: 'arduino-cli compile --profile <each profile> --warnings=all --clean --json <sketch>',
     commandCenterCompileCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] <sketch>',
+    commandCenterCompileExportCli: 'arduino-cli compile --export-binaries --json [--profile <profile> | --fqbn <fqbn>] <sketch>',
     commandCenterCleanCompileCli: 'arduino-cli compile --clean [--profile <profile> | --fqbn <fqbn>] <sketch>',
     commandCenterUploadCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] <sketch>\narduino-cli upload [--profile <profile> | --fqbn <fqbn>] [-p <port>] <sketch>',
     commandCenterUploadDataCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] --show-properties <sketch>\nmkspiffs/mklittlefs -s <size> -c data <image>\nesptool write_flash <offset> <image>',
@@ -748,6 +754,8 @@ const MSG = {
     commandCenterSetBaudDesc: 'シリアルモニター用のボーレートを選択します。',
     commandCenterCompileTitle: 'スケッチをコンパイル',
     commandCenterCompileDesc: '選択したプロファイルまたは FQBN を使ってスケッチをビルドします。',
+    commandCenterCompileExportTitle: 'バイナリを出力',
+    commandCenterCompileExportDesc: '--export-binaries と --json を付与して build/<target>/ 配下にバイナリを生成します。',
     commandCenterCleanCompileTitle: 'クリーンビルド',
     commandCenterCleanCompileDesc: 'ビルドキャッシュを削除してからスケッチを再コンパイルします。',
     commandCenterUploadTitle: 'スケッチを書き込み',
@@ -789,6 +797,7 @@ const MSG = {
     commandCenterSketchNewCli: 'arduino-cli sketch new <スケッチパス>',
     commandCenterBuildCheckCli: 'arduino-cli compile --profile <各プロファイル> --warnings=all --clean --json <スケッチ>',
     commandCenterCompileCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
+    commandCenterCompileExportCli: 'arduino-cli compile --export-binaries --json [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
     commandCenterCleanCompileCli: 'arduino-cli compile --clean [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
     commandCenterUploadCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>\narduino-cli upload [--profile <プロファイル> | --fqbn <FQBN>] [-p <ポート>] <スケッチ>',
     commandCenterUploadDataCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] --show-properties <スケッチ>\nmkspiffs/mklittlefs -s <サイズ> -c data <イメージ>\nesptool write_flash <オフセット> <イメージ>',
@@ -894,6 +903,8 @@ const MSG = {
     updatedYaml: 'sketch.yaml を更新しました。',
     noChanges: '変更はありませんでした。',
     compileDurationGeneric: '[{label}] {seconds}秒で完了しました。',
+    compileExportBinariesNotice: '[compile] --export-binaries と --json を付与し、build/<target>/ にバイナリを出力します。',
+    compileExportBinariesDurationLabel: 'バイナリエクスポート',
     cliCheckStart: '[cli] arduino-cli を確認中…',
     cliCheckOk: '[cli] OK: arduino-cli {version}',
     cliCheckFail: '[cli] arduino-cli の実行に失敗しました。arduino-cli のインストールまたは設定 (arduino-cli-wrapper.path) を行ってください。',
@@ -925,6 +936,7 @@ const MSG = {
     treeCommandCenter: 'コマンドセンター',
     treeBuildCheck: 'ビルドチェック',
     treeCompile: 'コンパイル',
+    treeExportBinaries: 'バイナリを出力',
     treeCleanCompile: 'クリーンコンパイル',
     treeUpload: '書き込み',
     treeUploadData: 'データ書き込み',
@@ -1031,6 +1043,7 @@ const COMMAND_CENTER_ITEMS = Object.freeze([
   { command: 'arduino-cli.setPort', titleKey: 'commandCenterSetPortTitle', descKey: 'commandCenterSetPortDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.setBaud', titleKey: 'commandCenterSetBaudTitle', descKey: 'commandCenterSetBaudDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.compile', titleKey: 'commandCenterCompileTitle', descKey: 'commandCenterCompileDesc', requiresProfile: true, cliKey: 'commandCenterCompileCli' },
+  { command: 'arduino-cli.compileExportBinaries', titleKey: 'commandCenterCompileExportTitle', descKey: 'commandCenterCompileExportDesc', requiresProfile: true, cliKey: 'commandCenterCompileExportCli' },
   { command: 'arduino-cli.cleanCompile', titleKey: 'commandCenterCleanCompileTitle', descKey: 'commandCenterCleanCompileDesc', requiresProfile: true, cliKey: 'commandCenterCleanCompileCli' },
   { command: 'arduino-cli.upload', titleKey: 'commandCenterUploadTitle', descKey: 'commandCenterUploadDesc', requiresProfile: true, cliKey: 'commandCenterUploadCli' },
   { command: 'arduino-cli.uploadData', titleKey: 'commandCenterUploadDataTitle', descKey: 'commandCenterUploadDataDesc', requiresProfile: true, cliKey: 'commandCenterUploadDataCli' },
@@ -3085,7 +3098,8 @@ async function commandSketchNew() {
  * Prefers sketch.yaml profiles when available; otherwise uses FQBN.
  * While compiling, parse include paths and update IntelliSense.
  */
-async function commandCompile() {
+async function commandCompile(options = {}) {
+  const { exportBinaries = false, jsonOutput = false } = options || {};
   if (!(await ensureCliReady())) return;
   // If a sketch/profile is selected via status bar, use it directly to avoid
   // prompting the user each time. Otherwise fall back to picking an .ino.
@@ -3132,28 +3146,41 @@ async function commandCompile() {
     }
     args.push('--fqbn', resolvedFqbn);
   }
+  if (exportBinaries) {
+    if (!args.includes('--export-binaries')) args.push('--export-binaries');
+    channel.appendLine(t('compileExportBinariesNotice'));
+  }
+  if (jsonOutput && !args.includes('--json')) {
+    args.push('--json');
+  }
   args.push(sketchDir);
   try {
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
     const opts = selectedProfile
       ? { profileName: selectedProfile, wokwiEnabled }
       : { fqbn: resolvedFqbn };
+    const durationLabel = exportBinaries ? t('compileExportBinariesDurationLabel') : 'compile';
     const result = await compileWithIntelliSense(sketchDir, args, opts);
     if (result && typeof result.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
-        label: 'compile',
+        label: durationLabel,
         seconds: formatDurationSeconds(result.durationMs)
       }));
     }
   } catch (e) {
+    const durationLabel = exportBinaries ? t('compileExportBinariesDurationLabel') : 'compile';
     if (e && typeof e.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
-        label: 'compile',
+        label: durationLabel,
         seconds: formatDurationSeconds(e.durationMs)
       }));
     }
     showError(e);
   }
+}
+
+async function commandCompileExportBinaries() {
+  return commandCompile({ exportBinaries: true, jsonOutput: true });
 }
 
 /**
@@ -4909,7 +4936,7 @@ async function detectBuildPathForCompile(exe, baseArgs, args, sketchDir) {
     const insertIdx = idx >= 0 ? idx : derivedArgs.length;
     derivedArgs.splice(insertIdx, 0, '--show-properties');
   }
-  const skipFlags = new Set(['--export-compile-commands', '--clean']);
+  const skipFlags = new Set(['--export-compile-commands', '--clean', '--export-binaries', '--json']);
   const cleanedArgs = derivedArgs.filter((arg) => !skipFlags.has(arg));
   const finalArgs = [...baseArgs, ...cleanedArgs];
   let stdout = '';
@@ -5861,6 +5888,10 @@ function activate(context) {
         if (!payload || typeof payload !== 'object') return;
         const { action, sketchDir, profile } = payload;
         if (action === 'compile') return runCompileFor(sketchDir, profile);
+        if (action === 'exportBinaries') {
+          if (sketchDir) return runExportBinariesFor(sketchDir, profile);
+          return vscode.commands.executeCommand('arduino-cli.compileExportBinaries');
+        }
         if (action === 'cleanCompile') {
           if (sketchDir) return runCleanCompileFor(sketchDir, profile);
           return vscode.commands.executeCommand('arduino-cli.cleanCompile');
@@ -5906,6 +5937,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.boardDetails', commandBoardDetails),
     vscode.commands.registerCommand('arduino-cli.runArbitrary', commandRunArbitrary),
     vscode.commands.registerCommand('arduino-cli.compile', commandCompile),
+    vscode.commands.registerCommand('arduino-cli.compileExportBinaries', commandCompileExportBinaries),
     vscode.commands.registerCommand('arduino-cli.configureWarnings', commandConfigureWarnings),
     vscode.commands.registerCommand('arduino-cli.versionCheck', commandVersionCheck),
     vscode.commands.registerCommand('arduino-cli.buildCheck', commandBuildCheck),
@@ -6061,6 +6093,7 @@ class CommandItem extends vscode.TreeItem {
 function defaultCommandItems(dir, profile, parent, features = {}) {
   const items = [
     new CommandItem('Compile', 'compile', dir, profile, parent, t('treeCompile')),
+    new CommandItem('Export Binaries', 'exportBinaries', dir, profile, parent, t('treeExportBinaries')),
     new CommandItem('Clean Compile', 'cleanCompile', dir, profile, parent, t('treeCleanCompile')),
     new CommandItem('Upload', 'upload', dir, profile, parent, t('treeUpload')),
     new CommandItem('Monitor', 'monitor', dir, profile, parent, t('treeMonitor')),
@@ -6194,6 +6227,56 @@ async function runCompileFor(sketchDir, profile) {
     if (e && typeof e.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: 'compile',
+        seconds: formatDurationSeconds(e.durationMs)
+      }));
+    }
+    throw e;
+  }
+}
+
+async function runExportBinariesFor(sketchDir, profile) {
+  if (!(await ensureCliReady())) return;
+  if (sketchDir && profile) {
+    await rememberSelectedProfile(sketchDir, profile);
+  }
+  const cfg = getConfig();
+  const channel = getOutput();
+  const args = ['compile'];
+  if (cfg.verbose) args.push('--verbose');
+  args.push('--export-binaries', '--json');
+  channel.appendLine(t('compileExportBinariesNotice'));
+  let wokwiEnabled = false;
+  let resolvedFqbn = '';
+  if (profile) {
+    args.push('--profile', profile);
+    try {
+      const yamlInfo = await readSketchYamlInfo(sketchDir);
+      wokwiEnabled = isProfileWokwiEnabled(yamlInfo, profile);
+    } catch { }
+  } else {
+    resolvedFqbn = extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (!resolvedFqbn) {
+      const set = await commandSetFqbn(true);
+      if (!set) return;
+      resolvedFqbn = extContext.workspaceState.get(STATE_FQBN, '') || '';
+    }
+    args.push('--fqbn', resolvedFqbn);
+  }
+  args.push(sketchDir);
+  const opts = profile ? { profileName: profile, wokwiEnabled } : { fqbn: resolvedFqbn };
+  const durationLabel = t('compileExportBinariesDurationLabel');
+  try {
+    const result = await compileWithIntelliSense(sketchDir, args, opts);
+    if (result && typeof result.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: durationLabel,
+        seconds: formatDurationSeconds(result.durationMs)
+      }));
+    }
+  } catch (e) {
+    if (e && typeof e.durationMs === 'number') {
+      channel.appendLine(t('compileDurationGeneric', {
+        label: durationLabel,
         seconds: formatDurationSeconds(e.durationMs)
       }));
     }

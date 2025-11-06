@@ -5,6 +5,8 @@
 - (JA) コマンドセンターの各カードに実行される `arduino-cli` コマンドを表示し、実行前に内容を把握できるようにしました。
 - (EN) `arduino-cli upload` calls now always inject `--verbose` so upload progress stays visible regardless of the status bar verbosity toggle.
 - (JA) ステータスバーの冗長出力設定に関係なく `arduino-cli upload` で必ず `--verbose` を付与し、アップロード処理の進行が常に確認できるようにしました。
+- (EN) Added an Arduino CLI: Export Binaries command that runs compile with `--export-binaries --json`, placing build artifacts under `build/<target>/`.
+- (JA) `--export-binaries` と `--json` を付与して `build/<target>/` に成果物を出力する "Arduino CLI: バイナリを出力" コマンドを追加しました。
 
 ## 1.7.2
 - (EN) Build Check and the sketch.yaml Version Check now trigger `arduino-cli update` right before they run so both commands always work with the latest core and library indexes.
