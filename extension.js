@@ -3257,8 +3257,7 @@ async function commandUpload() {
   compileArgs.push(sketchDir);
 
   // Prepare arguments for upload
-  const uploadArgs = ['upload'];
-  if (cfg.verbose) uploadArgs.push('--verbose');
+  const uploadArgs = ['upload', '--verbose'];
   if (yamlInfo && yamlInfo.profiles.length > 0) {
     // Use profile already chosen above, or fallback to lastResolved or a prompt.
     const profile = selectedProfile || yamlInfo.lastResolved || await resolveProfileName(yamlInfo);
@@ -3693,7 +3692,7 @@ async function commandDebug(sketchDir, profileFromTree) {
       compileTaskArgs.push('.');
 
       const uploadTaskArgs = [...baseArgs, 'upload'];
-      if (cfg.verbose) uploadTaskArgs.push('--verbose');
+      if (!uploadTaskArgs.includes('--verbose')) uploadTaskArgs.push('--verbose');
       if (selectedProfile) uploadTaskArgs.push('--profile', selectedProfile);
       else uploadTaskArgs.push('--fqbn', usedFqbn);
       if (port) uploadTaskArgs.push('-p', port);
@@ -4960,6 +4959,7 @@ async function performUploadWithPortStrategy(params) {
   const cfg = params.cfg || getConfig();
   const baseArgs = Array.isArray(params.baseArgs) ? params.baseArgs.slice() : ['upload'];
   if (baseArgs.length === 0 || baseArgs[0] !== 'upload') baseArgs.unshift('upload');
+  if (!baseArgs.includes('--verbose')) baseArgs.splice(1, 0, '--verbose');
   const displayBaseArgs = baseArgs.slice();
   const compileArgs = Array.isArray(params.compileArgs) ? params.compileArgs.slice() : ['compile', sketchDir];
 
@@ -6258,7 +6258,7 @@ async function runUploadFor(sketchDir, profile) {
   if (!currentPort && !noPortSelected) { vscode.window.showErrorMessage(t('portUnsetWarn')); return; }
   // Build args
   const cArgs = ['compile']; if (cfg.verbose) cArgs.push('--verbose');
-  const uArgs = ['upload']; if (cfg.verbose) uArgs.push('--verbose');
+  const uArgs = ['upload', '--verbose'];
   let yamlInfo;
   try { yamlInfo = await readSketchYamlInfo(sketchDir); } catch { yamlInfo = null; }
   let wokwiEnabled = false;
