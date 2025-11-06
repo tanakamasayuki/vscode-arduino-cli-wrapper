@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.7.3
 - (EN) Command Center cards now surface the exact `arduino-cli` invocation, making it easier to understand what will run before triggering a command.
 - (JA) コマンドセンターの各カードに実行される `arduino-cli` コマンドを表示し、実行前に内容を把握できるようにしました。
 - (EN) `arduino-cli upload` calls now always inject `--verbose` so upload progress stays visible regardless of the status bar verbosity toggle.
