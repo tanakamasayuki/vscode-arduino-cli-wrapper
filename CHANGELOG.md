@@ -9,6 +9,8 @@
 - (JA) `--export-binaries` と `--json` を付与して `build/<target>/` に成果物を出力する "Arduino CLI: バイナリを出力" コマンドを追加しました。
 - (EN) The Export Binaries flow now writes a `manifest.json` alongside the binaries, decoding `tools.esptool_py.upload.pattern_args`, copying any missing blobs (e.g., `boot_app0.bin`), and normalising FQBNs so board options (e.g., `PartitionScheme=minimal`) are stored separately from the core `vendor:arch:board` triplet.
 - (JA) バイナリエクスポート時に `tools.esptool_py.upload.pattern_args` を解析した `manifest.json` を同フォルダーへ出力し、`boot_app0.bin` など不足しているバイナリを自動コピーしつつ、`PartitionScheme=minimal` のようなボードオプションを除いた基本の `vendor:arch:board` 形式で FQBN を正規化するようにしました。
+- (EN) Added an Export All Binaries command that mirrors Build Check, removing existing `build/` folders and exporting binaries for every sketch.yaml profile in the workspace.
+- (JA) Build Check と同様にワークスペース内の sketch.yaml 全プロファイルでバイナリを出力し、実行前に `build/` フォルダーを削除するコマンドを追加しました。
 
 ## 1.7.2
 - (EN) Build Check and the sketch.yaml Version Check now trigger `arduino-cli update` right before they run so both commands always work with the latest core and library indexes.

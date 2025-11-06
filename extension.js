@@ -343,8 +343,19 @@ const MSG = {
     buildCheckParseError: '[build-check] Failed to parse JSON output for {sketch} ({profile}): {msg}',
     buildCheckCliError: '[build-check] Compile failed to run for {sketch} ({profile}): exit {code}',
     buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
+    exportAllStart: '[export-all] Exporting binaries for all sketch.yaml profiles...',
+    exportAllNoWorkspace: '[export-all] No workspace folder is open. Open a folder and re-run the command.',
+    exportAllNoSketchYaml: '[export-all] No sketch.yaml files were found.',
+    exportAllDeletingBuild: '[export-all] Removing build folder: {path}',
+    exportAllDeleteFailed: '[export-all] Failed to remove build folder {path}: {msg}',
+    exportAllProfileStart: '[export-all] {sketch} ({profile}) exporting...',
+    exportAllProfileSuccess: '[export-all] {sketch} ({profile}) export completed.',
+    exportAllProfileFailed: '[export-all] {sketch} ({profile}) export failed: {msg}',
+    exportAllProfileNoProfiles: '[export-all] {sketch} skipped (no profiles defined).',
+    exportAllSummary: '[export-all] Done. total={total} success={success} failed={failed}',
     treeCommandCenter: 'Command Center',
     treeBuildCheck: 'Build Check',
+    treeExportAllBinaries: 'Export All Binaries',
     treeCompile: 'Compile',
     treeExportBinaries: 'Export Binaries',
     treeCleanCompile: 'Clean Compile',
@@ -532,6 +543,8 @@ const MSG = {
     commandCenterSetBaudDesc: 'Choose the serial monitor baudrate.',
     commandCenterCompileTitle: 'Compile Sketch',
     commandCenterCompileDesc: 'Build the active sketch using the selected profile or FQBN.',
+    commandCenterExportAllTitle: 'Export Binaries (All Profiles)',
+    commandCenterExportAllDesc: 'Compile every sketch.yaml profile with --export-binaries --json and refresh build folders.',
     commandCenterCompileExportTitle: 'Export Binaries',
     commandCenterCompileExportDesc: 'Compile with --export-binaries and --json to save binaries under build/<target>/',
     commandCenterCleanCompileTitle: 'Clean Compile',
@@ -575,6 +588,7 @@ const MSG = {
     commandCenterSketchNewCli: 'arduino-cli sketch new <sketch-path>',
     commandCenterBuildCheckCli: 'arduino-cli compile --profile <each profile> --warnings=all --clean --json <sketch>',
     commandCenterCompileCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] <sketch>',
+    commandCenterExportAllCli: 'arduino-cli compile --profile <each profile> --export-binaries --json <sketch>',
     commandCenterCompileExportCli: 'arduino-cli compile --export-binaries --json [--profile <profile> | --fqbn <fqbn>] <sketch>',
     commandCenterCleanCompileCli: 'arduino-cli compile --clean [--profile <profile> | --fqbn <fqbn>] <sketch>',
     commandCenterUploadCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] <sketch>\narduino-cli upload [--profile <profile> | --fqbn <fqbn>] [-p <port>] <sketch>',
@@ -762,6 +776,8 @@ const MSG = {
     commandCenterSetBaudDesc: 'シリアルモニター用のボーレートを選択します。',
     commandCenterCompileTitle: 'スケッチをコンパイル',
     commandCenterCompileDesc: '選択したプロファイルまたは FQBN を使ってスケッチをビルドします。',
+    commandCenterExportAllTitle: 'バイナリを一括出力',
+    commandCenterExportAllDesc: 'sketch.yaml の全プロファイルに対して --export-binaries --json を実行し、build フォルダーを更新します。',
     commandCenterCompileExportTitle: 'バイナリを出力',
     commandCenterCompileExportDesc: '--export-binaries と --json を付与して build/<target>/ 配下にバイナリを生成します。',
     commandCenterCleanCompileTitle: 'クリーンビルド',
@@ -805,6 +821,7 @@ const MSG = {
     commandCenterSketchNewCli: 'arduino-cli sketch new <スケッチパス>',
     commandCenterBuildCheckCli: 'arduino-cli compile --profile <各プロファイル> --warnings=all --clean --json <スケッチ>',
     commandCenterCompileCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
+    commandCenterExportAllCli: 'arduino-cli compile --profile <各プロファイル> --export-binaries --json <スケッチ>',
     commandCenterCompileExportCli: 'arduino-cli compile --export-binaries --json [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
     commandCenterCleanCompileCli: 'arduino-cli compile --clean [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
     commandCenterUploadCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>\narduino-cli upload [--profile <プロファイル> | --fqbn <FQBN>] [-p <ポート>] <スケッチ>',
@@ -949,8 +966,19 @@ const MSG = {
     buildCheckParseError: '[build-check] {sketch} ({profile}) の JSON 出力解析に失敗しました: {msg}',
     buildCheckCliError: '[build-check] {sketch} ({profile}) のコンパイル実行に失敗しました (終了コード {code})。',
     buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
+    exportAllStart: '[export-all] sketch.yaml の全プロファイルでバイナリを生成します…',
+    exportAllNoWorkspace: '[export-all] ワークスペースフォルダーが開かれていません。フォルダーを開いてから再実行してください。',
+    exportAllNoSketchYaml: '[export-all] sketch.yaml が見つかりませんでした。',
+    exportAllDeletingBuild: '[export-all] build フォルダーを削除: {path}',
+    exportAllDeleteFailed: '[export-all] build フォルダー {path} の削除に失敗しました: {msg}',
+    exportAllProfileStart: '[export-all] {sketch} ({profile}) のバイナリを出力しています…',
+    exportAllProfileSuccess: '[export-all] {sketch} ({profile}) の出力が完了しました。',
+    exportAllProfileFailed: '[export-all] {sketch} ({profile}) の出力に失敗しました: {msg}',
+    exportAllProfileNoProfiles: '[export-all] {sketch} をスキップしました (プロファイルがありません)。',
+    exportAllSummary: '[export-all] 完了しました。total={total} success={success} failed={failed}',
     treeCommandCenter: 'コマンドセンター',
     treeBuildCheck: 'ビルドチェック',
+    treeExportAllBinaries: 'バイナリを一括出力',
     treeCompile: 'コンパイル',
     treeExportBinaries: 'バイナリを出力',
     treeCleanCompile: 'クリーンコンパイル',
@@ -1059,6 +1087,7 @@ const COMMAND_CENTER_ITEMS = Object.freeze([
   { command: 'arduino-cli.setPort', titleKey: 'commandCenterSetPortTitle', descKey: 'commandCenterSetPortDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.setBaud', titleKey: 'commandCenterSetBaudTitle', descKey: 'commandCenterSetBaudDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.compile', titleKey: 'commandCenterCompileTitle', descKey: 'commandCenterCompileDesc', requiresProfile: true, cliKey: 'commandCenterCompileCli' },
+  { command: 'arduino-cli.exportAllBinaries', titleKey: 'commandCenterExportAllTitle', descKey: 'commandCenterExportAllDesc', requiresProfile: true, cliKey: 'commandCenterExportAllCli' },
   { command: 'arduino-cli.compileExportBinaries', titleKey: 'commandCenterCompileExportTitle', descKey: 'commandCenterCompileExportDesc', requiresProfile: true, cliKey: 'commandCenterCompileExportCli' },
   { command: 'arduino-cli.cleanCompile', titleKey: 'commandCenterCleanCompileTitle', descKey: 'commandCenterCleanCompileDesc', requiresProfile: true, cliKey: 'commandCenterCleanCompileCli' },
   { command: 'arduino-cli.upload', titleKey: 'commandCenterUploadTitle', descKey: 'commandCenterUploadDesc', requiresProfile: true, cliKey: 'commandCenterUploadCli' },
@@ -3192,6 +3221,7 @@ async function commandCompile(options = {}) {
         seconds: formatDurationSeconds(result.durationMs)
       }));
     }
+    return result;
   } catch (e) {
     const durationLabel = exportBinaries ? t('compileExportBinariesDurationLabel') : 'compile';
     if (exportBinaries && e && e.stdout && typeof e.stdout === 'string') {
@@ -5928,6 +5958,9 @@ function activate(context) {
           if (sketchDir) return runExportBinariesFor(sketchDir, profile);
           return vscode.commands.executeCommand('arduino-cli.compileExportBinaries');
         }
+        if (action === 'exportAllBinaries') {
+          return vscode.commands.executeCommand('arduino-cli.exportAllBinaries');
+        }
         if (action === 'cleanCompile') {
           if (sketchDir) return runCleanCompileFor(sketchDir, profile);
           return vscode.commands.executeCommand('arduino-cli.cleanCompile');
@@ -5974,6 +6007,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.runArbitrary', commandRunArbitrary),
     vscode.commands.registerCommand('arduino-cli.compile', commandCompile),
     vscode.commands.registerCommand('arduino-cli.compileExportBinaries', commandCompileExportBinaries),
+    vscode.commands.registerCommand('arduino-cli.exportAllBinaries', commandExportAllBinaries),
     vscode.commands.registerCommand('arduino-cli.configureWarnings', commandConfigureWarnings),
     vscode.commands.registerCommand('arduino-cli.versionCheck', commandVersionCheck),
     vscode.commands.registerCommand('arduino-cli.buildCheck', commandBuildCheck),
@@ -6160,6 +6194,7 @@ function globalCommandItems() {
     new CommandItem('Sketch.yaml Helper', 'helper', '', '', undefined, t('treeHelper')),
     new CommandItem('Open Inspector', 'inspect', '', '', undefined, t('treeInspectorOpen')),
     new CommandItem('Sketch.yaml Versions', 'versionCheck', '', '', undefined, t('treeVersionCheck')),
+    new CommandItem('Export All Binaries', 'exportAllBinaries', '', '', undefined, t('treeExportAllBinaries')),
     new CommandItem('Build Check', 'buildCheck', '', '', undefined, t('treeBuildCheck')),
     new CommandItem('New Sketch', 'sketchNew', '', '', undefined, t('treeNewSketch')),
     new CommandItem('Refresh View', 'refreshView', '', '', undefined, t('treeRefresh')),
@@ -6562,6 +6597,90 @@ async function commandExpandAllTree() {
  * Compile every profile defined in each sketch.yaml under the workspace.
  * Ignores user compile settings and forces --warnings=all with JSON diagnostics.
  */
+async function deleteSketchBuildFolder(sketchDir, channel) {
+  if (!sketchDir) return;
+  const buildDir = path.join(sketchDir, 'build');
+  const buildUri = vscode.Uri.file(buildDir);
+  let exists = false;
+  try {
+    exists = await pathExists(buildUri);
+  } catch (_) {
+    exists = false;
+  }
+  if (!exists) return;
+  channel.appendLine(t('exportAllDeletingBuild', { path: buildDir }));
+  try {
+    await vscode.workspace.fs.delete(buildUri, { recursive: true, useTrash: false });
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err || 'unknown');
+    channel.appendLine(t('exportAllDeleteFailed', { path: buildDir, msg }));
+  }
+}
+
+async function commandExportAllBinaries() {
+  if (!(await ensureCliReady())) return;
+  try {
+    await runArduinoCliUpdate({ auto: false, skipEnsure: true });
+  } catch (err) {
+    showError(err);
+  }
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    vscode.window.showWarningMessage(t('exportAllNoWorkspace'));
+    return;
+  }
+  const channel = getOutput();
+  channel.show();
+  const entries = await findSketchYamlEntries();
+  if (!entries || entries.length === 0) {
+    channel.appendLine(t('exportAllNoSketchYaml'));
+    return;
+  }
+  channel.appendLine(t('exportAllStart'));
+  const totals = { total: 0, success: 0, failed: 0 };
+  for (const entry of entries) {
+    const { sketchDir, uri, folder } = entry;
+    const wsFolder = vscode.workspace.getWorkspaceFolder(uri) || folder;
+    let sketchLabel = sketchDir;
+    if (wsFolder) {
+      let rel = path.relative(wsFolder.uri.fsPath, sketchDir);
+      if (!rel) rel = '.';
+      sketchLabel = `${wsFolder.name}/${rel.split(path.sep).join('/')}`;
+    }
+    await deleteSketchBuildFolder(sketchDir, channel);
+    const yamlInfo = await readSketchYamlInfo(sketchDir);
+    const profilesRaw = yamlInfo && Array.isArray(yamlInfo.profiles) ? yamlInfo.profiles : [];
+    const uniqueProfiles = Array.from(new Set(profilesRaw.filter((p) => typeof p === 'string' && p.trim().length > 0)));
+    let profiles = uniqueProfiles;
+    if (yamlInfo && yamlInfo.defaultProfile && profiles.includes(yamlInfo.defaultProfile)) {
+      profiles = uniqueProfiles.filter((p) => p !== yamlInfo.defaultProfile);
+      profiles.push(yamlInfo.defaultProfile);
+    }
+    if (!profiles || profiles.length === 0) {
+      channel.appendLine(t('exportAllProfileNoProfiles', { sketch: sketchLabel }));
+      continue;
+    }
+    for (const profile of profiles) {
+      totals.total += 1;
+      channel.appendLine(t('exportAllProfileStart', { sketch: sketchLabel, profile }));
+      try {
+        const result = await runExportBinariesFor(sketchDir, profile);
+        if (result === PROGRESS_BUSY) {
+          vscode.window.showWarningMessage(t('progressBusyWarn'));
+          return;
+        }
+        totals.success += 1;
+        channel.appendLine(t('exportAllProfileSuccess', { sketch: sketchLabel, profile }));
+      } catch (err) {
+        totals.failed += 1;
+        const msg = err && err.message ? err.message : String(err || 'unknown');
+        channel.appendLine(t('exportAllProfileFailed', { sketch: sketchLabel, profile, msg }));
+      }
+    }
+  }
+  channel.appendLine(t('exportAllSummary', totals));
+}
+
 async function commandBuildCheck() {
   if (!(await ensureCliReady())) return;
   try {

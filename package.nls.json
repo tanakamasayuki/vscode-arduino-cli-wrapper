@@ -13,6 +13,7 @@
   "cmd.configureWarnings": "Arduino CLI: Configure Warnings & Verbose",
   "cmd.compile": "Arduino CLI: Compile Sketch",
   "cmd.compileExportBinaries": "Arduino CLI: Export Binaries",
+  "cmd.exportAllBinaries": "Arduino CLI: Export All Binaries",
   "cmd.cleanCompile": "Arduino CLI: Clean Compile",
   "cmd.embedAssets": "Arduino CLI: Embed Assets",
   "cmd.upload": "Arduino CLI: Upload Sketch",

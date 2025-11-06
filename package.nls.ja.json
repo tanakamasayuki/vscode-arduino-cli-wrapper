@@ -13,6 +13,7 @@
   "cmd.configureWarnings": "Arduino CLI: 警告/詳細ログの設定",
   "cmd.compile": "Arduino CLI: スケッチをビルド",
   "cmd.compileExportBinaries": "Arduino CLI: バイナリを出力",
+  "cmd.exportAllBinaries": "Arduino CLI: バイナリを一括出力",
   "cmd.cleanCompile": "Arduino CLI: クリーンビルド",
   "cmd.embedAssets": "Arduino CLI: アセットを埋め込む",
   "cmd.upload": "Arduino CLI: スケッチをアップロード",
