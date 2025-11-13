@@ -254,6 +254,11 @@
           "default": false,
           "markdownDescription": "%config.injectTimezoneMacros.description%"
         },
+        "arduino-cli-wrapper.autoCopySketchYaml": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.autoCopySketchYaml.description%"
+        },
         "arduino-cli-wrapper.lint.m5gfxIncludes": {
           "type": "array",
           "default": [

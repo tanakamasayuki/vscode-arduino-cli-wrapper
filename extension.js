@@ -236,6 +236,8 @@ const MSG = {
     sketchYamlFetching: '[sketch.yaml] Getting dump-profile…',
     sketchYamlEmpty: '[sketch.yaml] dump-profile output is empty (no profiles appended)',
     sketchYamlCreated: 'Created sketch.yaml.',
+    sketchYamlAutoCopied: '[sketch.yaml] Copied from {source} to {dest}',
+    sketchYamlAutoCopyFailed: '[sketch.yaml] Failed to copy into {dest}: {msg}',
     secretsLensOpen: '🔐 Open arduino_secrets.h',
     secretsLensCreate: '📝 Create arduino_secrets.h',
     secretsSelectIno: 'Focus an .ino file to manage arduino_secrets.h.',
@@ -665,6 +667,8 @@ const MSG = {
     sketchYamlFetching: '[sketch.yaml] 作成中: dump-profile を取得しています…',
     sketchYamlEmpty: '[sketch.yaml] dump-profile の取得結果が空でした（プロファイル追記はありません）',
     sketchYamlCreated: 'sketch.yaml を作成しました。',
+    sketchYamlAutoCopied: '[sketch.yaml] 親フォルダーからコピーしました: {source} → {dest}',
+    sketchYamlAutoCopyFailed: '[sketch.yaml] コピーに失敗しました: {dest} ({msg})',
     secretsLensOpen: '🔐 arduino_secrets.h を開く',
     secretsLensCreate: '📝 arduino_secrets.h を作成',
     secretsSelectIno: '.ino ファイルをアクティブにしてから arduino_secrets.h を管理してください。',
@@ -2211,6 +2215,7 @@ function getConfig() {
     warnings: normalizedWarnings,
     localBuildPath: cfg.get('arduino-cli-wrapper.localBuildPath', false),
     injectTimezoneMacros: cfg.get('arduino-cli-wrapper.injectTimezoneMacros', true),
+    autoCopySketchYaml: cfg.get('arduino-cli-wrapper.autoCopySketchYaml', true),
   };
 }
 
@@ -6205,6 +6210,8 @@ async function findSketches() {
   /** @type {{dir:string,name:string}[]} */
   const results = [];
   try {
+    const cfg = getConfig();
+    const autoCopySketchYaml = cfg.autoCopySketchYaml !== false;
     const uris = filterUrisOutsideBuild(await vscode.workspace.findFiles('**/*.ino', '**/{node_modules,.git}/**', 50));
     const seen = new Set();
     for (const u of uris) {
@@ -6213,12 +6220,17 @@ async function findSketches() {
       seen.add(dir);
       const base = path.basename(dir);
       let rel = '';
+      let workspaceRoot = '';
       try {
         const wf = vscode.workspace.getWorkspaceFolder(u);
         if (wf && wf.uri && wf.uri.fsPath) {
-          rel = path.relative(wf.uri.fsPath, dir);
+          workspaceRoot = wf.uri.fsPath;
+          rel = path.relative(workspaceRoot, dir);
         }
       } catch (_) { }
+      if (autoCopySketchYaml) {
+        await ensureSketchYamlFromParents(dir, workspaceRoot);
+      }
       let display = base;
       if (rel && rel !== '.') {
         display = rel;
@@ -6234,6 +6246,49 @@ async function findSketches() {
     });
   } catch (_) { }
   return results;
+}
+
+async function ensureSketchYamlFromParents(sketchDir, workspaceRoot) {
+  if (!sketchDir) return false;
+  try {
+    const destUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+    if (await pathExists(destUri)) return false;
+    const sourceUri = await findParentSketchYamlUri(sketchDir, workspaceRoot);
+    if (!sourceUri) return false;
+    const data = await vscode.workspace.fs.readFile(sourceUri);
+    await vscode.workspace.fs.writeFile(destUri, data);
+    getOutput().appendLine(t('sketchYamlAutoCopied', { source: sourceUri.fsPath, dest: sketchDir }));
+    return true;
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    getOutput().appendLine(t('sketchYamlAutoCopyFailed', { dest: sketchDir, msg }));
+    return false;
+  }
+}
+
+async function findParentSketchYamlUri(sketchDir, workspaceRoot) {
+  let current = path.dirname(sketchDir);
+  while (current && current !== '') {
+    const candidate = vscode.Uri.file(path.join(current, 'sketch.yaml'));
+    if (await pathExists(candidate)) return candidate;
+    if (workspaceRoot && pathsEqualCaseAware(current, workspaceRoot)) break;
+    const parent = path.dirname(current);
+    if (!parent || pathsEqualCaseAware(parent, current)) break;
+    current = parent;
+  }
+  return null;
+}
+
+function pathsEqualCaseAware(a, b) {
+  if (!a || !b) return false;
+  const normA = normalizePathForCompare(a);
+  const normB = normalizePathForCompare(b);
+  return normA === normB;
+}
+
+function normalizePathForCompare(p) {
+  const normalized = path.normalize(String(p || ''));
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 async function findSketchYamlEntries() {

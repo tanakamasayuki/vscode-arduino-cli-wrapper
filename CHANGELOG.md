@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Refresh View now backfills missing `sketch.yaml` files by copying the closest parent version automatically (configurable via `arduino-cli-wrapper.autoCopySketchYaml`, enabled by default).
+- (JA) Refresh View で検出したスケッチに `sketch.yaml` が無い場合、最も近い親フォルダーのファイルを自動コピーするようにしました（既定 ON／`arduino-cli-wrapper.autoCopySketchYaml` で切り替え可能）。
 
 ## 1.7.3
 - (EN) Command Center cards now surface the exact `arduino-cli` invocation, making it easier to understand what will run before triggering a command.

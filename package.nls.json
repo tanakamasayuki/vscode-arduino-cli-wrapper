@@ -59,6 +59,7 @@
   "config.verbose.description": "Add --verbose to compile/upload commands. (Managed from the status bar)",
   "config.localBuildPath.description": "Store Arduino CLI build outputs under a local `.build/<profile>` folder and pass --build-path automatically during compile commands.",
   "config.injectTimezoneMacros.description": "Inject CLI_BUILD_TZ_* macros based on the host timezone into every compile and Inspector run.",
+  "config.autoCopySketchYaml.description": "When Refresh View discovers a sketch folder without sketch.yaml, copy the closest parent sketch.yaml into that folder.",
   "config.lint.m5gfxIncludes.description": "Headers treated as part of the M5GFX family for include-order linting.",
   "config.lint.fsIncludes.description": "Headers treated as filesystem-related for include-order linting.",
   "view.arduinoCli": "Arduino CLI",
