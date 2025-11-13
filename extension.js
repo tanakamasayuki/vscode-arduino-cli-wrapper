@@ -6772,6 +6772,13 @@ async function commandBuildCheck() {
     channel.appendLine(t('buildCheckNoSketchYaml'));
     return;
   }
+  sketches.sort((a, b) => {
+    const labelA = formatBuildCheckSketchLabel(a.sketchDir, a.uri, a.folder);
+    const labelB = formatBuildCheckSketchLabel(b.sketchDir, b.uri, b.folder);
+    const cmp = labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return a.sketchDir.localeCompare(b.sketchDir, undefined, { sensitivity: 'base' });
+  });
 
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
@@ -6780,14 +6787,7 @@ async function commandBuildCheck() {
 
   for (const entry of sketches) {
     const { sketchDir, uri, folder } = entry;
-    const wsFolder = vscode.workspace.getWorkspaceFolder(uri) || folder;
-    let sketchLabel = sketchDir;
-    if (wsFolder) {
-      let relPath = path.relative(wsFolder.uri.fsPath, sketchDir);
-      if (!relPath) relPath = '.';
-      relPath = relPath.split(path.sep).join('/');
-      sketchLabel = wsFolder.name + '/' + relPath;
-    }
+    const sketchLabel = formatBuildCheckSketchLabel(sketchDir, uri, folder);
 
     const primaryIno = await getPrimaryInoUri(sketchDir);
     if (!primaryIno) {
@@ -7071,6 +7071,17 @@ async function commandBuildCheck() {
   if (report.results.length > 0) {
     openBuildCheckReport(report);
   }
+}
+
+function formatBuildCheckSketchLabel(sketchDir, uri, fallbackFolder) {
+  const wsFolder = vscode.workspace.getWorkspaceFolder(uri) || fallbackFolder;
+  if (!wsFolder || !wsFolder.uri || !wsFolder.uri.fsPath) {
+    return sketchDir;
+  }
+  let relPath = path.relative(wsFolder.uri.fsPath, sketchDir);
+  if (!relPath) relPath = '.';
+  relPath = relPath.split(path.sep).join('/');
+  return `${wsFolder.name}/${relPath}`;
 }
 
 /**
