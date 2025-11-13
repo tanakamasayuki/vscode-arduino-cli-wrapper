@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Refresh View now backfills missing `sketch.yaml` files by copying the closest parent version automatically (configurable via `arduino-cli-wrapper.autoCopySketchYaml`, enabled by default).
 - (JA) Refresh View で検出したスケッチに `sketch.yaml` が無い場合、最も近い親フォルダーのファイルを自動コピーするようにしました（既定 ON／`arduino-cli-wrapper.autoCopySketchYaml` で切り替え可能）。
+- (EN) Build Check now ignores sketch.yaml folders that do not contain any `.ino` files, avoiding unnecessary CLI runs on incomplete sketches.
+- (JA) `.ino` ファイルが存在しない `sketch.yaml` フォルダーはビルドチェックの対象から除外し、不完全なスケッチで Arduino CLI を実行しないようにしました。
 
 ## 1.7.3
 - (EN) Command Center cards now surface the exact `arduino-cli` invocation, making it easier to understand what will run before triggering a command.

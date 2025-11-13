@@ -337,6 +337,7 @@ const MSG = {
     buildCheckNoWorkspace: '[build-check] No workspace folder is open. Open a folder in VS Code and re-run Build Check from the Arduino CLI view.',
     buildCheckNoSketchYaml: '[build-check] No sketch.yaml files found. Use the Sketch.yaml Helper to create profiles, then run Build Check again.',
     buildCheckSkipNoProfiles: '[build-check] {sketch} skipped (no profiles defined in sketch.yaml).',
+    buildCheckSkipNoIno: '[build-check] {sketch} skipped (no .ino files found).',
     buildCheckCompileStart: '[build-check] {sketch} ({profile}) compiling…',
     buildCheckStatusSuccess: 'SUCCESS',
     buildCheckStatusFailed: 'FAILED',
@@ -962,6 +963,7 @@ const MSG = {
     buildCheckNoWorkspace: '[build-check] ワークスペースフォルダーが開かれていません。VS Code でフォルダーを開き、Arduino CLI ビューからビルドチェックを再実行してください。',
     buildCheckNoSketchYaml: '[build-check] sketch.yaml が見つかりませんでした。Sketch.yaml ヘルパーでプロファイルを作成してからビルドチェックを再実行してください。',
     buildCheckSkipNoProfiles: '[build-check] {sketch} をスキップしました (sketch.yaml にプロファイルがありません)。',
+    buildCheckSkipNoIno: '[build-check] {sketch} をスキップしました (.ino ファイルがありません)。',
     buildCheckCompileStart: '[build-check] {sketch} ({profile}) をコンパイル中…',
     buildCheckStatusSuccess: '成功',
     buildCheckStatusFailed: '失敗',
@@ -6785,6 +6787,12 @@ async function commandBuildCheck() {
       if (!relPath) relPath = '.';
       relPath = relPath.split(path.sep).join('/');
       sketchLabel = wsFolder.name + '/' + relPath;
+    }
+
+    const primaryIno = await getPrimaryInoUri(sketchDir);
+    if (!primaryIno) {
+      channel.appendLine(t('buildCheckSkipNoIno', { sketch: sketchLabel }));
+      continue;
     }
 
     const yamlInfo = await readSketchYamlInfo(sketchDir);
