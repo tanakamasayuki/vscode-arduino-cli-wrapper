@@ -225,6 +225,35 @@ All command logs are unified in a dedicated pseudo terminal with ANSI colors so 
 
 **Arduino CLI: Embed Assets** is the quickest option: open the Arduino CLI explorer, use the `Embed Assets` action in the profile section (it appears above `Upload Data`), drop files under `assets/` or any sketch-root folder whose name starts with `assets_` (for example `assets_wifi/` or `assets_ui/`), and the extension regenerates `<folder>_embed.h` with a `PROGMEM` byte array and length constant for each file. Each header reuses the folder name for the exported arrays and symbols (`assets_wifi_file_names`, etc.) so multiple asset bundles can coexist. If the base `assets/` folder is missing, the manual action still creates it for you; compile-time auto-regeneration continues to skip headers when their source folder doesn't exist so builds no longer recreate them unexpectedly. Add a `.assetsignore` file inside each assets folder to skip files or directories with gitignore-style rules (e.g., use `# comment`, `foo/`, `*.psd`, `**/tmp/**`, `!important.bin`), and the generator will only embed the files you keep. Unicode or symbol-heavy filenames are still embedded; the extension now hashes those paths to create valid, unique C++ identifiers automatically.
 
+Need more control? Drop an `.assetsconfig` file next to `.assetsignore` and describe how the folder should be processed using the INI-style sections shown below:
+
+```
+[general]
+# Relative directory (from assets/) where the generated header is written
+dir = ../
+# Filename for the generated header (directory comes from dir)
+header_name = assets_generated.h
+# Optional symbol prefix; defaults to the folder name
+prefix = assets_wifi
+
+[minify]
+enable = true      ; master switch
+html = true        ; html/css/js toggles
+css = true
+js = true
+keep_comments = false
+write_output_file = false
+output_dir = .assets_minified
+
+[gzip]
+enable = true
+patterns = **/*.html, **/*.css, **/*.js
+min_size = 256
+suffix = .gz
+```
+
+`dir` is resolved relative to the assets folder (blank entries fall back to `../`, which targets the sketch root), while `header_name` only controls the filename. The minifier is lightweight and regex-based—great for trimming whitespace/comments from small bundles, but not a full parser—so keep `keep_comments = true` if you rely on tricky constructs. When gzip is enabled, files that match `patterns` (glob, comma separated) and exceed `min_size` bytes are minified first and then compressed; the generated filename appends `suffix`. Both `.assetsconfig` and `.assetsignore` are excluded from the embed output automatically.
+
 The trade-off is size: every embedded byte becomes part of the sketch binary. Large media files make the firmware heavier, so each upload or OTA update takes longer, and you can run into partition limits.
 
 **Arduino CLI: Upload Data** takes the opposite approach. You upload a filesystem image from `data/` once, but afterward the sketch can be rebuilt or flashed without re-sending those files, keeping OTA and serial uploads small. For large or frequently changing assets—especially with OTA workflows—prefer the data image so the firmware stays lean. Reserve Embed Assets for lightweight bundles where the convenience outweighs the extra firmware size.

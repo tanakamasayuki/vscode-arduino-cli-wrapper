@@ -7,6 +7,8 @@
 - (JA) 各アセットフォルダーに `.assetsignore` を置くと `.gitignore` 形式で除外を制御でき、コメント (`#`)、ディレクトリ指定 (`foo/`)、ワイルドカード (`*.psd`, `**/tmp/**`)、再包含 (`!important.bin`) などに対応して埋め込み対象を絞り込めます。
 - (EN) Asset filenames that cannot form valid identifiers (e.g., emoji or CJK characters) now hash their paths to generate deterministic, unique symbols, while dashes/spaces are preserved as `_` instead of being dropped.
 - (JA) 絵文字や日本語など識別子に使えないファイル名は、パスをハッシュ化した一意のシンボルへ自動変換し、ハイフン/スペースは削除せず `_` に置換することで黙って無視されたり重複してビルドエラーになる問題を解消しました。
+- (EN) Added `.assetsconfig` (INI syntax) to control where headers are written, override the symbol prefix, toggle lightweight HTML/CSS/JS minify steps, and gzip selected files (with glob patterns, size thresholds, and custom suffixes) before embedding.
+- (JA) `.assetsconfig`（INI 形式）を追加し、ヘッダー出力先ディレクトリやファイル名、シンボルプレフィックス、簡易 HTML/CSS/JS minify、glob/サイズ条件付き gzip 圧縮といった処理をアセット単位でカスタマイズできるようにしました。
 
 ## 1.7.4
 - (EN) Refresh View now backfills missing `sketch.yaml` files by copying the closest parent version automatically (configurable via `arduino-cli-wrapper.autoCopySketchYaml`, enabled by default).

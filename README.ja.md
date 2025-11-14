@@ -229,6 +229,32 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 
 手早く扱いたいだけなら **Arduino CLI: アセットを埋め込む** が便利です。Arduino CLI エクスプローラーの各プロファイル欄（Upload Data の直前）からコマンドを呼び出し、スケッチ直下の `assets/` もしくは `assets_` で始まる任意のフォルダー（例: `assets_wifi/` や `assets_ui/`）にファイルを置けば、各ファイルを `PROGMEM` のバイト配列と長さ定数に展開した `<フォルダー名>_embed.h` を再生成します。出力される配列やシンボル（`assets_wifi_file_names` など）もフォルダー名ごとに分かれるため、複数のアセット束を並行して使えます。ベースの `assets/` が存在しない場合は手動コマンド実行時に自動作成されますが、コンパイル前の自動再生成では元フォルダーが無いときにヘッダーを作らず終了するため、意図せず復活することはありません。フォルダー内に `.assetsignore` を配置すると `.gitignore` 同様の書式で除外を制御でき（`# コメント`、`foo/`、`*.psd`、`**/tmp/**`、`!important.bin` など）、必要なファイルだけを埋め込めます。日本語や絵文字などシンボル名に使えないファイルでも、パスをハッシュ化した一意の識別子に自動変換するため安全に取り込めます。
 
+さらに制御したい場合は `.assetsconfig` を同じフォルダーに置き、INI 形式で生成場所や圧縮手順を指定します。例:
+
+```
+[general]
+dir = ../                ; ヘッダー出力先ディレクトリ (assets からの相対 PATH, 空欄でも ../ )
+header_name = wifi.h     ; 出力ファイル名（ディレクトリ部分は dir 側で指定）
+prefix = wifi_assets     ; シンボルのプレフィックス（既定はフォルダー名）
+
+[minify]
+enable = true
+html = true
+css = true
+js = true
+keep_comments = false
+write_output_file = false
+output_dir = .assets_minified
+
+[gzip]
+enable = true
+patterns = **/*.html, **/*.css, **/*.js
+min_size = 256
+suffix = .gz
+```
+
+`dir` は assets からの相対パスで、空欄や未設定なら `../`（= スケッチルート）に出力します。`header_name` はファイル名のみ指定し、`dir` と組み合わせて保存先を決めます。minify は軽量な正規表現ベースの実装なので複雑な構文には非対応ですが、空白やコメントを素早く削る用途には十分です。minify → gzip の順で処理し、`patterns`（glob、カンマ区切り）と `min_size` に一致したファイルに `suffix` を付けて圧縮結果を埋め込みます。`.assetsconfig` / `.assetsignore` 自身は自動的に出力対象から除外されます。
+
 ただし埋め込んだバイト列はそのままファームウェアサイズに加算されるため、ファイルが大きいと upload/OTA のたびに転送時間が延び、パーティション上限にも届きやすくなります。
 
 一方 **Arduino CLI: Upload Data** は初回に `data/` からファイルシステムイメージを転送する手間があるものの、以降はスケッチを書き換えても data 側を再送する必要がなく、OTA でもファームウェアを肥大化させません。サイズが大きい、頻繁に更新する、あるいは OTA での運用を想定している場合は data フォルダー方式を選び、軽量なセットだけを手軽に配布したいときに埋め込みを使い分けるのがおすすめです。
