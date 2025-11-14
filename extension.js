@@ -12309,9 +12309,17 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, folderName, entrie
   const fileNames = [];
   const dataSymbols = [];
   const sizeSymbols = [];
+  const symbolCache = new Map();
+  const usedSymbols = new Map();
+  const resolveSymbol = (relative) => {
+    if (symbolCache.has(relative)) return symbolCache.get(relative);
+    const symbol = makeAssetSymbolName(relative, groupSymbol, usedSymbols);
+    symbolCache.set(relative, symbol);
+    return symbol;
+  };
   lines.push('// Index:');
   for (const entry of sortedEntries) {
-    const symbol = makeAssetSymbolName(entry.relative, groupSymbol);
+    const symbol = resolveSymbol(entry.relative);
     lines.push(`// - ${folderLabel}/${entry.relative} -> ${symbol} / ${symbol}_len`);
   }
   lines.push('');
@@ -12325,7 +12333,7 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, folderName, entrie
   lines.push('');
   for (const entry of sortedEntries) {
     const data = await vscode.workspace.fs.readFile(entry.uri);
-    const symbol = makeAssetSymbolName(entry.relative, groupSymbol);
+    const symbol = resolveSymbol(entry.relative);
     const prettyPath = '/' + String(entry.relative || '').replace(/^[\/]+/, '').replace(/\\/g, '/');
     fileNames.push(`"${prettyPath}"`);
     dataSymbols.push(symbol);
@@ -12369,14 +12377,17 @@ function makeAssetGroupSymbol(folderName) {
   return base;
 }
 
-function makeAssetSymbolName(relativePath, groupSymbolBase = DEFAULT_ASSETS_DIR) {
+function makeAssetSymbolName(relativePath, groupSymbolBase = DEFAULT_ASSETS_DIR, usedSymbols) {
   const lower = String(relativePath || '').toLowerCase();
   const prefix = makeAssetGroupSymbol(groupSymbolBase);
-  let symbol = `${prefix}_${lower.replace(/[^a-z0-9]+/g, '_')}`;
+  let slug = lower.replace(/[^a-z0-9]+/g, '_');
+  slug = slug.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  if (!slug) slug = hashAssetRelativePath(relativePath);
+  let symbol = `${prefix}_${slug}`;
   symbol = symbol.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
-  if (!symbol) symbol = `${prefix}_data`;
+  if (!symbol) symbol = `${prefix}_${hashAssetRelativePath(relativePath)}`;
   if (!/^[a-z_]/.test(symbol)) symbol = `_${symbol}`;
-  return symbol;
+  return ensureUniqueAssetSymbol(symbol, usedSymbols);
 }
 
 function formatAssetBytes(data) {
@@ -12389,6 +12400,34 @@ function formatAssetBytes(data) {
     chunks.push(`  ${slice.join(', ')}${suffix}`);
   }
   return chunks.join('\n');
+}
+
+function ensureUniqueAssetSymbol(symbol, usedSymbols) {
+  if (!usedSymbols) return symbol;
+  if (!usedSymbols.has(symbol)) {
+    usedSymbols.set(symbol, 1);
+    return symbol;
+  }
+  let counter = usedSymbols.get(symbol);
+  let candidate = symbol;
+  while (usedSymbols.has(candidate)) {
+    counter += 1;
+    candidate = `${symbol}_${counter}`;
+  }
+  usedSymbols.set(symbol, counter);
+  usedSymbols.set(candidate, 1);
+  return candidate;
+}
+
+function hashAssetRelativePath(value) {
+  const text = String(value || '');
+  if (!text) return 'data';
+  const bytes = Buffer.from(text, 'utf8');
+  let hex = '';
+  for (let i = 0; i < bytes.length && hex.length < 12; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0');
+  }
+  return `h${hex || '00'}`;
 }
 
 async function reportAssetsEmbedDiagnostics(sketchDir) {

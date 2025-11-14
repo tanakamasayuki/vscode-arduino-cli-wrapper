@@ -5,6 +5,8 @@
 - (JA) アセット埋め込みがベースの `assets/` と `assets_` で始まる全フォルダーを対象にし、`<フォルダー名>_embed.h` とフォルダー名付きシンボルを出力することで複数束を並行して扱えるようにしました。
 - (EN) Each assets folder can now include a `.assetsignore` file (gitignore syntax) to skip files and directories before they are embedded, supporting comments (`#`), directory rules (`foo/`), glob patterns (`*.psd`, `**/tmp/**`), and re-inclusion (`!important.bin`).
 - (JA) 各アセットフォルダーに `.assetsignore` を置くと `.gitignore` 形式で除外を制御でき、コメント (`#`)、ディレクトリ指定 (`foo/`)、ワイルドカード (`*.psd`, `**/tmp/**`)、再包含 (`!important.bin`) などに対応して埋め込み対象を絞り込めます。
+- (EN) Asset filenames that cannot form valid identifiers (e.g., emoji or CJK characters) now hash their paths to generate deterministic, unique symbols instead of being silently skipped or colliding.
+- (JA) 絵文字や日本語など識別子に使えないファイル名は、パスをハッシュ化した一意のシンボルへ自動変換し、黙って無視されたり重複してビルドエラーになる問題を解消しました。
 
 ## 1.7.4
 - (EN) Refresh View now backfills missing `sketch.yaml` files by copying the closest parent version automatically (configurable via `arduino-cli-wrapper.autoCopySketchYaml`, enabled by default).
