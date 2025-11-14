@@ -12380,11 +12380,10 @@ function makeAssetGroupSymbol(folderName) {
 function makeAssetSymbolName(relativePath, groupSymbolBase = DEFAULT_ASSETS_DIR, usedSymbols) {
   const lower = String(relativePath || '').toLowerCase();
   const prefix = makeAssetGroupSymbol(groupSymbolBase);
-  let slug = lower.replace(/[^a-z0-9]+/g, '_');
-  slug = slug.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  let slug = lower.replace(/ /g, '_').replace(/-/g, '_');
+  slug = slug.replace(/[^a-z0-9_]/g, '_');
   if (!slug) slug = hashAssetRelativePath(relativePath);
   let symbol = `${prefix}_${slug}`;
-  symbol = symbol.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
   if (!symbol) symbol = `${prefix}_${hashAssetRelativePath(relativePath)}`;
   if (!/^[a-z_]/.test(symbol)) symbol = `_${symbol}`;
   return ensureUniqueAssetSymbol(symbol, usedSymbols);
