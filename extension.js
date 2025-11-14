@@ -12145,7 +12145,8 @@ async function writeAssetsEmbedHeader(sketchDir, options = {}) {
   if (!hasAssetsDir) {
     await ensureDir(assetsUri);
   }
-  const entries = await collectAssetFileEntries(assetsUri);
+  const ignore = await createAssetsIgnoreMatcher(assetsUri);
+  const entries = await collectAssetFileEntries(assetsUri, '', { ignore });
   entries.sort((a, b) => a.relative.localeCompare(b.relative, undefined, { sensitivity: 'base' }));
   const content = await buildAssetsHeaderContent(sketchDir, assetsDir, folderName, entries);
   await writeTextFile(headerUri, content);
@@ -12158,28 +12159,128 @@ async function writeAssetsEmbedHeader(sketchDir, options = {}) {
   };
 }
 
-async function collectAssetFileEntries(baseUri, prefix = '') {
+async function collectAssetFileEntries(baseUri, prefix = '', options = {}) {
   const results = [];
+  const { ignore } = options || {};
   try {
     const entries = await vscode.workspace.fs.readDirectory(baseUri);
     for (const [name, type] of entries) {
       const rel = prefix ? `${prefix}/${name}` : name;
       const child = vscode.Uri.joinPath(baseUri, name);
+      const normalized = rel.replace(/\\/g, '/');
       if (type === vscode.FileType.Directory) {
-        const nested = await collectAssetFileEntries(child, rel);
+        if (ignore && ignore.shouldIgnore(normalized, true)) continue;
+        const nested = await collectAssetFileEntries(child, rel, options);
         for (const item of nested) results.push(item);
       } else if (type === vscode.FileType.File) {
+        if ((ignore && ignore.shouldIgnore(normalized, false)) || name === '.assetsignore') continue;
         let stat;
         try { stat = await vscode.workspace.fs.stat(child); } catch { stat = undefined; }
         results.push({
           uri: child,
-          relative: rel.replace(/\\/g, '/'),
+          relative: normalized,
           mtime: stat && typeof stat.mtime === 'number' ? stat.mtime : 0
         });
       }
     }
   } catch { }
   return results;
+}
+
+async function createAssetsIgnoreMatcher(baseUri) {
+  const ignoreUri = vscode.Uri.joinPath(baseUri, '.assetsignore');
+  let text = '';
+  if (await pathExists(ignoreUri)) {
+    try {
+      text = await readTextFile(ignoreUri);
+    } catch {
+      text = '';
+    }
+  }
+  return buildAssetsIgnoreMatcher(text);
+}
+
+function buildAssetsIgnoreMatcher(text) {
+  const rules = [];
+  const defaultRule = compileAssetIgnoreRule('.assetsignore', false, { allowSelf: true });
+  if (defaultRule) rules.push(defaultRule);
+  const lines = String(text || '').split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = String(rawLine || '').trim();
+    if (!line || line.startsWith('#')) continue;
+    let include = false;
+    let pattern = line;
+    if (pattern.startsWith('!')) {
+      include = true;
+      pattern = pattern.slice(1).trim();
+    }
+    if (!pattern) continue;
+    const rule = compileAssetIgnoreRule(pattern, include, { disallowSelf: true });
+    if (rule) rules.push(rule);
+  }
+  return {
+    shouldIgnore(relativePath, isDirectory) {
+      if (!rules.length) return false;
+      const rel = String(relativePath || '').replace(/^[\/]+/, '');
+      if (!rel) return false;
+      const base = rel.split('/').pop();
+      let ignored = false;
+      for (const rule of rules) {
+        if (rule.dirOnly && !isDirectory) continue;
+        const target = rule.matchBasename ? base : rel;
+        if (rule.regex.test(target)) {
+          ignored = !rule.include;
+        }
+      }
+      return ignored;
+    }
+  };
+}
+
+function compileAssetIgnoreRule(pattern, include, options = {}) {
+  let body = String(pattern || '').trim();
+  if (!body) return null;
+  body = body.replace(/^\/+/, '');
+  let dirOnly = false;
+  if (body.endsWith('/')) {
+    dirOnly = true;
+    body = body.replace(/\/+$/, '');
+  }
+  if (!body) return null;
+  if (options.disallowSelf && body === '.assetsignore') return null;
+  const matchBasename = !body.includes('/');
+  const regexSource = globToRegExpSource(body);
+  if (!regexSource) return null;
+  return {
+    regex: new RegExp(`^${regexSource}$`),
+    include: !!include,
+    dirOnly,
+    matchBasename
+  };
+}
+
+function globToRegExpSource(pattern) {
+  let source = '';
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === '*') {
+      if (pattern[i + 1] === '*') {
+        source += '.*';
+        i++;
+      } else {
+        source += '[^/]*';
+      }
+    } else if (ch === '?') {
+      source += '[^/]';
+    } else {
+      source += escapeForRegExp(ch);
+    }
+  }
+  return source;
+}
+
+function escapeForRegExp(ch) {
+  return ch.replace(/[-\\^$+?.()|[\]{}]/g, '\\$&');
 }
 
 async function buildAssetsHeaderContent(sketchDir, assetsDir, folderName, entries) {
@@ -12306,7 +12407,8 @@ async function reportAssetsEmbedDiagnostics(sketchDir) {
     const headerUri = vscode.Uri.file(path.join(sketchDir, `${folderName}_embed.h`));
     const diagKey = makeAssetsDiagKey(sketchKey, folderName);
     processed.add(diagKey);
-    const entries = await collectAssetFileEntries(assetsUri);
+    const ignore = await createAssetsIgnoreMatcher(assetsUri);
+    const entries = await collectAssetFileEntries(assetsUri, '', { ignore });
     if (!entries.length) {
       clearAssetsDiagnostic(diagKey);
       continue;

@@ -3,6 +3,8 @@
 ## Unreleased
 - (EN) Embed Assets now scans the base `assets/` folder plus every sketch folder whose name starts with `assets_`, generating `<folder>_embed.h` files and prefixing the exported arrays/symbols with that folder name so multiple bundles can coexist.
 - (JA) アセット埋め込みがベースの `assets/` と `assets_` で始まる全フォルダーを対象にし、`<フォルダー名>_embed.h` とフォルダー名付きシンボルを出力することで複数束を並行して扱えるようにしました。
+- (EN) Each assets folder can now include a `.assetsignore` file (gitignore syntax) to skip files and directories before they are embedded, supporting comments (`#`), directory rules (`foo/`), glob patterns (`*.psd`, `**/tmp/**`), and re-inclusion (`!important.bin`).
+- (JA) 各アセットフォルダーに `.assetsignore` を置くと `.gitignore` 形式で除外を制御でき、コメント (`#`)、ディレクトリ指定 (`foo/`)、ワイルドカード (`*.psd`, `**/tmp/**`)、再包含 (`!important.bin`) などに対応して埋め込み対象を絞り込めます。
 
 ## 1.7.4
 - (EN) Refresh View now backfills missing `sketch.yaml` files by copying the closest parent version automatically (configurable via `arduino-cli-wrapper.autoCopySketchYaml`, enabled by default).
