@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Embed Assets now scans the base `assets/` folder plus every sketch folder whose name starts with `assets_`, generating `<folder>_embed.h` files and prefixing the exported arrays/symbols with that folder name so multiple bundles can coexist.
+- (JA) アセット埋め込みがベースの `assets/` と `assets_` で始まる全フォルダーを対象にし、`<フォルダー名>_embed.h` とフォルダー名付きシンボルを出力することで複数束を並行して扱えるようにしました。
 
 ## 1.7.4
 - (EN) Refresh View now backfills missing `sketch.yaml` files by copying the closest parent version automatically (configurable via `arduino-cli-wrapper.autoCopySketchYaml`, enabled by default).

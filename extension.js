@@ -9,6 +9,7 @@ const https = require('https');
 
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 const AUTO_UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_ASSETS_DIR = 'assets';
 let cachedLatestArduinoCliTag = '';
 let cachedLatestArduinoCliTagFetchedAt = 0;
 let cachedBoardDetailsJson = null;
@@ -575,7 +576,7 @@ const MSG = {
     commandCenterSketchYamlHelperTitle: 'Sketch.yaml Profile Helper',
     commandCenterSketchYamlHelperDesc: 'Generate profile entries from compile --dump-profile and apply settings.',
     commandCenterEmbedAssetsTitle: 'Embed Assets',
-    commandCenterEmbedAssetsDesc: 'Convert files under assets/ into a generated assets_embed.h header.',
+    commandCenterEmbedAssetsDesc: 'Convert files under assets/ and assets_*/ folders into matching <folder>_embed.h headers.',
     commandCenterRunWokwiTitle: 'Run in Wokwi',
     commandCenterRunWokwiDesc: 'Copy firmware artifacts and open the Wokwi simulator for the profile.',
     commandCenterRunArbitraryTitle: 'Run Arduino CLI Command',
@@ -810,7 +811,7 @@ const MSG = {
     commandCenterSketchYamlHelperTitle: 'sketch.yaml ヘルパー',
     commandCenterSketchYamlHelperDesc: 'compile --dump-profile の結果からプロファイル設定を生成します。',
     commandCenterEmbedAssetsTitle: 'アセットを埋め込む',
-    commandCenterEmbedAssetsDesc: 'assets/ 以下のファイルを assets_embed.h に変換します。',
+    commandCenterEmbedAssetsDesc: 'assets/ および assets_*/ フォルダー内のファイルを <フォルダー名>_embed.h に変換します。',
     commandCenterRunWokwiTitle: 'Wokwi で実行',
     commandCenterRunWokwiDesc: 'プロファイルの成果物をコピーして Wokwi シミュレーターを起動します。',
     commandCenterRunArbitraryTitle: 'Arduino CLI コマンドを実行',
@@ -7520,15 +7521,28 @@ async function commandEmbedAssets() {
 async function embedAssetsForSketch(sketchDir, options = {}) {
   const { silent = false, createDirIfMissing = false } = options || {};
   try {
-    const result = await writeAssetsEmbedHeader(sketchDir, { createDirIfMissing });
-    if (!silent) {
-      if (result.status === 'noAssets') {
-        vscode.window.showWarningMessage(t('embedAssetsNoAssets', { assets: result.assetsPath }));
-      } else {
-        vscode.window.showInformationMessage(t('embedAssetsDone', {
-          count: result.count,
-          header: result.headerPath
-        }));
+    const targets = await detectSketchAssetFolders(sketchDir, { includeDefaultWhenMissing: createDirIfMissing });
+    if (!targets.length) {
+      await reportAssetsEmbedDiagnostics(sketchDir);
+      return;
+    }
+    for (const target of targets) {
+      const result = await writeAssetsEmbedHeader(sketchDir, {
+        createDirIfMissing,
+        folderName: target.name
+      });
+      if (!silent) {
+        if (result.status === 'noAssets') {
+          vscode.window.showWarningMessage(t('embedAssetsNoAssets', {
+            assets: result.assetsPath,
+            header: result.headerPath
+          }));
+        } else if (result.status !== 'missingDir') {
+          vscode.window.showInformationMessage(t('embedAssetsDone', {
+            count: result.count,
+            header: result.headerPath
+          }));
+        }
       }
     }
     await reportAssetsEmbedDiagnostics(sketchDir);
@@ -12080,10 +12094,42 @@ async function gatherExampleSiblingFiles(primaryPath) {
   return items;
 }
 
+async function detectSketchAssetFolders(sketchDir, options = {}) {
+  const { includeDefaultWhenMissing = false } = options || {};
+  const results = [];
+  const seen = new Set();
+  const defaultKey = DEFAULT_ASSETS_DIR.toLowerCase();
+  const baseDir = String(sketchDir || '').trim();
+  if (!baseDir) return results;
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(baseDir));
+    for (const [name, type] of entries) {
+      if (type !== vscode.FileType.Directory) continue;
+      if (!isAssetsFolderName(name)) continue;
+      results.push({ name, exists: true });
+      seen.add(name.toLowerCase());
+    }
+  } catch { }
+  if (includeDefaultWhenMissing && !seen.has(defaultKey)) {
+    results.push({ name: DEFAULT_ASSETS_DIR, exists: false });
+  }
+  results.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  return results;
+}
+
+function isAssetsFolderName(name) {
+  if (!name) return false;
+  const trimmed = String(name).trim();
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (lower === DEFAULT_ASSETS_DIR) return true;
+  return lower.startsWith(`${DEFAULT_ASSETS_DIR}_`);
+}
+
 async function writeAssetsEmbedHeader(sketchDir, options = {}) {
-  const { createDirIfMissing = false } = options || {};
-  const assetsDir = path.join(sketchDir, 'assets');
-  const headerPath = path.join(sketchDir, 'assets_embed.h');
+  const { createDirIfMissing = false, folderName = DEFAULT_ASSETS_DIR } = options || {};
+  const assetsDir = path.join(sketchDir, folderName);
+  const headerPath = path.join(sketchDir, `${folderName}_embed.h`);
   const assetsUri = vscode.Uri.file(assetsDir);
   const headerUri = vscode.Uri.file(headerPath);
   const hasAssetsDir = await pathExists(assetsUri);
@@ -12092,7 +12138,8 @@ async function writeAssetsEmbedHeader(sketchDir, options = {}) {
       status: 'missingDir',
       count: 0,
       headerPath,
-      assetsPath: assetsDir
+      assetsPath: assetsDir,
+      folderName
     };
   }
   if (!hasAssetsDir) {
@@ -12100,13 +12147,14 @@ async function writeAssetsEmbedHeader(sketchDir, options = {}) {
   }
   const entries = await collectAssetFileEntries(assetsUri);
   entries.sort((a, b) => a.relative.localeCompare(b.relative, undefined, { sensitivity: 'base' }));
-  const content = await buildAssetsHeaderContent(sketchDir, assetsDir, entries);
+  const content = await buildAssetsHeaderContent(sketchDir, assetsDir, folderName, entries);
   await writeTextFile(headerUri, content);
   return {
     status: entries.length ? 'written' : 'noAssets',
     count: entries.length,
     headerPath,
-    assetsPath: assetsDir
+    assetsPath: assetsDir,
+    folderName
   };
 }
 
@@ -12134,11 +12182,13 @@ async function collectAssetFileEntries(baseUri, prefix = '') {
   return results;
 }
 
-async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
+async function buildAssetsHeaderContent(sketchDir, assetsDir, folderName, entries) {
   const lines = [];
   lines.push('// Auto-generated by Arduino CLI Wrapper: Embed Assets');
   const sketchName = path.basename(sketchDir || '') || sketchDir;
   lines.push(`// Sketch: ${sketchName}`);
+  const folderLabel = folderName || DEFAULT_ASSETS_DIR;
+  const groupSymbol = makeAssetGroupSymbol(folderLabel);
   if (!entries.length) {
     lines.push('#pragma once');
     lines.push('#include <cstddef>');
@@ -12160,8 +12210,8 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
   const sizeSymbols = [];
   lines.push('// Index:');
   for (const entry of sortedEntries) {
-    const symbol = makeAssetSymbolName(entry.relative);
-    lines.push(`// - assets/${entry.relative} -> ${symbol} / ${symbol}_len`);
+    const symbol = makeAssetSymbolName(entry.relative, groupSymbol);
+    lines.push(`// - ${folderLabel}/${entry.relative} -> ${symbol} / ${symbol}_len`);
   }
   lines.push('');
   lines.push('#pragma once');
@@ -12174,12 +12224,12 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
   lines.push('');
   for (const entry of sortedEntries) {
     const data = await vscode.workspace.fs.readFile(entry.uri);
-    const symbol = makeAssetSymbolName(entry.relative);
+    const symbol = makeAssetSymbolName(entry.relative, groupSymbol);
     const prettyPath = '/' + String(entry.relative || '').replace(/^[\/]+/, '').replace(/\\/g, '/');
     fileNames.push(`"${prettyPath}"`);
     dataSymbols.push(symbol);
     sizeSymbols.push(`${symbol}_len`);
-    lines.push(`// assets/${entry.relative}`);
+    lines.push(`// ${folderLabel}/${entry.relative}`);
     lines.push(`alignas(4) const uint8_t ${symbol}[] PROGMEM = {`);
     const body = formatAssetBytes(data);
     if (body) lines.push(body);
@@ -12187,20 +12237,20 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
     lines.push(`const size_t ${symbol}_len = ${data.length};`);
     lines.push('');
   }
-  lines.push(`constexpr size_t assets_file_count = ${sortedEntries.length};`);
-  lines.push(`const char* const assets_file_names[assets_file_count] = {`);
+  lines.push(`constexpr size_t ${groupSymbol}_file_count = ${sortedEntries.length};`);
+  lines.push(`const char* const ${groupSymbol}_file_names[${groupSymbol}_file_count] = {`);
   for (let i = 0; i < fileNames.length; i++) {
     const suffix = (i + 1) < fileNames.length ? ',' : '';
     lines.push(`  ${fileNames[i]}${suffix}`);
   }
   lines.push('};');
-  lines.push(`const uint8_t* const assets_file_data[assets_file_count] = {`);
+  lines.push(`const uint8_t* const ${groupSymbol}_file_data[${groupSymbol}_file_count] = {`);
   for (let i = 0; i < dataSymbols.length; i++) {
     const suffix = (i + 1) < dataSymbols.length ? ',' : '';
     lines.push(`  ${dataSymbols[i]}${suffix}`);
   }
   lines.push('};');
-  lines.push(`const size_t assets_file_sizes[assets_file_count] = {`);
+  lines.push(`const size_t ${groupSymbol}_file_sizes[${groupSymbol}_file_count] = {`);
   for (let i = 0; i < sizeSymbols.length; i++) {
     const suffix = (i + 1) < sizeSymbols.length ? ',' : '';
     lines.push(`  ${sizeSymbols[i]}${suffix}`);
@@ -12210,11 +12260,20 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, entries) {
   return lines.join('\n');
 }
 
-function makeAssetSymbolName(relativePath) {
+function makeAssetGroupSymbol(folderName) {
+  const raw = String(folderName || DEFAULT_ASSETS_DIR);
+  let base = raw.replace(/[^0-9A-Za-z]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  if (!base) base = DEFAULT_ASSETS_DIR;
+  if (!/^[A-Za-z_]/.test(base)) base = `${DEFAULT_ASSETS_DIR}_${base}`;
+  return base;
+}
+
+function makeAssetSymbolName(relativePath, groupSymbolBase = DEFAULT_ASSETS_DIR) {
   const lower = String(relativePath || '').toLowerCase();
-  let symbol = `assets_${lower.replace(/[^a-z0-9]+/g, '_')}`;
-  symbol = symbol.replace(/_+/g, '_').replace(/^_+/, '');
-  if (!symbol) symbol = 'assets_data';
+  const prefix = makeAssetGroupSymbol(groupSymbolBase);
+  let symbol = `${prefix}_${lower.replace(/[^a-z0-9]+/g, '_')}`;
+  symbol = symbol.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  if (!symbol) symbol = `${prefix}_data`;
   if (!/^[a-z_]/.test(symbol)) symbol = `_${symbol}`;
   return symbol;
 }
@@ -12233,54 +12292,65 @@ function formatAssetBytes(data) {
 
 async function reportAssetsEmbedDiagnostics(sketchDir) {
   if (!assetsDiagnostics) return;
-  const key = normalizeSketchKey(sketchDir);
-  const assetsPath = path.join(sketchDir, 'assets');
-  const assetsUri = vscode.Uri.file(assetsPath);
-  const headerUri = vscode.Uri.file(path.join(sketchDir, 'assets_embed.h'));
-  const hasAssetsDir = await pathExists(assetsUri);
-  if (!hasAssetsDir) {
-    clearAssetsDiagnostic(key);
+  const sketchKey = normalizeSketchKey(sketchDir);
+  const folders = await detectSketchAssetFolders(sketchDir);
+  if (!folders.length) {
+    clearUnusedAssetDiagnostics(sketchKey);
     return;
   }
-  const entries = await collectAssetFileEntries(assetsUri);
-  if (!entries.length) {
-    clearAssetsDiagnostic(key);
-    return;
-  }
-  let newest = 0;
-  let newestFile = entries[0]?.relative || '';
-  for (const entry of entries) {
-    const mtime = entry.mtime || 0;
-    if (mtime > newest) {
-      newest = mtime;
-      newestFile = entry.relative;
+  const processed = new Set();
+  for (const folder of folders) {
+    const folderName = folder.name;
+    const assetsPath = path.join(sketchDir, folderName);
+    const assetsUri = vscode.Uri.file(assetsPath);
+    const headerUri = vscode.Uri.file(path.join(sketchDir, `${folderName}_embed.h`));
+    const diagKey = makeAssetsDiagKey(sketchKey, folderName);
+    processed.add(diagKey);
+    const entries = await collectAssetFileEntries(assetsUri);
+    if (!entries.length) {
+      clearAssetsDiagnostic(diagKey);
+      continue;
+    }
+    let newest = 0;
+    let newestFile = entries[0]?.relative || '';
+    for (const entry of entries) {
+      const mtime = entry.mtime || 0;
+      if (mtime > newest) {
+        newest = mtime;
+        newestFile = entry.relative;
+      }
+    }
+    let headerExists = await pathExists(headerUri);
+    let headerMtime = 0;
+    if (headerExists) {
+      try {
+        const stat = await vscode.workspace.fs.stat(headerUri);
+        headerMtime = stat && typeof stat.mtime === 'number' ? stat.mtime : 0;
+      } catch {
+        headerExists = false;
+        headerMtime = 0;
+      }
+    }
+    if (!headerExists || headerMtime < newest) {
+      let targetUri = headerExists ? headerUri : await getPrimaryInoUri(sketchDir);
+      if (!targetUri) targetUri = headerUri;
+      const message = headerExists
+        ? t('embedAssetsOutdated', { file: newestFile, folder: folderName, header: headerUri.fsPath })
+        : t('embedAssetsMissing', { file: newestFile, folder: folderName, header: headerUri.fsPath });
+      setAssetsDiagnostic(diagKey, targetUri, message);
+    } else {
+      clearAssetsDiagnostic(diagKey);
     }
   }
-  let headerExists = await pathExists(headerUri);
-  let headerMtime = 0;
-  if (headerExists) {
-    try {
-      const stat = await vscode.workspace.fs.stat(headerUri);
-      headerMtime = stat && typeof stat.mtime === 'number' ? stat.mtime : 0;
-    } catch {
-      headerExists = false;
-      headerMtime = 0;
-    }
-  }
-  if (!headerExists || headerMtime < newest) {
-    let targetUri = headerExists ? headerUri : await getPrimaryInoUri(sketchDir);
-    if (!targetUri) targetUri = headerUri;
-    const message = headerExists
-      ? t('embedAssetsOutdated', { file: newestFile })
-      : t('embedAssetsMissing', { file: newestFile });
-    setAssetsDiagnostic(key, targetUri, message);
-  } else {
-    clearAssetsDiagnostic(key);
-  }
+  clearUnusedAssetDiagnostics(sketchKey, processed);
 }
 
 function normalizeSketchKey(sketchDir) {
   return path.normalize(String(sketchDir || '')).toLowerCase();
+}
+
+function makeAssetsDiagKey(sketchKey, folderName) {
+  return `${sketchKey}::${String(folderName || DEFAULT_ASSETS_DIR).toLowerCase()}`;
 }
 
 function setAssetsDiagnostic(key, targetUri, message) {
@@ -12306,6 +12376,25 @@ function clearAssetsDiagnostic(key) {
     const prevPath = assetsDiagTargets.get(key);
     if (prevPath) {
       assetsDiagnostics.delete(vscode.Uri.file(prevPath));
+      assetsDiagTargets.delete(key);
+    }
+  } catch { }
+}
+
+function clearUnusedAssetDiagnostics(sketchKey, keepKeys) {
+  try {
+    const prefix = `${sketchKey}::`;
+    const removals = [];
+    for (const key of assetsDiagTargets.keys()) {
+      if (!key.startsWith(prefix)) continue;
+      if (keepKeys && keepKeys.has(key)) continue;
+      removals.push(key);
+    }
+    for (const key of removals) {
+      const prevPath = assetsDiagTargets.get(key);
+      if (prevPath) {
+        assetsDiagnostics.delete(vscode.Uri.file(prevPath));
+      }
       assetsDiagTargets.delete(key);
     }
   } catch { }

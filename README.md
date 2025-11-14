@@ -223,7 +223,7 @@ All command logs are unified in a dedicated pseudo terminal with ANSI colors so 
 
 #### Embed assets or upload a data image?
 
-**Arduino CLI: Embed Assets** is the quickest option: open the Arduino CLI explorer, use the `Embed Assets` action in the profile section (it appears above `Upload Data`), drop files under `assets/`, and the extension regenerates `assets_embed.h` with a `PROGMEM` byte array and length constant for each file. If the folder is missing, the manual action creates it for you; compile-time auto-regeneration simply skips the header when `assets/` isn't present so builds no longer recreate it unexpectedly.
+**Arduino CLI: Embed Assets** is the quickest option: open the Arduino CLI explorer, use the `Embed Assets` action in the profile section (it appears above `Upload Data`), drop files under `assets/` or any sketch-root folder whose name starts with `assets_` (for example `assets_wifi/` or `assets_ui/`), and the extension regenerates `<folder>_embed.h` with a `PROGMEM` byte array and length constant for each file. Each header reuses the folder name for the exported arrays and symbols (`assets_wifi_file_names`, etc.) so multiple asset bundles can coexist. If the base `assets/` folder is missing, the manual action still creates it for you; compile-time auto-regeneration continues to skip headers when their source folder doesn't exist so builds no longer recreate them unexpectedly.
 
 The trade-off is size: every embedded byte becomes part of the sketch binary. Large media files make the firmware heavier, so each upload or OTA update takes longer, and you can run into partition limits.
 
