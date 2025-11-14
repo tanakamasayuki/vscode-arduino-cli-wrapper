@@ -252,7 +252,7 @@ min_size = 256
 suffix = .gz
 ```
 
-`dir` is resolved relative to the assets folder (blank entries fall back to `../`, which targets the sketch root), while `header_name` only controls the filename. The minifier is lightweight and regex-based—great for trimming whitespace/comments from small bundles, but not a full parser—so keep `keep_comments = true` if you rely on tricky constructs. When gzip is enabled, files that match `patterns` (glob, comma separated) and exceed `min_size` bytes are minified first and then compressed; the generated filename appends `suffix`. Both `.assetsconfig` and `.assetsignore` are excluded from the embed output automatically.
+`dir` is resolved relative to the assets folder (blank entries fall back to `../`, which targets the sketch root), while `header_name` only controls the filename. The minifier is lightweight and regex-based—great for trimming whitespace/comments from small bundles, but not a full parser—so keep `keep_comments = true` if you rely on tricky constructs. If you enable `write_output_file`, remember to add the specified `output_dir` to `.assetsignore` so those intermediate files don’t get embedded on the next run. When gzip is enabled, files that match `patterns` (glob, comma separated) and exceed `min_size` bytes are minified first and then compressed; the generated filename appends `suffix`. Both `.assetsconfig` and `.assetsignore` are excluded from the embed output automatically.
 
 The trade-off is size: every embedded byte becomes part of the sketch binary. Large media files make the firmware heavier, so each upload or OTA update takes longer, and you can run into partition limits.
 
