@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.7.6
 - (EN) Embed Assets only creates the base `assets/` folder when neither `assets/` nor an `assets_*` directory exists, preventing unused base folders from appearing when you manage bundles like `assets_wifi/` exclusively.
 - (JA) `assets/` や `assets_` で始まるフォルダーが一つも無い場合だけベースの `assets/` を新規作成するように変更し、`assets_wifi/` など既存の束だけで運用しているスケッチに空フォルダーが増えないようにしました。
 - (EN) `.assetsconfig` can now emit per-file timestamp and hash arrays via `[stamp]` (use `format = iso`, `format = unix`, or `format = iso, unix` to emit both) and `[hash]` (`sha256`/`sha1`/`md5`) sections, keeping every array aligned with the existing `*_file_count` output; each asset also exposes dedicated constants such as `assets_<bundle>_<file>_stamp_iso` that the arrays reference.
