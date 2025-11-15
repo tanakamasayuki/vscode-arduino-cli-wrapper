@@ -12111,7 +12111,7 @@ async function detectSketchAssetFolders(sketchDir, options = {}) {
       seen.add(name.toLowerCase());
     }
   } catch { }
-  if (includeDefaultWhenMissing && !seen.has(defaultKey)) {
+  if (includeDefaultWhenMissing && results.length === 0) {
     results.push({ name: DEFAULT_ASSETS_DIR, exists: false });
   }
   results.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));

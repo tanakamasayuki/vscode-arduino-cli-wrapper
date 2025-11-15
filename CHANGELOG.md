@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Embed Assets only creates the base `assets/` folder when neither `assets/` nor an `assets_*` directory exists, preventing unused base folders from appearing when you manage bundles like `assets_wifi/` exclusively.
+- (JA) `assets/` や `assets_` で始まるフォルダーが一つも無い場合だけベースの `assets/` を新規作成するように変更し、`assets_wifi/` など既存の束だけで運用しているスケッチに空フォルダーが増えないようにしました。
 
 ## 1.7.5
 - (EN) Embed Assets now scans the base `assets/` folder plus every sketch folder whose name starts with `assets_`, generating `<folder>_embed.h` files and prefixing the exported arrays/symbols with that folder name so multiple bundles can coexist.
