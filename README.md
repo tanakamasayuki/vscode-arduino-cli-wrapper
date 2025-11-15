@@ -250,9 +250,17 @@ enable = true
 patterns = **/*.html, **/*.css, **/*.js
 min_size = 256
 suffix = .gz
+
+[stamp]
+format = iso, unix
+
+[hash]
+algorithms = sha256, md5
 ```
 
 `dir` is resolved relative to the assets folder (blank entries fall back to `../`, which targets the sketch root), while `header_name` only controls the filename. The minifier is lightweight and regex-based—great for trimming whitespace/comments from small bundles, but not a full parser—so keep `keep_comments = true` if you rely on tricky constructs. If you enable `write_output_file`, remember to add the specified `output_dir` to `.assetsignore` so those intermediate files don’t get embedded on the next run. When gzip is enabled, files that match `patterns` (glob, comma separated) and exceed `min_size` bytes are minified first and then compressed; the generated filename appends `suffix`. Both `.assetsconfig` and `.assetsignore` are excluded from the embed output automatically.
+
+The optional `[stamp]` section emits file timestamps next to every asset: specify `format = iso`, `format = unix`, or combine them with commas (e.g., `format = iso, unix`) to output both arrays. Each format produces a dedicated array (for example `assets_wifi_stamp_iso[...]`) that matches the existing `assets_wifi_file_count` length, so you can line up entries with the base `assets_wifi_file_names[...]` array. Every file also declares individual constants such as `assets_wifi_index_html_stamp_iso` or `assets_wifi_index_html_stamp_unix`, and the arrays reference those symbols directly so you can choose whichever style is more convenient. Use `[hash]` when you need content digests; list any combination of `sha256`, `sha1`, or `md5` in `algorithms` and the generator will produce both per-file constants (`assets_wifi_index_html_hash_sha256`, …) and one `assets_<bundle>_hash_<algo>[...]` array per algorithm, again aligned with the file list.
 
 The trade-off is size: every embedded byte becomes part of the sketch binary. Large media files make the firmware heavier, so each upload or OTA update takes longer, and you can run into partition limits.
 

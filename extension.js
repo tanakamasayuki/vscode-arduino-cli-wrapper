@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const https = require('https');
 const zlib = require('zlib');
+const crypto = require('crypto');
 
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 const AUTO_UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -12282,6 +12283,8 @@ function parseAssetsConfig(text, folderName) {
     minSize: parseIniInteger(gzipSection.min_size, 0),
     suffix: String(gzipSection.suffix ?? '.gz').trim() || '.gz'
   };
+  const stampConfig = parseAssetsStampConfig(sections.stamp);
+  const hashConfig = parseAssetsHashConfig(sections.hash);
   return {
     general: {
       dir,
@@ -12289,7 +12292,9 @@ function parseAssetsConfig(text, folderName) {
       prefix
     },
     minify: minifyConfig,
-    gzip: gzipConfig
+    gzip: gzipConfig,
+    stamp: stampConfig,
+    hash: hashConfig
   };
 }
 
@@ -12309,7 +12314,7 @@ function parseIniConfig(text) {
     const kv = line.match(/^([^=]+)=(.*)$/);
     if (kv) {
       const key = kv[1].trim().toLowerCase();
-      const value = kv[2].trim();
+      const value = stripIniValue(kv[2]);
       if (!sections[current]) sections[current] = {};
       sections[current][key] = value;
     }
@@ -12339,6 +12344,74 @@ function parseIniPatternList(value) {
     .filter((part) => !!part);
 }
 
+function stripIniValue(source) {
+  if (source === undefined || source === null) return '';
+  let text = String(source);
+  let cutoff = -1;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === ';' || ch === '#') {
+      const prev = i > 0 ? text[i - 1] : '';
+      if (!prev || /\s/.test(prev)) {
+        cutoff = i;
+        break;
+      }
+    }
+  }
+  if (cutoff >= 0) {
+    text = text.slice(0, cutoff);
+  }
+  return text.trim();
+}
+
+function parseAssetsStampConfig(section) {
+  const formats = parseStampFormats(section?.format);
+  return { formats };
+}
+
+function parseStampFormats(value) {
+  if (value === undefined || value === null || value === '') return [];
+  const allowed = new Map([
+    ['iso', 'iso'],
+    ['iso8601', 'iso'],
+    ['unix', 'unix'],
+    ['epoch', 'unix']
+  ]);
+  const result = [];
+  const parts = String(value)
+    .split(',')
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => !!part);
+  for (const part of parts) {
+    const mapped = allowed.get(part);
+    if (!mapped) continue;
+    if (result.includes(mapped)) continue;
+    result.push(mapped);
+  }
+  return result;
+}
+
+function parseAssetsHashConfig(section) {
+  const algorithms = parseHashAlgorithms(section?.algorithms);
+  return { algorithms };
+}
+
+function parseHashAlgorithms(value) {
+  if (value === undefined || value === null || value === '') return [];
+  const allowed = new Set(['sha256', 'sha1', 'md5']);
+  const result = [];
+  const parts = String(value)
+    .split(',')
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => !!part);
+  for (const part of parts) {
+    if (!allowed.has(part)) continue;
+    if (result.includes(part)) continue;
+    result.push(part);
+  }
+  return result;
+}
+
 function resolveAssetsHeaderInfo(assetsDir, config, folderName) {
   const dirSetting = (config?.general?.dir || '../').trim() || '../';
   const headerDir = path.resolve(assetsDir, dirSetting);
@@ -12358,7 +12431,8 @@ async function prepareAssetRecords(entries, assetsUri, config) {
     records.push({
       relative: entry.relative,
       outputRelative: gzipResult.name,
-      data: gzipResult.data
+      data: gzipResult.data,
+      mtime: entry.mtime || 0
     });
   }
   return records;
@@ -12566,6 +12640,16 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, folderName, record
   const fileNames = [];
   const dataSymbols = [];
   const sizeSymbols = [];
+  const stampFormats = Array.isArray(config?.stamp?.formats) ? config.stamp.formats : [];
+  const collectIsoStamp = stampFormats.includes('iso');
+  const collectUnixStamp = stampFormats.includes('unix');
+  const isoStampSymbols = collectIsoStamp ? [] : null;
+  const unixStampSymbols = collectUnixStamp ? [] : null;
+  const hashAlgorithms = Array.isArray(config?.hash?.algorithms) ? config.hash.algorithms : [];
+  const hashSymbolBuckets = new Map();
+  for (const algo of hashAlgorithms) {
+    hashSymbolBuckets.set(algo, []);
+  }
   const symbolCache = new Map();
   const usedSymbols = new Map();
   const resolveSymbol = (relative) => {
@@ -12601,6 +12685,25 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, folderName, record
     if (body) lines.push(body);
     lines.push('};');
     lines.push(`const size_t ${symbol}_len = ${data.length};`);
+    if (collectIsoStamp && isoStampSymbols) {
+      const isoSymbol = `${symbol}_stamp_iso`;
+      isoStampSymbols.push(isoSymbol);
+      lines.push(`const char ${isoSymbol}[] PROGMEM = ${formatCxxStringLiteral(formatAssetIsoTimestamp(entry.mtime))};`);
+    }
+    if (collectUnixStamp && unixStampSymbols) {
+      const unixSymbol = `${symbol}_stamp_unix`;
+      unixStampSymbols.push(unixSymbol);
+      lines.push(`const uint32_t ${unixSymbol} = ${formatAssetUnixTimestamp(entry.mtime)};`);
+    }
+    if (hashAlgorithms.length) {
+      for (const algo of hashAlgorithms) {
+        const bucket = hashSymbolBuckets.get(algo);
+        if (!bucket) continue;
+        const hashSymbol = `${symbol}_hash_${algo}`;
+        bucket.push(hashSymbol);
+        lines.push(`const char ${hashSymbol}[] PROGMEM = ${formatCxxStringLiteral(computeAssetHashValue(data, algo))};`);
+      }
+    }
     lines.push('');
   }
   lines.push(`constexpr size_t ${groupSymbol}_file_count = ${sortedEntries.length};`);
@@ -12623,6 +12726,36 @@ async function buildAssetsHeaderContent(sketchDir, assetsDir, folderName, record
   }
   lines.push('};');
   lines.push('');
+  if (collectIsoStamp && isoStampSymbols) {
+    lines.push(`const char* const ${groupSymbol}_stamp_iso[${groupSymbol}_file_count] = {`);
+    for (let i = 0; i < isoStampSymbols.length; i++) {
+      const suffix = (i + 1) < isoStampSymbols.length ? ',' : '';
+      lines.push(`  ${isoStampSymbols[i]}${suffix}`);
+    }
+    lines.push('};');
+    lines.push('');
+  }
+  if (collectUnixStamp && unixStampSymbols) {
+    lines.push(`const uint32_t ${groupSymbol}_stamp_unix[${groupSymbol}_file_count] = {`);
+    for (let i = 0; i < unixStampSymbols.length; i++) {
+      const suffix = (i + 1) < unixStampSymbols.length ? ',' : '';
+      lines.push(`  ${unixStampSymbols[i]}${suffix}`);
+    }
+    lines.push('};');
+    lines.push('');
+  }
+  if (hashAlgorithms.length) {
+    for (const algo of hashAlgorithms) {
+      const symbols = hashSymbolBuckets.get(algo) || [];
+      lines.push(`const char* const ${groupSymbol}_hash_${algo}[${groupSymbol}_file_count] = {`);
+      for (let i = 0; i < symbols.length; i++) {
+        const suffix = (i + 1) < symbols.length ? ',' : '';
+        lines.push(`  ${symbols[i]}${suffix}`);
+      }
+      lines.push('};');
+      lines.push('');
+    }
+  }
   return lines.join('\n');
 }
 
@@ -12656,6 +12789,37 @@ function formatAssetBytes(data) {
     chunks.push(`  ${slice.join(', ')}${suffix}`);
   }
   return chunks.join('\n');
+}
+
+function formatCxxStringLiteral(value) {
+  if (value === undefined || value === null) return '""';
+  return JSON.stringify(String(value));
+}
+
+function formatAssetIsoTimestamp(mtime) {
+  if (!Number.isFinite(mtime) || mtime <= 0) return '';
+  try {
+    return new Date(mtime).toISOString();
+  } catch {
+    return '';
+  }
+}
+
+function formatAssetUnixTimestamp(mtime) {
+  if (!Number.isFinite(mtime) || mtime <= 0) return '0u';
+  const seconds = Math.max(0, Math.floor(mtime / 1000));
+  return `${seconds}u`;
+}
+
+function computeAssetHashValue(buffer, algorithm) {
+  if (!algorithm) return '';
+  try {
+    const hash = crypto.createHash(algorithm);
+    hash.update(buffer || Buffer.alloc(0));
+    return hash.digest('hex');
+  } catch {
+    return '';
+  }
 }
 
 function ensureUniqueAssetSymbol(symbol, usedSymbols) {

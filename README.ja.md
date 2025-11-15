@@ -251,9 +251,17 @@ enable = true
 patterns = **/*.html, **/*.css, **/*.js
 min_size = 256
 suffix = .gz
+
+[stamp]
+format = iso, unix    ; iso / unix / カンマで複数指定可、空欄=無効
+
+[hash]
+algorithms = sha256, md5
 ```
 
 `dir` は assets からの相対パスで、空欄や未設定なら `../`（= スケッチルート）に出力します。`header_name` はファイル名のみ指定し、`dir` と組み合わせて保存先を決めます。minify は軽量な正規表現ベースの実装なので複雑な構文には非対応ですが、空白やコメントを素早く削る用途には十分です。`write_output_file` を有効にする場合は `output_dir` を `.assetsignore` に追加しておくと、生成された中間ファイルが次回の埋め込み対象に混ざらず安心です。minify → gzip の順で処理し、`patterns`（glob、カンマ区切り）と `min_size` に一致したファイルに `suffix` を付けて圧縮結果を埋め込みます。`.assetsconfig` / `.assetsignore` 自身は自動的に出力対象から除外されます。
+
+`[stamp]` セクションを追加すると各ファイルのタイムスタンプ配列を出力できます。`format = iso` で ISO 8601 文字列、`format = unix` で符号なしの Unix 秒を `assets_wifi_stamp_iso[...]` や `assets_wifi_stamp_unix[...]` のように `assets_wifi_file_count` と同じ長さで用意するため、既存の `assets_wifi_file_names[...]` と添え字で突き合わせられます。`format = iso, unix` のようにカンマ区切りで複数指定すれば両方の配列を同時に生成できます。また各ファイルごとに `assets_wifi_index_html_stamp_iso` のような個別シンボルも宣言され、配列はそれらを参照するだけなので用途に応じて好きな方を利用できます。`[hash]` では `sha256` / `sha1` / `md5` をカンマ区切りで列挙すると、指定したアルゴリズムごとに `assets_<bundle>_hash_<algo>[...]` 配列を生成し、各ファイルにも `assets_wifi_index_html_hash_sha256` のようなシンボルが出力されます。スタンプ同様に配列はファイル順へ揃います。
 
 ただし埋め込んだバイト列はそのままファームウェアサイズに加算されるため、ファイルが大きいと upload/OTA のたびに転送時間が延び、パーティション上限にも届きやすくなります。
 

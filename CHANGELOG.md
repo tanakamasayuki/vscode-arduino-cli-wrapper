@@ -3,6 +3,10 @@
 ## Unreleased
 - (EN) Embed Assets only creates the base `assets/` folder when neither `assets/` nor an `assets_*` directory exists, preventing unused base folders from appearing when you manage bundles like `assets_wifi/` exclusively.
 - (JA) `assets/` や `assets_` で始まるフォルダーが一つも無い場合だけベースの `assets/` を新規作成するように変更し、`assets_wifi/` など既存の束だけで運用しているスケッチに空フォルダーが増えないようにしました。
+- (EN) `.assetsconfig` can now emit per-file timestamp and hash arrays via `[stamp]` (use `format = iso`, `format = unix`, or `format = iso, unix` to emit both) and `[hash]` (`sha256`/`sha1`/`md5`) sections, keeping every array aligned with the existing `*_file_count` output; each asset also exposes dedicated constants such as `assets_<bundle>_<file>_stamp_iso` that the arrays reference.
+- (JA) `.assetsconfig` に `[stamp]`（`format = iso` / `unix` / `iso, unix` など）と `[hash]`（`sha256` / `sha1` / `md5`）セクションを追加し、既存の `*_file_count` に合わせたタイムスタンプ／ハッシュ配列をファイルごとに生成できるようにしました。各ファイルには `assets_<bundle>_<file>_stamp_iso` のような個別シンボルも出力され、配列はそれらを参照します。
+- (EN) Inline comments inside `.assetsconfig` values (e.g., `format = iso ; comment`) are now stripped correctly, so sample configurations that document valid options continue to work out of the box.
+- (JA) `.assetsconfig` の値に `format = iso ; コメント` のような行内コメントを書いても自動で切り落とすようにし、ドキュメント通りに記述した設定がそのまま動作するようにしました。
 
 ## 1.7.5
 - (EN) Embed Assets now scans the base `assets/` folder plus every sketch folder whose name starts with `assets_`, generating `<folder>_embed.h` files and prefixing the exported arrays/symbols with that folder name so multiple bundles can coexist.
