@@ -603,7 +603,7 @@ const MSG = {
     commandCenterCompileExportCli: 'arduino-cli compile --export-binaries --json [--profile <profile> | --fqbn <fqbn>] <sketch>',
     commandCenterCleanCompileCli: 'arduino-cli compile --clean [--profile <profile> | --fqbn <fqbn>] <sketch>',
     commandCenterUploadCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] <sketch>\narduino-cli upload [--profile <profile> | --fqbn <fqbn>] [-p <port>] <sketch>',
-    commandCenterUploadDataCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] --show-properties <sketch>\nmkspiffs/mklittlefs -s <size> -c data <image>\nesptool write_flash <offset> <image>',
+    commandCenterUploadDataCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] --show-properties <sketch>\nmkspiffs/mklittlefs -s <size> -c data <image>\nesptool write-flash <offset> <image>',
     commandCenterMonitorCli: 'arduino-cli monitor -p <port> --config baudrate=<baud>',
     commandCenterDebugCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] --build-property compiler.*=-Og -g3 --show-properties <sketch>',
     commandCenterInspectorCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] --warnings=all [--clean] --json <sketch>',
@@ -838,7 +838,7 @@ const MSG = {
     commandCenterCompileExportCli: 'arduino-cli compile --export-binaries --json [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
     commandCenterCleanCompileCli: 'arduino-cli compile --clean [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
     commandCenterUploadCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>\narduino-cli upload [--profile <プロファイル> | --fqbn <FQBN>] [-p <ポート>] <スケッチ>',
-    commandCenterUploadDataCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] --show-properties <スケッチ>\nmkspiffs/mklittlefs -s <サイズ> -c data <イメージ>\nesptool write_flash <オフセット> <イメージ>',
+    commandCenterUploadDataCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] --show-properties <スケッチ>\nmkspiffs/mklittlefs -s <サイズ> -c data <イメージ>\nesptool write-flash <オフセット> <イメージ>',
     commandCenterMonitorCli: 'arduino-cli monitor -p <ポート> --config baudrate=<ボーレート>',
     commandCenterDebugCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] --build-property compiler.*=-Og -g3 --show-properties <スケッチ>',
     commandCenterInspectorCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] --warnings=all [--clean] --json <スケッチ>',
@@ -4276,9 +4276,9 @@ async function commandUploadData() {
           channel.appendLine(friendly);
           return;
         }
-        await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, winImagePath], {});
+        await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write-flash', offset, winImagePath], {});
       } else {
-        await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, outBin], { cwd: sketchDir });
+        await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write-flash', offset, outBin], { cwd: sketchDir });
       }
       vscode.window.showInformationMessage(`Uploaded ${fsType} image to ${portDisplay} at ${offset}`);
       if (reopenMonitorAfter) {
