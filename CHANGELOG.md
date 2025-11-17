@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.7.7
 - (EN) Upload Data now flashes ESP32 filesystem images to Windows-hosted `COM` ports even when you run the command from WSL: the image is still built on Linux, but the extension mirrors `arduino-cli.exe --show-properties` and calls `esptool.exe` on Windows automatically.
 - (JA) Upload Data が WSL からでも Windows ホストの `COM` ポートへ直接書き込めるようになり、イメージ生成は Linux、フラッシュは Windows 側の `arduino-cli.exe --show-properties` と `esptool.exe` を自動呼び出しして処理します。
 - (EN) Updated the Upload Data workflow to use the non-deprecated `esptool write-flash` command, eliminating warnings from recent esptool releases.
