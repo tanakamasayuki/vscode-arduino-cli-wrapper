@@ -84,6 +84,11 @@
   "msg.uploadDataProgressMessageResolve": "Collecting filesystem metadata…",
   "msg.uploadDataProgressMessageBuild": "Building {fsType} image…",
   "msg.uploadDataProgressMessageFlash": "Flashing filesystem image via esptool…",
+  "msg.uploadDataWindowsShowPropsStart": "Detecting Windows tool paths via arduino-cli.exe --show-properties…",
+  "msg.uploadDataWindowsShowPropsFail": "[upload-data] Failed to run arduino-cli.exe --show-properties: {msg}",
+  "msg.uploadDataWindowsEsptoolMissing": "arduino-cli.exe output did not include runtime.tools.esptool_py.path.",
+  "msg.uploadDataWindowsPathMissing": "Could not convert sketch path for arduino-cli.exe (wslpath -w failed).",
+  "msg.uploadDataWindowsImagePathFail": "Could not convert the filesystem image path for esptool.exe; aborting.",
   "msg.progressBusyWarn": "Another command is already running. Please wait for it to finish.",
   "inspectorCleanOptionLabel": "Clean build (--clean)"
 }

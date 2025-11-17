@@ -85,20 +85,9 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 5. **アップロード / モニタは Windows 側を自動利用**
    - この拡張機能は WSL 環境でも、Upload / Monitor コマンドを実行すると自動的に Windows 側の `arduino-cli.exe` を起動し、`COM` ポートへ直接接続します。WSL でシリアルポートを設定する必要はありません。
 
-6. **Update Data / Debug の制限と対処**
-   - `Arduino CLI: Upload Data` と `Arduino CLI: Debug` は、WSL から Windows ホストのシリアルポートへ直接アクセスできないため利用できません。
-   - 対処方法は以下のいずれかです。
-     1. `usbipd-win` などを用いて Windows の USB デバイスを WSL 側に転送し、WSL 内でポートを認識させてから実行する。
-        ```powershell
-        # PowerShell (管理者) でホスト側デバイスをエクスポート
-        usbipd wsl list
-        usbipd wsl attach --busid <BUSID>
-        ```
-        ```bash
-        # WSL 内で接続を確認
-        ls /dev/tty*
-        ```
-     2. もしくは Windows 側の VS Code / Arduino CLI で `Upload Data` や `Debug` を実行する。
+6. **Upload Data / Debug の注意点**
+   - Upload Data は WSL からでも Windows の `COM` ポートへ書き込めるようになりました。WSL 内でファイルシステムイメージを生成しつつ、Windows 側では自動的に `arduino-cli.exe --show-properties` と `esptool.exe` を呼び出して転送するため、`usbipd` でのデバイス転送は不要です（`arduino-cli.exe` が Windows の PATH に含まれていることだけ確認してください）。
+   - `Arduino CLI: Debug` は依然として WSL から Windows ホストのシリアルポートへ接続できません。`usbipd-win` でデバイスを `/dev/tty*` として認識させるか、Windows 側の VS Code / Arduino CLI で Debug を実行してください。
 
 7. **トラブルシューティング**
    - `Latest arduino-cli: (unknown)` と表示された場合、GitHub API のレート制限に引っかかっています。`GITHUB_TOKEN` を VS Code の環境変数に設定するか、しばらく時間を空けて再試行してください。
@@ -224,6 +213,7 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 - `mklittlefs` または `mkspiffs` でイメージを生成し、`esptool` で SPIFFS パーティションに書き込みます。
 - `arduino-cli compile --show-properties` の結果からツールや速度を取得し、ビルド出力中の `partitions.csv` を解析してオフセット/サイズを特定します。
 - フラッシュ前にシリアルモニタを閉じ、完了後に自動で再オープンします。
+- WSL で動作している場合でも、Windows の `COM` ポートを選択すると Windows 側で `arduino-cli.exe --show-properties` と `esptool.exe` を自動実行して転送するため、Linux でビルドしつつ Windows ドライバーで書き込むハイブリッド構成を保てます。
 
 #### アセットを埋め込むか、data イメージを使うか
 

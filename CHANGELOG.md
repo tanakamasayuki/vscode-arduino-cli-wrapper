@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Upload Data now flashes ESP32 filesystem images to Windows-hosted `COM` ports even when you run the command from WSL: the image is still built on Linux, but the extension mirrors `arduino-cli.exe --show-properties` and calls `esptool.exe` on Windows automatically.
+- (JA) Upload Data が WSL からでも Windows ホストの `COM` ポートへ直接書き込めるようになり、イメージ生成は Linux、フラッシュは Windows 側の `arduino-cli.exe --show-properties` と `esptool.exe` を自動呼び出しして処理します。
 
 ## 1.7.6
 - (EN) Embed Assets only creates the base `assets/` folder when neither `assets/` nor an `assets_*` directory exists, preventing unused base folders from appearing when you manage bundles like `assets_wifi/` exclusively.

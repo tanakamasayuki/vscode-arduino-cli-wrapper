@@ -83,6 +83,11 @@
   "msg.uploadDataProgressMessageResolve": "ファイルシステムのメタデータを収集中です…",
   "msg.uploadDataProgressMessageBuild": "{fsType} イメージを生成しています…",
   "msg.uploadDataProgressMessageFlash": "esptool でファイルシステムイメージを書き込み中です…",
+  "msg.uploadDataWindowsShowPropsStart": "arduino-cli.exe --show-properties で Windows 側のツールパスを取得しています…",
+  "msg.uploadDataWindowsShowPropsFail": "[upload-data] arduino-cli.exe --show-properties の実行に失敗しました: {msg}",
+  "msg.uploadDataWindowsEsptoolMissing": "arduino-cli.exe の出力に runtime.tools.esptool_py.path が含まれていません。",
+  "msg.uploadDataWindowsPathMissing": "arduino-cli.exe 用にスケッチパスを変換できませんでした (wslpath -w が失敗しました)。",
+  "msg.uploadDataWindowsImagePathFail": "esptool.exe に渡すファイルシステムイメージのパスを変換できませんでした。処理を中止します。",
   "msg.progressBusyWarn": "別のコマンドが実行中です。完了するまでお待ちください。",
   "inspectorCleanOptionLabel": "クリーンビルド (--clean)",
   "lang.buildOpt.alias": "Arduino ビルドオプション"

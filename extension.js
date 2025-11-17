@@ -272,6 +272,11 @@ const MSG = {
     uploadDataProgressMessageResolve: 'Collecting filesystem metadata…',
     uploadDataProgressMessageBuild: 'Building {fsType} image…',
     uploadDataProgressMessageFlash: 'Flashing filesystem image via esptool…',
+    uploadDataWindowsShowPropsStart: 'Detecting Windows tool paths via arduino-cli.exe --show-properties…',
+    uploadDataWindowsShowPropsFail: '[upload-data] Failed to run arduino-cli.exe --show-properties: {msg}',
+    uploadDataWindowsEsptoolMissing: 'arduino-cli.exe output did not include runtime.tools.esptool_py.path.',
+    uploadDataWindowsPathMissing: 'Could not convert sketch path for arduino-cli.exe (wslpath -w failed).',
+    uploadDataWindowsImagePathFail: 'Could not convert the filesystem image path for esptool.exe; aborting.',
     progressBusyWarn: 'Another command is already running. Please wait for it to finish.',
     setPortManual: 'Enter port manually…',
     setPortNoSerial: 'External programmer (JTAG/SWD/ISP)',
@@ -898,6 +903,11 @@ const MSG = {
     uploadDataProgressMessageResolve: 'ファイルシステムのメタデータを収集中です…',
     uploadDataProgressMessageBuild: '{fsType} イメージを生成しています…',
     uploadDataProgressMessageFlash: 'esptool でファイルシステムイメージを書き込み中です…',
+    uploadDataWindowsShowPropsStart: 'arduino-cli.exe --show-properties で Windows 側のツールパスを取得しています…',
+    uploadDataWindowsShowPropsFail: '[upload-data] arduino-cli.exe --show-properties の実行に失敗しました: {msg}',
+    uploadDataWindowsEsptoolMissing: 'arduino-cli.exe の出力に runtime.tools.esptool_py.path が含まれていません。',
+    uploadDataWindowsPathMissing: 'arduino-cli.exe 用にスケッチパスを変換できませんでした (wslpath -w が失敗しました)。',
+    uploadDataWindowsImagePathFail: 'esptool.exe に渡すファイルシステムイメージのパスを変換できませんでした。処理を中止します。',
     progressBusyWarn: '別のコマンドが実行中です。完了するまでお待ちください。',
     setPortManual: 'ポートを手入力…',
     setPortNoSerial: '外部書き込み装置を使用 (JTAG/SWD/ISP など)',
@@ -2583,6 +2593,33 @@ function runWindowsCli(args, opts = {}) {
   });
 }
 
+async function runWindowsCliCaptureOutput(args, opts = {}) {
+  const logStdout = opts.logStdout !== false;
+  const cfg = getConfig();
+  const exe = 'arduino-cli.exe';
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  const finalArgs = [...baseArgs, ...args];
+  const channel = getOutput();
+  const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
+  channel.show();
+  channel.appendLine(`${ANSI.cyan}$ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);
+  if (opts.cwd) channel.appendLine(`${ANSI.dim}(cwd: ${opts.cwd})${ANSI.reset}`);
+  const result = await runCommandCapture(exe, finalArgs, opts.cwd);
+  const stdout = result.stdout || '';
+  const stderr = result.stderr || '';
+  if (stdout && logStdout) channel.append(stdout);
+  if (stderr) channel.append(stderr);
+  if (typeof result.code === 'number') {
+    channel.appendLine(`${ANSI.bold}${ANSI.green}[exit ${result.code}]${ANSI.reset}`);
+  }
+  if (result.error) throw result.error;
+  if (typeof result.code === 'number' && result.code !== 0) {
+    const errMsg = stderr.trim() ? stderr.trim() : t('commandCenterCliExit', { code: result.code });
+    throw new Error(errMsg);
+  }
+  return result;
+}
+
 async function runCliCaptureOutput(args, opts = {}) {
   const logStdout = opts.logStdout !== false;
   const cfg = getConfig();
@@ -4001,14 +4038,6 @@ async function commandUploadData() {
   const sketchDir = path.dirname(ino);
   const channel = getOutput();
 
-  const portInfoInitial = getStoredPortInfo();
-  if (shouldUseWindowsSerial(portInfoInitial)) {
-    const message = t('cliWindowsOnlyOperation');
-    vscode.window.showErrorMessage(message);
-    channel.appendLine(message);
-    return;
-  }
-
   // Ensure data folder exists
   const dataDirUri = vscode.Uri.file(path.join(sketchDir, 'data'));
   const dataExists = await pathExists(dataDirUri);
@@ -4056,6 +4085,7 @@ async function commandUploadData() {
     let usingProfile = false;
     let selectedProfile = '';
     let resolvedFqbn = '';
+    let windowsProps = null;
     const yamlInfo = await readSketchYamlInfo(sketchDir);
     if (yamlInfo && yamlInfo.profiles.length > 0) {
       selectedProfile = await resolveProfileName(yamlInfo);
@@ -4098,15 +4128,7 @@ async function commandUploadData() {
       return;
     }
 
-    const props = {};
-    for (const line of String(propsText).split(/\r?\n/)) {
-      const idx = line.indexOf('=');
-      if (idx > 0) {
-        const k = line.slice(0, idx).trim();
-        const v = line.slice(idx + 1).trim();
-        if (k) props[k] = v;
-      }
-    }
+    const props = parseShowPropertiesOutput(propsText);
 
     const buildPath = props['build.path'] || '';
     if (!buildPath) {
@@ -4166,16 +4188,6 @@ async function commandUploadData() {
       return;
     }
 
-    const esptoolBase = props['runtime.tools.esptool_py.path'] || '';
-    if (!esptoolBase) {
-      vscode.window.showErrorMessage('esptool path not found (runtime.tools.esptool_py.path)');
-      return;
-    }
-    const esptoolExe = await resolveExecutable(esptoolBase, 'esptool');
-    if (!esptoolExe) {
-      vscode.window.showErrorMessage(`Executable not found: esptool under ${esptoolBase}`);
-      return;
-    }
     let portInfo = getStoredPortInfo();
     let port = portInfo.cliPort;
     if (!port) {
@@ -4188,7 +4200,61 @@ async function commandUploadData() {
         return;
       }
     }
-    const speed = props['upload.speed'] || '115200';
+    const useWindowsEsptool = shouldUseWindowsSerial(portInfo);
+    if (useWindowsEsptool && !windowsProps) {
+      const winSketchPath = await convertPathForWindowsCli(sketchDir);
+      if (!winSketchPath) {
+        const message = t('uploadDataWindowsPathMissing');
+        vscode.window.showErrorMessage(message);
+        channel.appendLine(message);
+        return;
+      }
+      const windowsArgs = ['compile'];
+      if (cfg.verbose) windowsArgs.push('--verbose');
+      if (usingProfile) windowsArgs.push('--profile', selectedProfile);
+      else windowsArgs.push('--fqbn', resolvedFqbn);
+      windowsArgs.push('--show-properties');
+      windowsArgs.push(winSketchPath);
+      channel.appendLine(`${ANSI.cyan}[upload-data] ${t('uploadDataWindowsShowPropsStart')}${ANSI.reset}`);
+      let windowsStdout = '';
+      try {
+        const winResult = await runWindowsCliCaptureOutput(windowsArgs, { logStdout: false });
+        windowsStdout = winResult.stdout || '';
+      } catch (err) {
+        const msg = err && err.message ? err.message : String(err || 'unknown');
+        const friendly = t('uploadDataWindowsShowPropsFail', { msg });
+        vscode.window.showErrorMessage(friendly);
+        channel.appendLine(friendly);
+        return;
+      }
+      windowsProps = parseShowPropertiesOutput(windowsStdout);
+      if (!windowsProps || !windowsProps['runtime.tools.esptool_py.path']) {
+        const friendly = t('uploadDataWindowsEsptoolMissing');
+        vscode.window.showErrorMessage(friendly);
+        channel.appendLine(friendly);
+        return;
+      }
+    }
+
+    let esptoolBase = useWindowsEsptool
+      ? (windowsProps && windowsProps['runtime.tools.esptool_py.path']) || ''
+      : (props['runtime.tools.esptool_py.path'] || '');
+    if (!esptoolBase) {
+      vscode.window.showErrorMessage('esptool path not found (runtime.tools.esptool_py.path)');
+      return;
+    }
+    let resolvedEsptoolBase = esptoolBase;
+    if (useWindowsEsptool) {
+      resolvedEsptoolBase = windowsDrivePathToWsl(esptoolBase) || esptoolBase;
+    }
+    const esptoolExe = await resolveExecutable(resolvedEsptoolBase, 'esptool');
+    if (!esptoolExe) {
+      vscode.window.showErrorMessage(`Executable not found: esptool under ${esptoolBase}`);
+      return;
+    }
+    const speed = (useWindowsEsptool && windowsProps && windowsProps['upload.speed'])
+      ? windowsProps['upload.speed']
+      : (props['upload.speed'] || '115200');
 
     let reopenMonitorAfter = false;
     if (monitorTerminal) {
@@ -4202,7 +4268,18 @@ async function commandUploadData() {
     channel.appendLine(`${ANSI.cyan}[upload-data] Flashing at ${offset} over ${portDisplay} (${speed} baud)${ANSI.reset}`);
     progress.report({ message: t('uploadDataProgressMessageFlash') });
     try {
-      await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, outBin], { cwd: sketchDir });
+      if (useWindowsEsptool) {
+        const winImagePath = await convertPathForWindowsCli(outBin);
+        if (!winImagePath) {
+          const friendly = t('uploadDataWindowsImagePathFail');
+          vscode.window.showErrorMessage(friendly);
+          channel.appendLine(friendly);
+          return;
+        }
+        await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, winImagePath], {});
+      } else {
+        await runExternal(esptoolExe, ['-p', port, '-b', String(speed), 'write_flash', offset, outBin], { cwd: sketchDir });
+      }
       vscode.window.showInformationMessage(`Uploaded ${fsType} image to ${portDisplay} at ${offset}`);
       if (reopenMonitorAfter) {
         await new Promise((res) => setTimeout(res, 1500));
@@ -4222,12 +4299,13 @@ async function resolveExecutable(baseDir, name) {
   const candidates = [];
   const base = String(baseDir || '').replace(/[\\/]+$/, '');
   const join = (n) => path.join(base, n);
-  if (process.platform === 'win32') {
+  const includeExe = process.platform === 'win32' || _isWslEnv;
+  if (includeExe) {
     candidates.push(join(name + '.exe'));
   }
   candidates.push(join(name));
   // Also try in a bin/ subdir
-  if (process.platform === 'win32') candidates.push(join(path.join('bin', name + '.exe')));
+  if (includeExe) candidates.push(join(path.join('bin', name + '.exe')));
   candidates.push(join(path.join('bin', name)));
   for (const p of candidates) {
     try { if (await pathExists(vscode.Uri.file(p))) return p; } catch { }
@@ -4248,6 +4326,22 @@ async function runExternal(exe, args, opts = {}) {
     child.on('error', reject);
     child.on('close', code => code === 0 ? resolve() : reject(new Error(`exit ${code}`)));
   });
+}
+
+function parseShowPropertiesOutput(text) {
+  const props = {};
+  if (!text) return props;
+  const lines = String(text).split(/\r?\n/);
+  for (const line of lines) {
+    if (!line) continue;
+    const idx = line.indexOf('=');
+    if (idx <= 0) continue;
+    const key = line.slice(0, idx).trim();
+    if (!key) continue;
+    const value = line.slice(idx + 1).trim();
+    props[key] = value;
+  }
+  return props;
 }
 
 async function runWithNotificationProgress(options, task) {

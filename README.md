@@ -84,17 +84,9 @@ If Arduino CLI builds feel slow on Windows, you can offload compilation to a Lin
 5. **Upload / Monitor stay on Windows**
    - When you trigger Upload or Monitor, the extension switches to `arduino-cli.exe` on Windows, connecting to `COM` ports directly. No extra serial configuration inside WSL is required.
 
-6. **Limitations for Upload Data and Debug**
-   - `Arduino CLI: Upload Data` and `Arduino CLI: Debug` cannot access Windows-hosted serial ports from WSL. Choose one of these workarounds:
-     1. Forward the USB device into WSL with `usbipd-win` so the port appears under `/dev/tty*`.
-        ```powershell
-        usbipd wsl list
-        usbipd wsl attach --busid <BUSID>
-        ```
-        ```bash
-        ls /dev/tty*
-        ```
-     2. Run those commands from Windows instead of WSL.
+6. **Upload Data and Debug notes**
+   - Upload Data now bridges both sides automatically: the filesystem image is built inside WSL, yet when a Windows `COM` port is selected the extension reruns `arduino-cli.exe --show-properties` plus `esptool.exe` on Windows to program the board—no `usbipd` forwarding is required as long as `arduino-cli.exe` is on the Windows PATH.
+   - `Arduino CLI: Debug` still cannot access Windows-hosted serial ports from WSL. Either forward the USB device into WSL with `usbipd-win` (so it appears under `/dev/tty*`) or run Debug from Windows instead.
 
 7. **Troubleshooting tips**
    - Seeing `Latest arduino-cli: (unknown)` usually means the GitHub API rate limit was exceeded. Set `GITHUB_TOKEN` in your environment or retry later.
@@ -220,6 +212,7 @@ All command logs are unified in a dedicated pseudo terminal with ANSI colors so 
 - Builds an image via `mklittlefs` or `mkspiffs` and flashes it with `esptool` to the SPIFFS partition.
 - Reads tool paths and upload speed from `arduino-cli compile --show-properties` and parses `partitions.csv` in the build output to find offset/size.
 - Closes an open serial monitor before flashing and reopens it after.
+- When running inside WSL, the extension automatically captures `arduino-cli.exe --show-properties` on Windows and launches `esptool.exe` there whenever the selected port is a Windows `COM`, so you can keep building under Linux while flashing over the native driver stack.
 
 #### Embed assets or upload a data image?
 
