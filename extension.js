@@ -181,7 +181,10 @@ let extContext;
 let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings;
 let compileDiagnostics;
 const PROGRESS_BUSY = Symbol('progressBusyNotification');
+const PROGRESS_CANCELLED = Symbol('progressCancelledNotification');
+const CANCELLED_ERROR_CODE = 'ECANCELLED';
 let notificationProgressActive = false;
+let notificationProgressToken = null;
 let monitorTerminal;
 // Log terminal (ANSI capable, no command execution)
 let logTerminal;
@@ -278,6 +281,7 @@ const MSG = {
     uploadDataWindowsPathMissing: 'Could not convert sketch path for arduino-cli.exe (wslpath -w failed).',
     uploadDataWindowsImagePathFail: 'Could not convert the filesystem image path for esptool.exe; aborting.',
     progressBusyWarn: 'Another command is already running. Please wait for it to finish.',
+    progressCancelledMessage: 'Command cancelled.',
     setPortManual: 'Enter port manually…',
     setPortNoSerial: 'External programmer (JTAG/SWD/ISP)',
     setPortNoSerialDescription: 'Choose this when uploading with a dedicated programmer instead of a serial port',
@@ -909,6 +913,7 @@ const MSG = {
     uploadDataWindowsPathMissing: 'arduino-cli.exe 用にスケッチパスを変換できませんでした (wslpath -w が失敗しました)。',
     uploadDataWindowsImagePathFail: 'esptool.exe に渡すファイルシステムイメージのパスを変換できませんでした。処理を中止します。',
     progressBusyWarn: '別のコマンドが実行中です。完了するまでお待ちください。',
+    progressCancelledMessage: 'コマンドをキャンセルしました。',
     setPortManual: 'ポートを手入力…',
     setPortNoSerial: '外部書き込み装置を使用 (JTAG/SWD/ISP など)',
     setPortNoSerialDescription: 'シリアルポートではなく書き込み装置（プログラマ）で書き込む場合に選択',
@@ -1199,18 +1204,27 @@ function isNoPortSelected(portInfo) {
 async function convertPathForWindowsCli(p) {
   if (!_isWslEnv) return p;
   if (!p) return '';
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
     const child = cp.spawn('wslpath', ['-w', p], { shell: false });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
     child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       const msg = err && err.message ? err.message : String(err || 'unknown');
       getOutput().appendLine(t('cliWindowsPathConvertFail', { msg }));
       resolve('');
     });
     child.on('close', (code) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       if (code === 0) {
         const rawOut = stdout.trim();
         const normalized = rawOut ? rawOut.replace(/\\/g, '/') : '';
@@ -2280,11 +2294,22 @@ function getOutput() {
   return output;
 }
 
+function isCancellationError(err) {
+  return !!(err && (err === PROGRESS_CANCELLED || err.code === CANCELLED_ERROR_CODE));
+}
+
+function createCancellationError() {
+  const err = new Error(t('progressCancelledMessage'));
+  err.code = CANCELLED_ERROR_CODE;
+  return err;
+}
+
 /**
  * Report an error to both the output channel and VS Code UI toast.
  * The error is converted to a string for safety.
  */
 function showError(err) {
+  if (isCancellationError(err)) return;
   const channel = getOutput();
   const msg = (err && err.message) ? err.message : String(err);
   channel.appendLine(`[error] ${msg}`);
@@ -2383,10 +2408,23 @@ async function ensureCliReady(options = {}) {
   try {
     await new Promise((resolve, reject) => {
       const child = cp.spawn(exe, args, { shell: false });
+      const wasCancelled = trackChildCancellation(child);
       child.stdout.on('data', d => { stdout += d.toString(); });
       child.stderr.on('data', d => channel.append(d.toString()));
-      child.on('error', e => reject(e));
-      child.on('close', code => code === 0 ? resolve() : reject(new Error(`version exit ${code}`)));
+      child.on('error', e => {
+        if (wasCancelled()) {
+          reject(createCancellationError());
+          return;
+        }
+        reject(e);
+      });
+      child.on('close', code => {
+        if (wasCancelled()) {
+          reject(createCancellationError());
+          return;
+        }
+        code === 0 ? resolve() : reject(new Error(`version exit ${code}`));
+      });
     });
     let version = '';
     try {
@@ -2538,9 +2576,14 @@ function runCli(args, opts = {}) {
       cwd: opts.cwd || undefined,
       shell: false,
     });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', (d) => channel.append(d.toString()))
     child.stderr.on('data', (d) => channel.append(d.toString()))
     child.on('error', async (e) => {
+      if (isCancellationError(e) || wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       if (e && (e.code === 'ENOENT' || /not recognized/i.test(e.message))) {
         // arduino-cli is missing — guide the user to configure it
         if (!opts._retried) {
@@ -2552,6 +2595,10 @@ function runCli(args, opts = {}) {
       reject(e);
     });
     child.on('close', (code) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       channel.appendLine(`${ANSI.bold}${ANSI.green}[exit ${code}]${ANSI.reset}`);
       if (code === 0) resolve({ code });
       else reject(new Error(`arduino-cli exited with code ${code}`));
@@ -2578,14 +2625,23 @@ function runWindowsCli(args, opts = {}) {
       cwd: opts.cwd || undefined,
       shell: false,
     });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', (d) => channel.append(d.toString()));
     child.stderr.on('data', (d) => channel.append(d.toString()));
     child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       const msg = err && err.message ? err.message : String(err || 'unknown');
       channel.appendLine(`[error] ${msg}`);
       reject(err);
     });
     child.on('close', (code) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       channel.appendLine(`${ANSI.bold}${ANSI.green}[exit ${code}]${ANSI.reset}`);
       if (code === 0) resolve({ code });
       else reject(new Error(`arduino-cli.exe exited with code ${code}`));
@@ -2770,14 +2826,27 @@ async function runCliForJson(exe, args, channel) {
   let stdout = '';
   await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, args, { shell: false, windowsHide: true });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     if (channel && typeof channel.append === 'function') {
       child.stderr.on('data', (d) => channel.append(d.toString()));
     } else {
       child.stderr.on('data', () => { });
     }
-    child.on('error', reject);
-    child.on('close', (code) => code === 0 ? resolve() : reject(new Error(`board list exit ${code}`)));
+    child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      reject(err);
+    });
+    child.on('close', (code) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      code === 0 ? resolve() : reject(new Error(`board list exit ${code}`));
+    });
   });
   return stdout;
 }
@@ -3074,10 +3143,21 @@ async function getCliVersionStringForExecutable(exe, options = {}) {
   let stderr = '';
   await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, args, { shell: false, windowsHide: true });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', d => { stdout += d.toString(); });
     child.stderr.on('data', d => { stderr += d.toString(); });
-    child.on('error', reject);
+    child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      reject(err);
+    });
     child.on('close', code => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       if (code === 0) {
         resolve();
       } else {
@@ -3253,7 +3333,7 @@ async function commandCompile(options = {}) {
       : { fqbn: resolvedFqbn };
     const durationLabel = exportBinaries ? t('compileExportBinariesDurationLabel') : 'compile';
     const result = await compileWithIntelliSense(sketchDir, args, opts);
-    if (exportBinaries && result && result !== PROGRESS_BUSY) {
+    if (exportBinaries && result && !progressWasAborted(result)) {
       await handleExportBinariesArtifacts({
         sketchDir,
         channel,
@@ -3426,7 +3506,7 @@ async function commandUpload() {
     const wokwiEnabled = selectedProfile ? isProfileWokwiEnabled(yamlInfo, selectedProfile) : false;
     const compileOpts = selectedProfile ? { profileName: selectedProfile, wokwiEnabled } : { fqbn: resolvedFqbn };
     const compileResult = await compileWithIntelliSense(sketchDir, compileArgs, compileOpts);
-    if (compileResult === PROGRESS_BUSY) return;
+    if (progressWasAborted(compileResult)) return;
     if (compileResult && typeof compileResult.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: 'upload',
@@ -3464,7 +3544,7 @@ async function commandUpload() {
       if (uploadProgressMessage) progress.report({ message: uploadProgressMessage });
       await performUploadWithPortStrategy(uploadParams);
     });
-    if (uploadOutcome === PROGRESS_BUSY) {
+    if (progressWasAborted(uploadOutcome)) {
       if (reopenMonitorAfter) {
         try { await commandMonitor(); } catch (_) { }
       }
@@ -4118,10 +4198,23 @@ async function commandUploadData() {
     try {
       await new Promise((resolve, reject) => {
         const child = cp.spawn(exe, propsArgs, { shell: false, cwd: sketchDir });
+        const wasCancelled = trackChildCancellation(child);
         child.stdout.on('data', d => { propsText += d.toString(); });
         child.stderr.on('data', d => channel.append(d.toString()));
-        child.on('error', reject);
-        child.on('close', code => code === 0 ? resolve() : reject(new Error(`show-properties exit ${code}`)));
+        child.on('error', (err) => {
+          if (wasCancelled()) {
+            reject(createCancellationError());
+            return;
+          }
+          reject(err);
+        });
+        child.on('close', code => {
+          if (wasCancelled()) {
+            reject(createCancellationError());
+            return;
+          }
+          code === 0 ? resolve() : reject(new Error(`show-properties exit ${code}`));
+        });
       });
     } catch (e) {
       showError(e);
@@ -4290,7 +4383,7 @@ async function commandUploadData() {
       showError(new Error(`esptool failed: ${e.message}`));
     }
   });
-  if (progressOutcome === PROGRESS_BUSY) return;
+  if (progressWasAborted(progressOutcome)) return;
   if (!uploadDataCompleted) return;
 }
 
@@ -4321,10 +4414,23 @@ async function runExternal(exe, args, opts = {}) {
   if (opts.cwd) channel.appendLine(`${ANSI.dim}(cwd: ${opts.cwd})${ANSI.reset}`);
   await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, args, { shell: false, cwd: opts.cwd || undefined });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', d => channel.append(d.toString()));
     child.stderr.on('data', d => channel.append(d.toString()));
-    child.on('error', reject);
-    child.on('close', code => code === 0 ? resolve() : reject(new Error(`exit ${code}`)));
+    child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      reject(err);
+    });
+    child.on('close', code => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      code === 0 ? resolve() : reject(new Error(`exit ${code}`));
+    });
   });
 }
 
@@ -4351,12 +4457,61 @@ async function runWithNotificationProgress(options, task) {
   }
   notificationProgressActive = true;
   try {
-    return await vscode.window.withProgress(options, async (progress, token) => {
-      return await task(progress, token);
+    const progressOptions = { ...(options || {}), cancellable: true };
+    return await vscode.window.withProgress(progressOptions, async (progress, token) => {
+      notificationProgressToken = token;
+      let cancelled = token?.isCancellationRequested === true;
+      let disposable;
+      if (token && typeof token.onCancellationRequested === 'function') {
+        disposable = token.onCancellationRequested(() => { cancelled = true; });
+      }
+      try {
+        const result = await task(progress, token);
+        return cancelled ? PROGRESS_CANCELLED : result;
+      } catch (err) {
+        if (cancelled || isCancellationError(err)) return PROGRESS_CANCELLED;
+        throw err;
+      } finally {
+        if (disposable && typeof disposable.dispose === 'function') {
+          try { disposable.dispose(); } catch (_) { /* ignore */ }
+        }
+        notificationProgressToken = null;
+      }
     });
   } finally {
     notificationProgressActive = false;
   }
+}
+
+function trackChildCancellation(child) {
+  const token = notificationProgressToken;
+  if (!child || typeof child.kill !== 'function' || !token || typeof token.onCancellationRequested !== 'function') {
+    return () => false;
+  }
+  let cancelled = token.isCancellationRequested === true;
+  const cancel = () => {
+    cancelled = true;
+    try { child.kill(); } catch (_) { /* ignore */ }
+  };
+  let disposable;
+  if (!cancelled) {
+    disposable = token.onCancellationRequested(cancel);
+  } else {
+    cancel();
+  }
+  const cleanup = () => {
+    if (disposable && typeof disposable.dispose === 'function') {
+      try { disposable.dispose(); } catch (_) { /* ignore */ }
+      disposable = null;
+    }
+  };
+  child.once('close', cleanup);
+  child.once('error', cleanup);
+  return () => cancelled;
+}
+
+function progressWasAborted(result) {
+  return result === PROGRESS_BUSY || result === PROGRESS_CANCELLED;
 }
 
 function hasBuildExtraFlagsArg(args) {
@@ -4970,6 +5125,7 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
 
   const runCompile = () => new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
+    const wasCancelled = trackChildCancellation(child);
     let stderrBuffer = '';
     let stdoutBuffer = '';
     const writeToTerminal = (raw) => {
@@ -4986,6 +5142,10 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
       writeToTerminal(raw);
     });
     child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       if (err && typeof err === 'object') {
         err.durationMs = Date.now() - startTime;
       }
@@ -4993,6 +5153,10 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
       reject(err);
     });
     child.on('close', async (code) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       const durationMs = Date.now() - startTime;
       term.write(`\r\n${ANSI.bold}${(code === 0 ? ANSI.green : ANSI.red)}[exit ${code}]${ANSI.reset}\r\n`);
       let diagSummary = { files: 0, diagnostics: 0 };
@@ -5113,10 +5277,21 @@ async function detectBuildPathForCompile(exe, baseArgs, args, sketchDir) {
   let stderr = '';
   await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
-    child.on('error', reject);
+    child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      reject(err);
+    });
     child.on('close', (code) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       if (code === 0) resolve();
       else reject(new Error(`show-properties exit ${code}${stderr ? `: ${stderr.trim()}` : ''}`));
     });
@@ -6492,7 +6667,7 @@ async function runExportBinariesFor(sketchDir, profile) {
   const durationLabel = t('compileExportBinariesDurationLabel');
   try {
     const result = await compileWithIntelliSense(sketchDir, args, opts);
-    if (result && result !== PROGRESS_BUSY) {
+    if (result && !progressWasAborted(result)) {
       await handleExportBinariesArtifacts({
         sketchDir,
         channel,
@@ -6609,7 +6784,7 @@ async function runUploadFor(sketchDir, profile) {
       channel.appendLine(t('uploadNoSerialInfo'));
     }
     const result = await compileWithIntelliSense(sketchDir, cArgs, opts);
-    if (result === PROGRESS_BUSY) return;
+    if (progressWasAborted(result)) return;
     if (result && typeof result.durationMs === 'number') {
       channel.appendLine(t('compileDurationGeneric', {
         label: 'upload',
@@ -6649,7 +6824,7 @@ async function runUploadFor(sketchDir, profile) {
     if (uploadProgressMessage) progress.report({ message: uploadProgressMessage });
     await performUploadWithPortStrategy(uploadParams);
   });
-  if (uploadOutcome === PROGRESS_BUSY) {
+  if (progressWasAborted(uploadOutcome)) {
     if (reopenMonitorAfter) {
       try { await commandMonitor(); } catch (_) { }
     }
@@ -6823,6 +6998,9 @@ async function commandExportAllBinaries() {
           vscode.window.showWarningMessage(t('progressBusyWarn'));
           return;
         }
+        if (result === PROGRESS_CANCELLED) {
+          return;
+        }
         totals.success += 1;
         channel.appendLine(t('exportAllProfileSuccess', { sketch: sketchLabel, profile }));
       } catch (err) {
@@ -6944,6 +7122,9 @@ async function commandBuildCheck() {
         });
         if (runResult === PROGRESS_BUSY) {
           // Another progress is active; abort the build check run.
+          return;
+        }
+        if (runResult === PROGRESS_CANCELLED) {
           return;
         }
       } catch (err) {
@@ -7442,7 +7623,7 @@ function buildExportManifestPayload({ fqbn, pattern, parsedArgs }) {
 }
 
 async function handleExportBinariesArtifacts({ sketchDir, channel, compileResult, profileName = '', fqbnHint = '' }) {
-  if (!compileResult || compileResult === PROGRESS_BUSY) return;
+  if (!compileResult || progressWasAborted(compileResult)) return;
   const parsed = parseBuildCheckJson(compileResult.stdout || '');
   if (!parsed.data) {
     if (parsed.error) {
@@ -7521,17 +7702,26 @@ async function runBuildCheckCompile(exe, sketchDir, profile) {
   const startTime = Date.now();
   return new Promise((resolve, reject) => {
     const child = cp.spawn(exe, args, { cwd: sketchDir, shell: false });
+    const wasCancelled = trackChildCancellation(child);
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
     child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       if (err && typeof err === 'object') {
         err.durationMs = Date.now() - startTime;
       }
       reject(err);
     });
     child.on('close', (code) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
       const durationMs = Date.now() - startTime;
       resolve({ code, stdout, stderr, durationMs });
     });
@@ -8143,6 +8333,7 @@ async function commandSetPort(required) {
       return await listConnectedBoards();
     });
     if (boards === PROGRESS_BUSY) return false;
+    if (boards === PROGRESS_CANCELLED) return false;
   } catch (err) {
     showError(err);
     if (required) vscode.window.showWarningMessage(t('portUnsetWarn'));
@@ -8348,10 +8539,23 @@ async function getDumpProfileYaml(fqbn, sketchDir) {
   try {
     await new Promise((resolve, reject) => {
       const child = cp.spawn(exe, args, { shell: false, cwd: sketchDir || undefined });
+      const wasCancelled = trackChildCancellation(child);
       child.stdout.on('data', d => { stdout += d.toString(); });
       child.stderr.on('data', d => { stderr += d.toString(); });
-      child.on('error', e => reject(e));
-      child.on('close', code => code === 0 ? resolve() : reject(new Error(`dump-profile exit ${code}: ${stderr}`)));
+      child.on('error', e => {
+        if (wasCancelled()) {
+          reject(createCancellationError());
+          return;
+        }
+        reject(e);
+      });
+      child.on('close', code => {
+        if (wasCancelled()) {
+          reject(createCancellationError());
+          return;
+        }
+        code === 0 ? resolve() : reject(new Error(`dump-profile exit ${code}: ${stderr}`));
+      });
     });
     const cleaned = (stdout || '').trim();
     // Output already contains a YAML 'profiles:' root; return as is.
@@ -8376,10 +8580,23 @@ async function getCliConfigDirs() {
   try {
     await new Promise((resolve, reject) => {
       const child = cp.spawn(exe, args, { shell: false });
+      const wasCancelled = trackChildCancellation(child);
       child.stdout.on('data', d => { stdout += d.toString(); });
       child.stderr.on('data', d => channel.append(d.toString()));
-      child.on('error', e => reject(e));
-      child.on('close', code => code === 0 ? resolve() : reject(new Error(`config dump exit ${code}`)));
+      child.on('error', e => {
+        if (wasCancelled()) {
+          reject(createCancellationError());
+          return;
+        }
+        reject(e);
+      });
+      child.on('close', code => {
+        if (wasCancelled()) {
+          reject(createCancellationError());
+          return;
+        }
+        code === 0 ? resolve() : reject(new Error(`config dump exit ${code}`));
+      });
     });
     const json = JSON.parse(stdout);
     const dirs = json.directories || {};
@@ -9796,6 +10013,15 @@ async function commandOpenInspector(ctx) {
               });
               return;
             }
+            if (outcome === PROGRESS_CANCELLED) {
+              panel.webview.postMessage({
+                type: 'analysisResult',
+                requestId,
+                success: false,
+                message: t('progressCancelledMessage')
+              });
+              return;
+            }
             const result = outcome || {};
             state.lastFiles = result.filesMeta || {};
             panel.webview.postMessage({ type: 'analysisResult', requestId, ...result.payload });
@@ -11097,14 +11323,27 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath, clean }) {
   let outputFlushed = false;
   const code = await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, finalArgs, { cwd: sketchDir, shell: false });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', (d) => {
       stdout += d.toString();
     });
     child.stderr.on('data', (d) => {
       stderr += d.toString();
     });
-    child.on('error', reject);
-    child.on('close', resolve);
+    child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      reject(err);
+    });
+    child.on('close', (code) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      resolve(code);
+    });
   });
   if (code !== 0) {
     flushInspectorCliOutput(channel, stdout, stderr);
@@ -11456,16 +11695,25 @@ async function runCommandCapture(executable, args, cwd) {
     let settled = false;
     try {
       const child = cp.spawn(executable, Array.isArray(args) ? args : [], { shell: false, cwd: cwd || undefined });
+      const wasCancelled = trackChildCancellation(child);
       child.stdout.on('data', (d) => { stdout += d.toString(); });
       child.stderr.on('data', (d) => { stderr += d.toString(); });
       child.on('error', (error) => {
         if (settled) return;
         settled = true;
+        if (wasCancelled()) {
+          resolve({ code: null, stdout, stderr, error: createCancellationError() });
+          return;
+        }
         resolve({ code: null, stdout, stderr, error });
       });
       child.on('close', (code) => {
         if (settled) return;
         settled = true;
+        if (wasCancelled()) {
+          resolve({ code: null, stdout, stderr, error: createCancellationError() });
+          return;
+        }
         resolve({ code, stdout, stderr, error: null });
       });
     } catch (error) {
@@ -11918,10 +12166,23 @@ async function getShowProperties(sketchDir) {
   let out = '';
   await new Promise((resolve, reject) => {
     const child = cp.spawn(exe, args, { shell: false, cwd: sketchDir });
+    const wasCancelled = trackChildCancellation(child);
     child.stdout.on('data', d => { out += d.toString(); });
     child.stderr.on('data', () => { /* ignore */ });
-    child.on('error', reject);
-    child.on('close', code => code === 0 ? resolve() : resolve()); // tolerate non-zero
+    child.on('error', (err) => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      reject(err);
+    });
+    child.on('close', code => {
+      if (wasCancelled()) {
+        reject(createCancellationError());
+        return;
+      }
+      code === 0 ? resolve() : resolve(); // tolerate non-zero
+    });
   });
   const props = {};
   for (const line of String(out).split(/\r?\n/)) {

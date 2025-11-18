@@ -89,6 +89,7 @@
   "msg.uploadDataWindowsPathMissing": "arduino-cli.exe 用にスケッチパスを変換できませんでした (wslpath -w が失敗しました)。",
   "msg.uploadDataWindowsImagePathFail": "esptool.exe に渡すファイルシステムイメージのパスを変換できませんでした。処理を中止します。",
   "msg.progressBusyWarn": "別のコマンドが実行中です。完了するまでお待ちください。",
+  "msg.progressCancelled": "コマンドをキャンセルしました。",
   "inspectorCleanOptionLabel": "クリーンビルド (--clean)",
   "lang.buildOpt.alias": "Arduino ビルドオプション"
 }

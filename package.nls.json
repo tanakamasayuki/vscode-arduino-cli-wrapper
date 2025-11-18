@@ -90,5 +90,6 @@
   "msg.uploadDataWindowsPathMissing": "Could not convert sketch path for arduino-cli.exe (wslpath -w failed).",
   "msg.uploadDataWindowsImagePathFail": "Could not convert the filesystem image path for esptool.exe; aborting.",
   "msg.progressBusyWarn": "Another command is already running. Please wait for it to finish.",
+  "msg.progressCancelled": "Command cancelled.",
   "inspectorCleanOptionLabel": "Clean build (--clean)"
 }
