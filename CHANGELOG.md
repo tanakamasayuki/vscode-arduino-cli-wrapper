@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.0
 - (EN) All notification-based commands now expose a Cancel button; when you cancel, the extension forwards VS Code's cancellation token to every spawned `arduino-cli`/helper process and terminates it immediately so long-running compiles, uploads, Build Check, Inspector, etc. can stop safely.
 - (JA) 通知ベースのすべてのコマンドにキャンセルボタンを追加し、キャンセル時は VS Code のキャンセルトークンをすべての `arduino-cli` / 補助プロセスへ伝播して即座に kill するため、コンパイル・アップロード・Build Check・Inspector など長時間処理を安全に停止できます。
 
