@@ -6256,7 +6256,7 @@ function activate(context) {
         if (action === 'sketchNew') return vscode.commands.executeCommand('arduino-cli.sketchNew');
         if (action === 'runArbitrary') return vscode.commands.executeCommand('arduino-cli.runArbitrary');
         if (action === 'uploadData') return commandUploadDataFor(sketchDir, profile);
-        if (action === 'monitor') return commandMonitor();
+        if (action === 'monitor') return commandMonitor({ sketchDir, profile });
         if (action === 'helper') return commandOpenSketchYamlHelper({ sketchDir, profile });
         if (action === 'examples') return commandOpenExamplesBrowser({ sketchDir, profile });
         if (action === 'inspect') return commandOpenInspector({ sketchDir, profile });
@@ -8275,8 +8275,15 @@ async function commandConfigureWarnings() {
 
 /**
  * Launch the serial monitor in the integrated terminal with saved port/baud.
+ * When invoked with a profile context, apply that profile's serial settings first.
+ * @param {{sketchDir?: string, profile?: string}} [options]
  */
-async function commandMonitor() {
+async function commandMonitor(options = {}) {
+  const sketchDir = options && typeof options === 'object' ? (options.sketchDir || '') : '';
+  const profile = options && typeof options === 'object' ? (options.profile || '') : '';
+  if (sketchDir && profile) {
+    try { await rememberSelectedProfile(sketchDir, profile); } catch (_) { /* ignore profile sync errors */ }
+  }
   if (!(await ensureCliReady())) return;
   // Close existing monitor if running
   if (monitorTerminal) {
