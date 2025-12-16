@@ -6481,7 +6481,7 @@ function globalCommandItems() {
 }
 
 async function findSketches() {
-  /** @type {{dir:string,name:string}[]} */
+  /** @type {{dir:string,name:string,sortLabel?:string}[]} */
   const results = [];
   try {
     const cfg = getConfig();
@@ -6509,14 +6509,16 @@ async function findSketches() {
       if (rel && rel !== '.') {
         display = rel;
       }
-      const depth = (rel && rel !== '.') ? rel.split(/[\\\/]+/).length : 0;
-      results.push({ dir, name: display, depth });
+      const sortLabel = display;
+      results.push({ dir, name: display, sortLabel });
     }
-    // Sort: shallower hierarchy first, then by name (case-insensitive)
+    // Sort by the label shown in the tree (folder + project path), case-insensitive
     results.sort((a, b) => {
-      const d = (a.depth || 0) - (b.depth || 0);
-      if (d !== 0) return d;
-      return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+      const labelA = String(a.sortLabel || a.name || '');
+      const labelB = String(b.sortLabel || b.name || '');
+      const cmp = labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
+      if (cmp !== 0) return cmp;
+      return String(a.dir || '').localeCompare(String(b.dir || ''), undefined, { sensitivity: 'base' });
     });
   } catch (_) { }
   return results;
