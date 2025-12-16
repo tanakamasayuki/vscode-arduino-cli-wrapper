@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.2
 - (EN) Arduino CLI view projects are now sorted by their displayed label (workspace folder + project path) instead of the project name alone, so nested sketches appear in predictable path order.
 - (JA) Arduino CLI ビューのプロジェクトをプロジェクト名単独ではなく「ワークスペースフォルダー名＋プロジェクトパス」の表示ラベルでソートするよう変更し、階層化されたスケッチがパス順で並ぶようにしました。
 
