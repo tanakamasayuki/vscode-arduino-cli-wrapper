@@ -199,6 +199,23 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 - **ステータスバーのトグル** – 警告レベル（`none` / `workspace` / `default` / `more` / `all`）と `--verbose` の ON/OFF をワンクリックで切替できます。バッジ表記（例: `all+V`）ですぐに状態が分かります。
 - **Include Order Lint** – `.ino` の中で M5GFX 系ヘッダーより前に FS 系ヘッダーを書いた場合に警告を表示し、実行時のトラブルを未然に防ぎます。
 
+### ローカルポート設定（ワークスペースごとにポートを固定したいとき）
+
+- コマンドパレットまたは Command Center／エクスプローラービュー上部の「Local Port Rules」からウィザードを開き、`.vscode/arduino-cli-wrapper.json` を GUI で編集できます。
+- ルールは上から順に評価され、`sketch`（ワークスペース相対パスの glob）と `profile`（プロファイル名の glob）のどちらかを指定、`port` は必須、`baud` は任意です。空欄のフィールドは保存時に省略されます。
+- 例:
+  ```json
+  {
+    "ports": [
+      { "sketch": "temp/assetsTest/**", "profile": "*", "port": "COM7", "baud": 921600 },
+      { "profile": "esp32-*", "port": "/dev/ttyACM0", "baud": 921600 },
+      { "sketch": "temp/test/**", "port": "/dev/ttyUSB0" }
+    ],
+    "defaultBaud": 115200
+  }
+  ```
+- 既存の `sketch.yaml` に書かれた `port`/`baud` よりもローカル設定が優先され、チームで共有したくない個人用ポート設定を安全に管理できます。
+
 ![Inspector の画面](images/inspector.png)
 
 *Inspector を使えばメモリマップやセクションごとのサイズを可視化できます。*

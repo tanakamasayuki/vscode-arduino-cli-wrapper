@@ -197,6 +197,17 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 - **Inspector** – Examines the generated map file, ELF sections, and other build artifacts so you can understand memory usage at a glance. Use the **Clean build (--clean)** toggle when you need a fresh compile; it defaults to off so quick inspections reuse the existing build.
 - **Status controls in the status bar** – Toggle warning levels (`none`, `workspace`, `default`, `more`, `all`) and the `--verbose` switch. The badge (for example `all+V`) updates instantly.
 - **Include Order Lint** – Watches `.ino` files and warns if filesystem headers appear before M5GFX headers, catching a common runtime pitfall.
+- **Local Port Rules** – Open the wizard from Command Center, the Arduino CLI explorer header, or the command palette entry “Local Port Rules” to edit `.vscode/arduino-cli-wrapper.json`. Define ordered glob rules (workspace-relative `sketch` and `profile` globs) with a required `port` and optional `baud`; rules are matched top-down, and empty fields are omitted on save. Local rules override any `port`/`baud` in `sketch.yaml`, keeping per-developer port choices out of version control.
+  ```json
+  {
+    "ports": [
+      { "sketch": "temp/assetsTest/**", "profile": "*", "port": "COM7", "baud": 921600 },
+      { "profile": "esp32-*", "port": "/dev/ttyACM0", "baud": 921600 },
+      { "sketch": "temp/test/**", "port": "/dev/ttyUSB0" }
+    ],
+    "defaultBaud": 115200
+  }
+  ```
 
 ![Inspector analysing build artifacts](images/inspector.png)
 
