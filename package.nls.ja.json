@@ -32,6 +32,7 @@
   "cmd.setPort": "Arduino CLI: シリアルポートを設定",
   "cmd.setBaud": "Arduino CLI: ボーレートを設定",
   "cmd.localPortHelper": "Arduino CLI: ローカルポート設定を編集",
+  "cmd.openSketchFromTree": "Arduino CLI: ツリーからスケッチを開く",
   "cmd.uploadData": "Arduino CLI: data フォルダをアップロード",
   "cmd.runWokwi": "Arduino CLI: wokwi で実行",
   "treeEmbedAssets": "アセットを埋め込む",

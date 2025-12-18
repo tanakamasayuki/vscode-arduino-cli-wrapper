@@ -6358,6 +6358,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.setPort', () => commandSetPort(false)),
     vscode.commands.registerCommand('arduino-cli.setBaud', () => commandSetBaud(false)),
     vscode.commands.registerCommand('arduino-cli.localPortHelper', commandLocalPortHelper),
+    vscode.commands.registerCommand('arduino-cli.openSketchFromTree', (item) => commandOpenSketchFromTree(item)),
     vscode.commands.registerCommand('arduino-cli.uploadData', commandUploadData),
     vscode.commands.registerCommand('arduino-cli.runWokwi', () => commandRunWokwi()),
   );
@@ -8877,6 +8878,28 @@ async function commandLocalPortHelper() {
       }
     }
   });
+}
+
+async function commandOpenSketchFromTree(item) {
+  try {
+    const dir = item && item.dir ? item.dir : '';
+    let targetDir = dir;
+    if (!targetDir) {
+      targetDir = await detectSketchDirForStatus();
+    }
+    if (!targetDir) return;
+    const inoUri = await getPrimaryInoUri(targetDir);
+    if (inoUri) {
+      const doc = await vscode.workspace.openTextDocument(inoUri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+      return;
+    }
+    // Fallback: reveal folder in explorer
+    const folderUri = vscode.Uri.file(targetDir);
+    await vscode.commands.executeCommand('revealInExplorer', folderUri);
+  } catch (err) {
+    showError(err);
+  }
 }
 
 /**

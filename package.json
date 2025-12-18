@@ -182,6 +182,10 @@
         "title": "%cmd.localPortHelper%"
       },
       {
+        "command": "arduino-cli.openSketchFromTree",
+        "title": "%cmd.openSketchFromTree%"
+      },
+      {
         "command": "arduino-cli.uploadData",
         "title": "%cmd.uploadData%"
       },
@@ -204,6 +208,13 @@
           "command": "arduino-cli.expandAll",
           "when": "view == arduinoCliView",
           "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "arduino-cli.openSketchFromTree",
+          "when": "view == arduinoCliView && viewItem == project",
+          "group": "inline"
         }
       ]
     },
