@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.4
 - (EN) Added an inline "Open" action on Arduino CLI view projects so you can open the sketch’s main `.ino` directly from the tree.
 - (JA) Arduino CLI ビューのプロジェクト行にインラインの「Open」アクションを追加し、ツリーから直接メイン `.ino` を開けるようにしました。
 
