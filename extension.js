@@ -154,6 +154,7 @@ const WOKWI_DIAGRAM_TEMPLATES = Object.freeze({
     ]
   }
 });
+const LOCAL_PORT_CONFIG_NAME = path.join('.vscode', 'arduino-cli-wrapper.json');
 const WOKWI_GENERIC_ESP32_TEMPLATE = Object.freeze({
   parts: [{ type: 'board-esp32-devkit-c-v4', id: 'esp', top: 0, left: 0, attrs: {} }],
   connections: [
@@ -292,6 +293,31 @@ const MSG = {
     portNoSerialTooltip: 'Serial port intentionally unset for programmer-based uploads (JTAG/SWD/ISP). Click to change.',
     portNoSerialMonitorWarn: 'Serial monitor needs a serial port. Select one before starting or exit programmer mode.',
     uploadNoSerialInfo: '[upload] Serial port omitted: continuing without -p for programmer-based workflow (JTAG/SWD/ISP).',
+    localPortHelperNoWorkspace: 'No workspace is open. Open a folder to manage local port rules.',
+    localPortHelperOpenFile: 'Open local port config (.vscode/arduino-cli-wrapper.json)',
+    localPortHelperAddRule: 'Add rule: {sketch} / {profile} -> {port}',
+    localPortHelperAddRuleDesc: 'Uses current baudrate {baud}',
+    localPortHelperAddCustom: 'Add rule manually…',
+    localPortHelperAddCustomDesc: 'Enter sketch/profile globs and port/baud',
+    localPortHelperPickAction: 'Choose how to edit local port rules',
+    localPortHelperPromptSketch: 'Enter sketch path glob (relative to workspace, e.g., temp/SimpleTest/**)',
+    localPortHelperPromptProfile: 'Enter profile glob (e.g., esp32-*, prod, *)',
+    localPortHelperPromptPort: 'Enter serial port (e.g., COM5, /dev/ttyACM0)',
+    localPortHelperPromptBaud: 'Enter baudrate (optional)',
+    localPortHelperRuleSaved: 'Saved local port rule to {path}',
+    localPortHelperCreated: 'Created {path}',
+    localPortHelperTitle: 'Local Port Rules',
+    localPortHelperAddRuleInline: 'Add empty rule',
+    localPortHelperAddCurrent: 'Add from current selection',
+    localPortHelperDefaultBaud: 'Default baud',
+    localPortHelperHint: 'Rules are matched top-down; port required, sketch/profile glob at least one.',
+    localPortHelperEmpty: 'No rules. Add one to start.',
+    localPortHelperSketchPh: 'Sketch glob (e.g., temp/SimpleTest/**)',
+    localPortHelperProfilePh: 'Profile glob (e.g., esp32-*, prod, *)',
+    localPortHelperPortPh: 'Port (required)',
+    localPortHelperBaudPh: 'Baud (optional)',
+    localPortHelperSave: 'Save',
+    localPortHelperReload: 'Reload from file',
     setBaudTitle: 'Select baudrate (current: {current})',
     setBaudCustom: 'Custom…',
     setBaudPrompt: 'Enter baudrate (e.g., 115200)',
@@ -924,6 +950,31 @@ const MSG = {
     portNoSerialTooltip: 'シリアルポートを使わずプログラマでアップロードする設定です (JTAG/SWD/ISP など)。クリックで変更できます。',
     portNoSerialMonitorWarn: 'シリアルモニターを開くにはポートが必要です。ポートを選択するか書き込み装置モードを解除してください。',
     uploadNoSerialInfo: '[upload] シリアルポートを指定せずに書き込み装置モードで続行します (-p なし、JTAG/SWD/ISP 等)。',
+    localPortHelperNoWorkspace: 'ワークスペースが開かれていません。フォルダーを開いてからローカルポート設定を編集してください。',
+    localPortHelperOpenFile: 'ローカルポート設定を開く (.vscode/arduino-cli-wrapper.json)',
+    localPortHelperAddRule: 'ルールを追加: {sketch} / {profile} -> {port}',
+    localPortHelperAddRuleDesc: '現在のボーレート {baud} を使用',
+    localPortHelperAddCustom: 'ルールを手入力で追加…',
+    localPortHelperAddCustomDesc: 'スケッチ/プロファイルの glob とポート/ボーレートを入力',
+    localPortHelperPickAction: 'ローカルポート設定の編集方法を選択してください',
+    localPortHelperPromptSketch: 'スケッチパスの glob を入力（ワークスペース相対、例: temp/SimpleTest/**）',
+    localPortHelperPromptProfile: 'プロファイルの glob を入力（例: esp32-*, prod, *）',
+    localPortHelperPromptPort: 'シリアルポートを入力（例: COM5, /dev/ttyACM0）',
+    localPortHelperPromptBaud: 'ボーレートを入力（任意）',
+    localPortHelperRuleSaved: '{path} にローカルポートのルールを保存しました',
+    localPortHelperCreated: '{path} を作成しました',
+    localPortHelperTitle: 'ローカルポート設定',
+    localPortHelperAddRuleInline: '空のルールを追加',
+    localPortHelperAddCurrent: '現在の選択から追加',
+    localPortHelperDefaultBaud: 'デフォルトボーレート',
+    localPortHelperHint: '上から順にマッチ。port は必須、sketch/profile はどちらか必須。',
+    localPortHelperEmpty: 'ルールがありません。追加してください。',
+    localPortHelperSketchPh: 'スケッチ glob (例: temp/SimpleTest/**)',
+    localPortHelperProfilePh: 'プロファイル glob (例: esp32-*, prod, *)',
+    localPortHelperPortPh: 'ポート（必須）',
+    localPortHelperBaudPh: 'ボーレート（任意）',
+    localPortHelperSave: '保存',
+    localPortHelperReload: 'ファイルを再読込',
     setBaudTitle: 'ボーレートを選択（現在: {current})',
     setBaudCustom: 'カスタム入力…',
     setBaudPrompt: 'ボーレートを入力（例: 115200）',
@@ -6264,6 +6315,7 @@ function activate(context) {
         if (action === 'versionCheck') return vscode.commands.executeCommand('arduino-cli.versionCheck');
         if (action === 'buildCheck') return vscode.commands.executeCommand('arduino-cli.buildCheck');
         if (action === 'commandCenter') return vscode.commands.executeCommand('arduino-cli.commandCenter');
+        if (action === 'localPortHelper') return vscode.commands.executeCommand('arduino-cli.localPortHelper');
         if (action === 'refreshView') return vscode.commands.executeCommand('arduino-cli.refreshView');
         if (action === 'setPort') return vscode.commands.executeCommand('arduino-cli.setPort');
         if (action === 'setBaud') return vscode.commands.executeCommand('arduino-cli.setBaud');
@@ -6300,6 +6352,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.setFqbn', () => commandSetFqbn(false)),
     vscode.commands.registerCommand('arduino-cli.setPort', () => commandSetPort(false)),
     vscode.commands.registerCommand('arduino-cli.setBaud', () => commandSetBaud(false)),
+    vscode.commands.registerCommand('arduino-cli.localPortHelper', commandLocalPortHelper),
     vscode.commands.registerCommand('arduino-cli.uploadData', commandUploadData),
     vscode.commands.registerCommand('arduino-cli.runWokwi', () => commandRunWokwi()),
   );
@@ -6393,11 +6446,12 @@ class ArduinoCliTreeProvider {
         } catch {
           yamlText = '';
         }
-        return info.profiles.map((p) => {
-          const rawPort = getPortFromSketchYamlText(yamlText, p);
-          const portLabel = formatProfilePortDisplay(rawPort);
-          return new ProfileItem(element.dir, p, element, isProfileWokwiEnabled(info, p), portLabel);
-        });
+        const profiles = [];
+        for (const p of info.profiles) {
+          const portLabel = await resolveProfilePortLabel(element.dir, p, yamlText);
+          profiles.push(new ProfileItem(element.dir, p, element, isProfileWokwiEnabled(info, p), portLabel));
+        }
+        return profiles;
       }
       // No profiles: return commands directly under project
       return defaultCommandItems(element.dir, null, element);
@@ -6486,6 +6540,7 @@ function globalCommandItems() {
     new CommandItem('Command Center', 'commandCenter', '', '', undefined, t('treeCommandCenter')),
     new CommandItem('CLI Version', 'version', '', '', undefined, t('treeCliVersion')),
     new CommandItem('Sketch.yaml Helper', 'helper', '', '', undefined, t('treeHelper')),
+    new CommandItem('Local Port Rules', 'localPortHelper', '', '', undefined, t('treeLocalPortRules')),
     new CommandItem('Open Inspector', 'inspect', '', '', undefined, t('treeInspectorOpen')),
     new CommandItem('Sketch.yaml Versions', 'versionCheck', '', '', undefined, t('treeVersionCheck')),
     new CommandItem('Export All Binaries', 'exportAllBinaries', '', '', undefined, t('treeExportAllBinaries')),
@@ -7993,11 +8048,155 @@ function getSelectedProfileState() {
   return { sketchDir, profile };
 }
 
+function normalizeToPosix(p) {
+  return String(p || '').replace(/\\/g, '/');
+}
+
+function escapeRegexChar(ch) {
+  if (/[.+^${}()|[\]\\]/.test(ch)) return `\\${ch}`;
+  return ch;
+}
+
+function globToRegExp(pattern) {
+  if (!pattern) return /^.*$/;
+  const normalized = normalizeToPosix(pattern);
+  let regexBody = '';
+  for (let i = 0; i < normalized.length; i += 1) {
+    const ch = normalized[i];
+    if (ch === '*') {
+      regexBody += '.*';
+    } else {
+      regexBody += escapeRegexChar(ch);
+    }
+  }
+  return new RegExp(`^${regexBody}$`, 'i');
+}
+
+function globMatches(pattern, value) {
+  if (pattern === undefined || pattern === null || pattern === '') return true;
+  const regex = globToRegExp(pattern);
+  return regex.test(normalizeToPosix(value || ''));
+}
+
+function getWorkspaceFolderForPath(fsPath) {
+  try {
+    const uri = vscode.Uri.file(fsPath);
+    return vscode.workspace.getWorkspaceFolder(uri);
+  } catch {
+    return undefined;
+  }
+}
+
+function getWorkspaceFolderFallback() {
+  if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+    return vscode.workspace.workspaceFolders[0];
+  }
+  return undefined;
+}
+
+async function readLocalPortConfigForSketch(sketchDir) {
+  const wf = getWorkspaceFolderForPath(sketchDir);
+  if (!wf) return { ports: [], defaultBaud: '', configPath: '' };
+  const configPath = path.join(wf.uri.fsPath, LOCAL_PORT_CONFIG_NAME);
+  let text = '';
+  try {
+    text = await readTextFile(vscode.Uri.file(configPath));
+  } catch {
+    return { ports: [], defaultBaud: '', configPath };
+  }
+  try {
+    const parsed = JSON.parse(text);
+    const ports = Array.isArray(parsed?.ports) ? parsed.ports : [];
+    const defaultBaud = parsed && parsed.defaultBaud ? String(parsed.defaultBaud) : '';
+    return { ports, defaultBaud, configPath };
+  } catch {
+    return { ports: [], defaultBaud: '', configPath };
+  }
+}
+
+async function matchLocalPortRule(sketchDir, profileName) {
+  if (!sketchDir) return null;
+  const wf = getWorkspaceFolderForPath(sketchDir);
+  const rel = wf ? (path.relative(wf.uri.fsPath, sketchDir) || '.') : sketchDir;
+  const normalizedRel = normalizeToPosix(rel);
+  const cfg = await readLocalPortConfigForSketch(sketchDir);
+  if (!Array.isArray(cfg.ports) || cfg.ports.length === 0) return null;
+  for (const rule of cfg.ports) {
+    if (!rule || typeof rule !== 'object') continue;
+    if (!globMatches(rule.sketch, normalizedRel)) continue;
+    if (!globMatches(rule.profile, profileName || '')) continue;
+    const port = typeof rule.port === 'string' ? rule.port.trim() : '';
+    const baud = rule.baud ? String(rule.baud).trim() : (cfg.defaultBaud ? String(cfg.defaultBaud).trim() : '');
+    if (!port && !baud) continue;
+    return { port, baud, workspaceFolder: wf, configPath: cfg.configPath };
+  }
+  return null;
+}
+
+async function resolveSerialSettingsForProfile(sketchDir, profile) {
+  const rule = await matchLocalPortRule(sketchDir, profile);
+  if (rule) {
+    return { port: rule.port || '', baud: rule.baud || '' };
+  }
+  const portRaw = await getPortFromSketchYaml(sketchDir, profile);
+  const baudRaw = await getPortConfigBaudFromSketchYaml(sketchDir, profile);
+  return { port: portRaw || '', baud: baudRaw || '' };
+}
+
+async function ensureLocalPortConfigFile(configUri) {
+  const dirUri = vscode.Uri.file(path.dirname(configUri.fsPath));
+  try { await vscode.workspace.fs.createDirectory(dirUri); } catch { /* ignore */ }
+  let existed = true;
+  try {
+    await vscode.workspace.fs.stat(configUri);
+  } catch {
+    existed = false;
+  }
+  if (existed) return false;
+  const initial = JSON.stringify({ ports: [], defaultBaud: 115200 }, null, 2) + '\n';
+  await writeTextFile(configUri, initial);
+  return true;
+}
+
+async function readLocalPortConfigFromUri(configUri) {
+  try {
+    const text = await readTextFile(configUri);
+    const parsed = JSON.parse(text);
+    const ports = Array.isArray(parsed?.ports) ? parsed.ports : [];
+    const defaultBaud = parsed && parsed.defaultBaud ? parsed.defaultBaud : 115200;
+    return { ports, defaultBaud };
+  } catch {
+    return { ports: [], defaultBaud: 115200 };
+  }
+}
+
+async function writeLocalPortConfig(configUri, data) {
+  const ports = Array.isArray(data?.ports) ? data.ports : [];
+  const defaultBaud = data && data.defaultBaud ? data.defaultBaud : 115200;
+  const body = JSON.stringify({ ports, defaultBaud }, null, 2) + '\n';
+  await writeTextFile(configUri, body);
+}
+
+async function addLocalPortRule(configUri, rule) {
+  const cfg = await readLocalPortConfigFromUri(configUri);
+  const ports = Array.isArray(cfg.ports) ? cfg.ports : [];
+  const cleaned = {};
+  if (rule && typeof rule === 'object') {
+    if (rule.sketch) cleaned.sketch = rule.sketch;
+    if (rule.profile) cleaned.profile = rule.profile;
+    if (rule.port) cleaned.port = rule.port;
+    if (rule.baud) cleaned.baud = rule.baud;
+  }
+  if (cleaned.port && (cleaned.sketch || cleaned.profile)) ports.unshift(cleaned);
+  await writeLocalPortConfig(configUri, { ports, defaultBaud: cfg.defaultBaud });
+}
+
 async function applyProfileSerialSettings(sketchDir, profile) {
   if (!extContext || !sketchDir || !profile) return;
   try {
     await extContext.workspaceState.update(STATE_LAST_PROFILE, profile);
-    const portRaw = await getPortFromSketchYaml(sketchDir, profile);
+    const serial = await resolveSerialSettingsForProfile(sketchDir, profile);
+    const portRaw = serial.port;
     if (typeof portRaw === 'string') {
       const trimmed = portRaw.trim();
       if (trimmed) {
@@ -8009,7 +8208,7 @@ async function applyProfileSerialSettings(sketchDir, profile) {
         }
       }
     }
-    const baudRaw = await getPortConfigBaudFromSketchYaml(sketchDir, profile);
+    const baudRaw = serial.baud || await getPortConfigBaudFromSketchYaml(sketchDir, profile);
     if (baudRaw) {
       await extContext.workspaceState.update(STATE_BAUD, String(baudRaw));
     }
@@ -8409,6 +8608,270 @@ async function commandSetPort(required) {
   const displayPort = info.display || info.cliPort || port;
   vscode.window.setStatusBarMessage(t('statusSetPort', { port: displayPort, withFqbn }), 2000);
   return true;
+}
+
+async function commandLocalPortHelper() {
+  let { sketchDir: selectedSketch, profile: selectedProfile } = getSelectedProfileState();
+  const workspace = selectedSketch
+    ? getWorkspaceFolderForPath(selectedSketch)
+    : getWorkspaceFolderFallback();
+  if (!workspace) {
+    vscode.window.showWarningMessage(t('localPortHelperNoWorkspace'));
+    return;
+  }
+  const configUri = vscode.Uri.file(path.join(workspace.uri.fsPath, LOCAL_PORT_CONFIG_NAME));
+  const storedPortInfo = getStoredPortInfo();
+  const currentPort = storedPortInfo.cliPort || '';
+  const currentBaud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
+  const relSketch = selectedSketch
+    ? normalizeToPosix(path.relative(workspace.uri.fsPath, selectedSketch) || '.')
+    : '**';
+
+  const panel = vscode.window.createWebviewPanel(
+    'localPortHelper',
+    t('localPortHelperTitle'),
+    vscode.ViewColumn.Active,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+
+  const initialHtml = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #e0e0e0; background: #1e1e1e; margin: 0; padding: 12px 16px; }
+        h1 { font-size: 18px; margin: 0 0 12px; }
+        .toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+        button { background: #0e639c; color: white; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+        button.secondary { background: #3a3d41; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        .rules { border: 1px solid #3a3d41; border-radius: 6px; overflow: hidden; }
+        .row { display: grid; grid-template-columns: 1fr 1fr 1fr 120px 120px; gap: 8px; padding: 10px; align-items: center; }
+        .row:nth-child(odd) { background: #252526; }
+        .row:nth-child(even) { background: #2c2c2c; }
+        input { width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #3a3d41; background: #1e1e1e; color: #e0e0e0; }
+        .controls { display: flex; gap: 4px; }
+        .message { margin-top: 10px; min-height: 20px; }
+        .error { color: #f44747; }
+        .ok { color: #4fc3f7; }
+        small { color: #a0a0a0; }
+      </style>
+    </head>
+    <body>
+      <h1>${t('localPortHelperTitle')}</h1>
+      <div class="toolbar">
+        <button id="btnAdd">${t('localPortHelperAddRuleInline')}</button>
+        <button id="btnAddCurrent">${t('localPortHelperAddCurrent')}</button>
+        <button id="btnOpenFile" class="secondary">${t('localPortHelperOpenFile')}</button>
+        <label style="display:flex;align-items:center;gap:4px;">
+          <small>${t('localPortHelperDefaultBaud')}</small>
+          <input id="defaultBaud" style="width:100px;" />
+        </label>
+        <small>${t('localPortHelperHint')}</small>
+      </div>
+      <div class="rules" id="rules"></div>
+      <div class="message" id="message"></div>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button id="btnSave">${t('localPortHelperSave')}</button>
+        <button id="btnReload" class="secondary">${t('localPortHelperReload')}</button>
+      </div>
+      <script>
+        const vscode = acquireVsCodeApi();
+        let rules = [];
+        let defaultBaud = '115200';
+        let lastSketch = ${JSON.stringify(relSketch)};
+        let lastProfile = ${JSON.stringify(selectedProfile || '')};
+        let lastPort = ${JSON.stringify(currentPort || '')};
+        let lastBaud = ${JSON.stringify(currentBaud || '115200')};
+
+        const rulesEl = document.getElementById('rules');
+        const msgEl = document.getElementById('message');
+        const defaultBaudEl = document.getElementById('defaultBaud');
+
+        function render() {
+          defaultBaudEl.value = defaultBaud || '';
+          rulesEl.innerHTML = '';
+          if (rules.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.padding = '10px';
+            empty.innerHTML = '<small>${t('localPortHelperEmpty')}</small>';
+            rulesEl.appendChild(empty);
+            return;
+          }
+          rules.forEach((r, idx) => {
+            const row = document.createElement('div');
+            row.className = 'row';
+            row.innerHTML = \`
+              <input data-field="sketch" data-idx="\${idx}" placeholder="${t('localPortHelperSketchPh')}" value="\${r.sketch || ''}" />
+              <input data-field="profile" data-idx="\${idx}" placeholder="${t('localPortHelperProfilePh')}" value="\${r.profile || ''}" />
+              <input data-field="port" data-idx="\${idx}" placeholder="${t('localPortHelperPortPh')}" value="\${r.port || ''}" />
+              <input data-field="baud" data-idx="\${idx}" placeholder="${t('localPortHelperBaudPh')}" value="\${r.baud || ''}" />
+              <div class="controls">
+                <button data-action="up" data-idx="\${idx}">↑</button>
+                <button data-action="down" data-idx="\${idx}">↓</button>
+                <button data-action="delete" data-idx="\${idx}">✕</button>
+              </div>
+            \`;
+            rulesEl.appendChild(row);
+          });
+          rulesEl.querySelectorAll('input').forEach((el) => {
+            el.addEventListener('input', (e) => {
+              const idx = Number(e.target.dataset.idx);
+              const field = e.target.dataset.field;
+              rules[idx][field] = e.target.value;
+            });
+          });
+          rulesEl.querySelectorAll('button').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+              const idx = Number(e.target.dataset.idx);
+              const action = e.target.dataset.action;
+              if (action === 'delete') {
+                rules.splice(idx, 1);
+              } else if (action === 'up' && idx > 0) {
+                [rules[idx - 1], rules[idx]] = [rules[idx], rules[idx - 1]];
+              } else if (action === 'down' && idx < rules.length - 1) {
+                [rules[idx + 1], rules[idx]] = [rules[idx], rules[idx + 1]];
+              }
+              render();
+            });
+          });
+        }
+
+        function showMessage(text, type = 'ok') {
+          msgEl.textContent = text || '';
+          msgEl.className = 'message ' + (type === 'error' ? 'error' : 'ok');
+        }
+
+        document.getElementById('btnAdd').addEventListener('click', () => {
+          rules.unshift({ sketch: '', profile: '', port: '', baud: '' });
+          render();
+        });
+
+        document.getElementById('btnAddCurrent').addEventListener('click', () => {
+          rules.unshift({
+            sketch: lastSketch || '',
+            profile: lastProfile || '',
+            port: lastPort || '',
+            baud: lastBaud || ''
+          });
+          render();
+        });
+
+        document.getElementById('btnOpenFile').addEventListener('click', () => {
+          vscode.postMessage({ type: 'openFile' });
+        });
+
+        document.getElementById('btnReload').addEventListener('click', () => {
+          vscode.postMessage({ type: 'reload' });
+        });
+
+        document.getElementById('btnSave').addEventListener('click', () => {
+          defaultBaud = defaultBaudEl.value || '';
+          vscode.postMessage({ type: 'save', payload: { rules, defaultBaud } });
+        });
+
+        window.addEventListener('message', (event) => {
+          const msg = event.data;
+          if (!msg) return;
+          if (msg.type === 'init') {
+            rules = Array.isArray(msg.rules) ? msg.rules : [];
+            defaultBaud = msg.defaultBaud || '';
+            lastSketch = msg.relSketch || '**';
+            lastProfile = msg.profile || '*';
+            lastPort = msg.port || '';
+            lastBaud = msg.baud || '115200';
+            render();
+          } else if (msg.type === 'status') {
+            showMessage(msg.text, msg.level || 'ok');
+            if (msg.rules) {
+              rules = msg.rules;
+              defaultBaud = msg.defaultBaud || defaultBaud;
+              render();
+            }
+          }
+        });
+
+        vscode.postMessage({ type: 'ready' });
+      </script>
+    </body>
+    </html>
+  `;
+
+  panel.webview.html = initialHtml;
+
+  const sendInit = async () => {
+    const cfg = await readLocalPortConfigForSketch(selectedSketch || workspace.uri.fsPath);
+    const rules = Array.isArray(cfg.ports) ? cfg.ports : [];
+    const defaultBaud = cfg.defaultBaud || '115200';
+    panel.webview.postMessage({
+      type: 'init',
+      rules,
+      defaultBaud,
+      relSketch,
+      profile: selectedProfile || '*',
+      port: currentPort || '',
+      baud: currentBaud || '115200'
+    });
+  };
+
+  panel.webview.onDidReceiveMessage(async (msg) => {
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'ready') {
+      await ensureLocalPortConfigFile(configUri);
+      await sendInit();
+      return;
+    }
+    if (msg.type === 'openFile') {
+      await ensureLocalPortConfigFile(configUri);
+      const doc = await vscode.workspace.openTextDocument(configUri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+      return;
+    }
+    if (msg.type === 'reload') {
+      await sendInit();
+      return;
+    }
+    if (msg.type === 'save') {
+      try {
+        await ensureLocalPortConfigFile(configUri);
+        const payload = msg.payload || {};
+        const incomingRules = Array.isArray(payload.rules) ? payload.rules : [];
+        const cleaned = [];
+        for (const r of incomingRules) {
+          if (!r || typeof r !== 'object') continue;
+          const port = typeof r.port === 'string' ? r.port.trim() : '';
+          const sketch = typeof r.sketch === 'string' ? r.sketch.trim() : '';
+          const profile = typeof r.profile === 'string' ? r.profile.trim() : '';
+          const baud = r.baud ? String(r.baud).trim() : '';
+          if (!port) continue; // port is required
+          if (!sketch && !profile) continue; // at least one selector
+          const rule = { port };
+          if (sketch) rule.sketch = sketch;
+          if (profile) rule.profile = profile;
+          if (baud) rule.baud = baud;
+          cleaned.push(rule);
+        }
+        const defaultBaud = payload.defaultBaud ? String(payload.defaultBaud).trim() : '115200';
+        await writeLocalPortConfig(configUri, { ports: cleaned, defaultBaud });
+        panel.webview.postMessage({
+          type: 'status',
+          text: t('localPortHelperRuleSaved', { path: configUri.fsPath }),
+          level: 'ok',
+          rules: cleaned,
+          defaultBaud
+        });
+        try { await vscode.commands.executeCommand('arduino-cli.refreshView'); } catch { /* ignore refresh errors */ }
+      } catch (err) {
+        panel.webview.postMessage({
+          type: 'status',
+          text: err && err.message ? err.message : String(err || 'unknown'),
+          level: 'error'
+        });
+      }
+    }
+  });
 }
 
 /**
@@ -13404,6 +13867,17 @@ async function getPortConfigBaudFromSketchYaml(sketchDir, profileName) {
     }
   } catch { }
   return '';
+}
+
+async function resolveProfilePortLabel(sketchDir, profileName, yamlText = '') {
+  try {
+    const rule = await matchLocalPortRule(sketchDir, profileName);
+    if (rule && rule.port) return formatProfilePortDisplay(rule.port);
+  } catch { /* ignore config errors */ }
+  const rawPort = yamlText
+    ? getPortFromSketchYamlText(yamlText, profileName)
+    : await getPortFromSketchYaml(sketchDir, profileName);
+  return formatProfilePortDisplay(rawPort);
 }
 
 /**

@@ -178,6 +178,10 @@
         "title": "%cmd.setBaud%"
       },
       {
+        "command": "arduino-cli.localPortHelper",
+        "title": "%cmd.localPortHelper%"
+      },
+      {
         "command": "arduino-cli.uploadData",
         "title": "%cmd.uploadData%"
       },

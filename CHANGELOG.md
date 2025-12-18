@@ -3,6 +3,10 @@
 ## Unreleased
 - (EN) Arduino CLI view profiles now show the profile's serial port next to the name; POSIX-style paths display only the last segment so `/dev/ttyACM0` becomes `ttyACM0`.
 - (JA) Arduino CLI ビューのプロファイルに対応するシリアルポートを併記するようにし、`/dev/ttyACM0` などパス形式のポートは末尾要素（`ttyACM0`）だけを表示するようにしました。
+- (EN) Added a local override file `.vscode/arduino-cli-wrapper.json` where you can define ordered glob rules (`sketch`/`profile`) to set per-profile ports/baudrates; a new command "Edit Local Port Rules" creates/opens the file and can add a rule from the current selection.
+- (JA) `.vscode/arduino-cli-wrapper.json` にスケッチ/プロファイルの glob ルールを順番どおりに書いてポート/ボーレートを上書きできるようにし、現在の選択からルールを追加できる「ローカルポート設定を編集」コマンドでファイル作成・編集を行えるようにしました。
+- (EN) The Arduino CLI view now includes a "Local Port Rules" wizard entry under Sketch.yaml Helper to edit rules with a GUI (add/reorder/delete, validate required port and sketch/profile).
+- (JA) Arduino CLI ビューの先頭に「ローカルポート設定」ウィザードを追加し、Sketch.yaml Helper の下から GUI でルール追加・並べ替え・削除、必須項目チェックが行えるようにしました。
 
 ## 1.8.2
 - (EN) Arduino CLI view projects are now sorted by their displayed label (workspace folder + project path) instead of the project name alone, so nested sketches appear in predictable path order.
