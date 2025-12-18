@@ -6386,7 +6386,18 @@ class ArduinoCliTreeProvider {
     if (element instanceof ProjectItem) {
       const info = await readSketchYamlInfo(element.dir);
       if (info && info.profiles && info.profiles.length) {
-        return info.profiles.map(p => new ProfileItem(element.dir, p, element, isProfileWokwiEnabled(info, p)));
+        let yamlText = '';
+        try {
+          const yamlUri = vscode.Uri.file(path.join(element.dir, 'sketch.yaml'));
+          yamlText = await readTextFile(yamlUri);
+        } catch {
+          yamlText = '';
+        }
+        return info.profiles.map((p) => {
+          const rawPort = getPortFromSketchYamlText(yamlText, p);
+          const portLabel = formatProfilePortDisplay(rawPort);
+          return new ProfileItem(element.dir, p, element, isProfileWokwiEnabled(info, p), portLabel);
+        });
       }
       // No profiles: return commands directly under project
       return defaultCommandItems(element.dir, null, element);
@@ -6413,15 +6424,19 @@ class ProjectItem extends vscode.TreeItem {
   }
 }
 class ProfileItem extends vscode.TreeItem {
-  constructor(dir, profile, parent, wokwiEnabled = false) {
+  constructor(dir, profile, parent, wokwiEnabled = false, portLabel = '') {
     super(`Profile: ${profile}`, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = 'profile';
-    this.tooltip = `${dir} | ${t('treeProfile', { profile })}`;
+    const tooltipParts = [`${dir} | ${t('treeProfile', { profile })}`];
+    if (portLabel) tooltipParts.push(`Port: ${portLabel}`);
+    this.tooltip = tooltipParts.join(' | ');
+    if (portLabel) this.description = portLabel;
     this.dir = dir;
     this.profile = profile;
     this.id = `profile:${dir}|${profile}`;
     this.parent = parent;
     this.wokwiEnabled = !!wokwiEnabled;
+    this.portLabel = portLabel;
   }
 }
 class CommandItem extends vscode.TreeItem {
@@ -13389,6 +13404,21 @@ async function getPortConfigBaudFromSketchYaml(sketchDir, profileName) {
     }
   } catch { }
   return '';
+}
+
+/**
+ * Format a port value for profile tree display (basename for POSIX-style paths).
+ */
+function formatProfilePortDisplay(rawPort) {
+  const trimmed = typeof rawPort === 'string' ? rawPort.trim() : '';
+  if (!trimmed) return '';
+  if (/^(none|no[-_ ]?serial)$/i.test(trimmed)) return '';
+  const unquoted = trimmed.replace(/^"|"$/g, '');
+  const slashIdx = unquoted.lastIndexOf('/');
+  if (slashIdx >= 0 && slashIdx < unquoted.length - 1) {
+    return unquoted.slice(slashIdx + 1);
+  }
+  return unquoted;
 }
 
 /**

@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Arduino CLI view profiles now show the profile's serial port next to the name; POSIX-style paths display only the last segment so `/dev/ttyACM0` becomes `ttyACM0`.
+- (JA) Arduino CLI ビューのプロファイルに対応するシリアルポートを併記するようにし、`/dev/ttyACM0` などパス形式のポートは末尾要素（`ttyACM0`）だけを表示するようにしました。
 
 ## 1.8.2
 - (EN) Arduino CLI view projects are now sorted by their displayed label (workspace folder + project path) instead of the project name alone, so nested sketches appear in predictable path order.
