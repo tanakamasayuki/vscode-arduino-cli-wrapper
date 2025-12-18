@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.3
 - (EN) Arduino CLI view profiles now show the profile's serial port next to the name; POSIX-style paths display only the last segment so `/dev/ttyACM0` becomes `ttyACM0`.
 - (JA) Arduino CLI ビューのプロファイルに対応するシリアルポートを併記するようにし、`/dev/ttyACM0` などパス形式のポートは末尾要素（`ttyACM0`）だけを表示するようにしました。
 - (EN) Added a local override file `.vscode/arduino-cli-wrapper.json` where you can define ordered glob rules (`sketch`/`profile`) to set per-profile ports/baudrates; a new command "Edit Local Port Rules" creates/opens the file and can add a rule from the current selection.
