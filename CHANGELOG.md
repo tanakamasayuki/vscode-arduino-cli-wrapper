@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.5
 - (EN) On Windows, if arduino-cli is not found, the extension now searches common install locations (Arduino CLI MSI and Arduino IDE bundles) and uses the newest match for the session.
 - (JA) Windows で arduino-cli が見つからない場合、Arduino CLI MSI / Arduino IDE の既知パスを自動検索し、最終更新日時が新しいものをそのセッションで使用するようにしました。
 - (EN) When running in WSL, Windows-only operations now auto-detect `arduino-cli.exe` from common Windows install paths (including per-user Arduino IDE installs).
