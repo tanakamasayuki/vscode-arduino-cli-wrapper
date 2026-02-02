@@ -3120,6 +3120,15 @@ function hasBuildPathFlag(args) {
   return false;
 }
 
+function hasInputDirFlag(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    const value = args[i];
+    if (value === '--input-dir') return true;
+    if (typeof value === 'string' && value.startsWith('--input-dir=')) return true;
+  }
+  return false;
+}
+
 /**
  * Allow the user to choose a connected board (and optionally port),
  * or enter a manual FQBN when detection is not possible.
@@ -5527,12 +5536,23 @@ async function performUploadWithPortStrategy(params) {
   if (!baseArgs.includes('--verbose')) baseArgs.splice(1, 0, '--verbose');
   const displayBaseArgs = baseArgs.slice();
   const compileArgs = Array.isArray(params.compileArgs) ? params.compileArgs.slice() : ['compile', sketchDir];
+  const buildProfile = params.buildProfile || '';
+  const buildFqbn = params.buildFqbn || '';
 
   let buildPath = '';
-  try {
-    buildPath = await detectBuildPathForCompile(cfg.exe || 'arduino-cli', Array.isArray(cfg.extra) ? cfg.extra : [], compileArgs, sketchDir);
-  } catch (_) {
-    buildPath = '';
+  if (cfg.localBuildPath) {
+    try {
+      buildPath = await ensureLocalBuildPath(sketchDir, buildProfile, buildFqbn);
+    } catch (_) {
+      buildPath = '';
+    }
+  }
+  if (!buildPath) {
+    try {
+      buildPath = await detectBuildPathForCompile(cfg.exe || 'arduino-cli', Array.isArray(cfg.extra) ? cfg.extra : [], compileArgs, sketchDir);
+    } catch (_) {
+      buildPath = '';
+    }
   }
 
   const portInfo = getStoredPortInfo();
@@ -5569,9 +5589,9 @@ async function performUploadWithPortStrategy(params) {
       });
       const windowsArgs = ['upload', sketchWinPath, ...options];
       const windowsDisplayArgs = ['upload', sketchWinPath, ...displayOptions];
-      if (!hasBuildPathFlag(windowsArgs) && buildWinPath) {
-        windowsArgs.push('--build-path', buildWinPath);
-        windowsDisplayArgs.push('--build-path', buildWinPath);
+      if (!hasInputDirFlag(windowsArgs) && buildWinPath) {
+        windowsArgs.push('--input-dir', buildWinPath);
+        windowsDisplayArgs.push('--input-dir', buildWinPath);
       }
       try {
         await runWindowsCli(windowsArgs, { logArgs: windowsDisplayArgs });
@@ -5593,6 +5613,10 @@ async function performUploadWithPortStrategy(params) {
     return arg;
   });
   displayLinuxArgs.push(sketchDir);
+  if (!hasInputDirFlag(linuxArgs) && buildPath) {
+    linuxArgs.push('--input-dir', buildPath);
+    displayLinuxArgs.push('--input-dir', buildPath);
+  }
   await runCli(linuxArgs, { cwd: sketchDir, forceSpawn: true, logArgs: displayLinuxArgs });
 }
 

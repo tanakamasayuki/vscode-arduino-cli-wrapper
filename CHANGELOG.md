@@ -7,6 +7,8 @@
 - (JA) WSL 環境では、Windows 側でのみ必要な操作に限り、`arduino-cli.exe` を既知の Windows インストール先（ユーザー別 Arduino IDE 含む）から自動検出するようにしました。
 - (EN) WSL compilation continues to use the Linux `arduino-cli`; the Windows executable is only used for Windows-side workflows such as COM port operations.
 - (JA) WSL でのコンパイルは Linux 側の `arduino-cli` を使い続け、Windows 側の実行ファイルは COM ポート等の Windows 専用処理に限定するようにしました。
+- (EN) Upload now reuses the local build output folder by passing `--input-dir` when Local Build Path is enabled.
+- (JA) ローカルビルドパス有効時は Upload でも `--input-dir` を渡し、`.build` のビルド成果物を再利用するようにしました。
 
 ## 1.8.4
 - (EN) Added an inline "Open" action on Arduino CLI view projects so you can open the sketch’s main `.ino` directly from the tree.
