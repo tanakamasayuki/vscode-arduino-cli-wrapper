@@ -3,6 +3,7 @@
 
 const vscode = require('vscode');
 const cp = require('child_process');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const https = require('https');
@@ -193,6 +194,8 @@ let logTermWriteEmitter;
 let timezoneDefineCache;
 let autoUpdateInFlight = false;
 let lastAutoUpdateAt = 0;
+let sessionCliExeOverride = '';
+const cliAutoDetectState = { attempted: false, found: '' };
 
 // Simple i18n without external deps.
 // Note: We intentionally avoid bundling any library to keep
@@ -367,6 +370,10 @@ const MSG = {
     windowsSerialPortDetail: 'Detected via Windows arduino-cli.exe',
     cliWindowsPathConvertFail: '[cli][win] Failed to convert path for Windows upload: {msg}',
     cliWindowsUploadFallback: '[cli][win] Upload via arduino-cli.exe failed ({msg}). Falling back to WSL arduino-cli.',
+    cliAutoDetectStart: '[cli][win] Looking for arduino-cli.exe in common locations…',
+    cliAutoDetectFound: '[cli][win] Using arduino-cli.exe found at {path} for this session.',
+    cliAutoDetectMultiple: '[cli][win] Multiple arduino-cli.exe found; using newest: {path}',
+    cliAutoDetectNotFound: '[cli][win] arduino-cli.exe not found in common locations.',
     cacheCleanStart: '[cli] Cleaning arduino-cli cache…',
     cacheCleanDone: '[cli] Cache cleaned.',
     cliWindowsOnlyOperation: '[cli][win] This command does not support Windows-hosted serial ports from WSL. Use a port recognized inside WSL or run this command from Windows.',
@@ -1028,6 +1035,10 @@ const MSG = {
     windowsSerialPortDetail: 'Windows 側の arduino-cli.exe で検出',
     cliWindowsPathConvertFail: '[cli][win] Windows 側アップロード用のパス変換に失敗しました: {msg}',
     cliWindowsUploadFallback: '[cli][win] arduino-cli.exe でのアップロードに失敗したため WSL 側の arduino-cli へフォールバックします ({msg})。',
+    cliAutoDetectStart: '[cli][win] 既知の場所から arduino-cli.exe を検索しています…',
+    cliAutoDetectFound: '[cli][win] arduino-cli.exe を検出しました: {path}（このセッションで使用）',
+    cliAutoDetectMultiple: '[cli][win] 複数の arduino-cli.exe が見つかったため新しいものを使用します: {path}',
+    cliAutoDetectNotFound: '[cli][win] 既知の場所に arduino-cli.exe が見つかりませんでした。',
     cacheCleanStart: '[cli] arduino-cli のキャッシュをクリアしています…',
     cacheCleanDone: '[cli] キャッシュを削除しました。',
     cliWindowsOnlyOperation: '[cli][win] このコマンドは WSL から Windows ホストのシリアルポートへは接続できません。WSL で認識されるポートを利用するか、Windows 側でコマンドを実行してください。',
@@ -2292,8 +2303,9 @@ function getConfig() {
       ? inspectedVerbose.globalValue
       : inspectedVerbose?.defaultValue ?? false;
   const normalizedWarnings = typeof warnings === 'string' ? warnings : 'workspace';
+  const configuredExe = cfg.get('arduino-cli-wrapper.path', 'arduino-cli');
   return {
-    exe: cfg.get('arduino-cli-wrapper.path', 'arduino-cli'),
+    exe: sessionCliExeOverride || configuredExe,
     useTerminal: cfg.get('arduino-cli-wrapper.useTerminal', false),
     extra: cfg.get('arduino-cli-wrapper.additionalArgs', []),
     verbose: !!verbose,
@@ -2404,6 +2416,63 @@ function needsPwshCallOperator() {
   return false;
 }
 
+function shouldAutoDetectCliFromError(err) {
+  if (process.platform !== 'win32') return false;
+  if (!err) return false;
+  if (err.code === 'ENOENT') return true;
+  const msg = String(err.message || '').toLowerCase();
+  return msg.includes('enoent') || msg.includes('not recognized') || msg.includes('cannot find');
+}
+
+function buildWindowsCliCandidates() {
+  const candidates = [];
+  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  candidates.push(path.join(programFiles, 'Arduino CLI', 'arduino-cli.exe'));
+  candidates.push(path.join(localAppData, 'Programs', 'Arduino IDE', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+  candidates.push(path.join(programFiles, 'arduino-ide', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  candidates.push(path.join(programFilesX86, 'arduino-ide', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+  const seen = new Set();
+  return candidates.filter((p) => {
+    const key = String(p || '').toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function autoDetectWindowsCliExecutable(channel) {
+  if (process.platform !== 'win32') return '';
+  if (sessionCliExeOverride) return sessionCliExeOverride;
+  if (cliAutoDetectState.attempted) return cliAutoDetectState.found;
+  cliAutoDetectState.attempted = true;
+  if (channel) channel.appendLine(t('cliAutoDetectStart'));
+  const verified = [];
+  const candidates = buildWindowsCliCandidates();
+  for (const candidate of candidates) {
+    try {
+      const stat = await fs.promises.stat(candidate);
+      if (stat && stat.isFile()) {
+        verified.push({ path: candidate, mtimeMs: Number(stat.mtimeMs || 0) });
+      }
+    } catch (_) { /* ignore missing paths */ }
+  }
+  if (verified.length === 0) {
+    if (channel) channel.appendLine(t('cliAutoDetectNotFound'));
+    return '';
+  }
+  verified.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const chosen = verified[0].path;
+  sessionCliExeOverride = chosen;
+  cliAutoDetectState.found = chosen;
+  if (channel) {
+    if (verified.length > 1) channel.appendLine(t('cliAutoDetectMultiple', { path: chosen }));
+    else channel.appendLine(t('cliAutoDetectFound', { path: chosen }));
+  }
+  return chosen;
+}
+
 /**
  * Remove ANSI escape sequences from a string.
  * Keeps logs readable when tools emit colored output.
@@ -2445,6 +2514,7 @@ const cliReadyCache = new Map();
 async function ensureCliReady(options = {}) {
   const force = options && options.force;
   const skipAutoUpdate = options && options.skipAutoUpdate;
+  const autoDetected = options && options._autoDetected;
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const cacheKey = `${process.platform}|${exe}`;
@@ -2496,6 +2566,12 @@ async function ensureCliReady(options = {}) {
     return true;
   } catch (e) {
     cliReadyCache.delete(cacheKey);
+    if (!autoDetected && shouldAutoDetectCliFromError(e)) {
+      const detected = await autoDetectWindowsCliExecutable(channel);
+      if (detected) {
+        return await ensureCliReady({ ...options, force: true, _autoDetected: true });
+      }
+    }
     // If executable not found, provide guided actions
     const msg = t('cliCheckFail');
     channel.appendLine(`[error] ${msg}`);
@@ -2640,9 +2716,20 @@ function runCli(args, opts = {}) {
         reject(createCancellationError());
         return;
       }
-      if (e && (e.code === 'ENOENT' || /not recognized/i.test(e.message))) {
+      if (shouldAutoDetectCliFromError(e)) {
         // arduino-cli is missing — guide the user to configure it
         if (!opts._retried) {
+          const detected = await autoDetectWindowsCliExecutable(channel);
+          if (detected) {
+            try {
+              const result = await runCli(args, { ...opts, _retried: true });
+              resolve(result);
+              return;
+            } catch (err) {
+              reject(err);
+              return;
+            }
+          }
           await promptConfigureCli(exe, args, opts);
         }
       } else {
@@ -2664,7 +2751,7 @@ function runCli(args, opts = {}) {
 
 function runWindowsCli(args, opts = {}) {
   const cfg = getConfig();
-  const exe = 'arduino-cli.exe';
+  const exe = sessionCliExeOverride || 'arduino-cli.exe';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
   const finalArgs = [...baseArgs, ...args];
   const channel = getOutput();

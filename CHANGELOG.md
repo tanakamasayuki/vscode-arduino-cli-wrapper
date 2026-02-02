@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) On Windows, if arduino-cli is not found, the extension now searches common install locations (Arduino CLI MSI and Arduino IDE bundles) and uses the newest match for the session.
+- (JA) Windows で arduino-cli が見つからない場合、Arduino CLI MSI / Arduino IDE の既知パスを自動検索し、最終更新日時が新しいものをそのセッションで使用するようにしました。
 
 ## 1.8.4
 - (EN) Added an inline "Open" action on Arduino CLI view projects so you can open the sketch’s main `.ino` directly from the tree.
