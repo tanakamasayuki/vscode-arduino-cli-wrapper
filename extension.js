@@ -2304,8 +2304,9 @@ function getConfig() {
       : inspectedVerbose?.defaultValue ?? false;
   const normalizedWarnings = typeof warnings === 'string' ? warnings : 'workspace';
   const configuredExe = cfg.get('arduino-cli-wrapper.path', 'arduino-cli');
+  const resolvedExe = _isWslEnv ? configuredExe : (sessionCliExeOverride || configuredExe);
   return {
-    exe: sessionCliExeOverride || configuredExe,
+    exe: resolvedExe,
     useTerminal: cfg.get('arduino-cli-wrapper.useTerminal', false),
     extra: cfg.get('arduino-cli-wrapper.additionalArgs', []),
     verbose: !!verbose,
@@ -2424,15 +2425,53 @@ function shouldAutoDetectCliFromError(err) {
   return msg.includes('enoent') || msg.includes('not recognized') || msg.includes('cannot find');
 }
 
+function getWslDriveRoot() {
+  if (!_isWslEnv) return '';
+  const roots = ['/mnt/c', '/c'];
+  for (const root of roots) {
+    try {
+      const stat = fs.statSync(root);
+      if (stat && stat.isDirectory()) return root;
+    } catch (_) { /* ignore */ }
+  }
+  return '';
+}
+
+function listWslWindowsUsers(usersRoot) {
+  try {
+    const entries = fs.readdirSync(usersRoot, { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch (_) {
+    return [];
+  }
+}
+
 function buildWindowsCliCandidates() {
   const candidates = [];
-  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-  candidates.push(path.join(programFiles, 'Arduino CLI', 'arduino-cli.exe'));
-  candidates.push(path.join(localAppData, 'Programs', 'Arduino IDE', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
-  candidates.push(path.join(programFiles, 'arduino-ide', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
-  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
-  candidates.push(path.join(programFilesX86, 'arduino-ide', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+  if (process.platform === 'win32') {
+    const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    candidates.push(path.join(programFiles, 'Arduino CLI', 'arduino-cli.exe'));
+    candidates.push(path.join(localAppData, 'Programs', 'Arduino IDE', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+    candidates.push(path.join(programFiles, 'arduino-ide', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    candidates.push(path.join(programFilesX86, 'arduino-ide', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+  } else if (_isWslEnv) {
+    const driveRoot = getWslDriveRoot();
+    if (driveRoot) {
+      const programFiles = path.join(driveRoot, 'Program Files');
+      const programFilesX86 = path.join(driveRoot, 'Program Files (x86)');
+      candidates.push(path.join(programFiles, 'Arduino CLI', 'arduino-cli.exe'));
+      candidates.push(path.join(programFiles, 'arduino-ide', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+      candidates.push(path.join(programFilesX86, 'arduino-ide', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+      const usersRoot = path.join(driveRoot, 'Users');
+      const users = listWslWindowsUsers(usersRoot);
+      for (const user of users) {
+        const localAppData = path.join(usersRoot, user, 'AppData', 'Local');
+        candidates.push(path.join(localAppData, 'Programs', 'Arduino IDE', 'resources', 'app', 'lib', 'backend', 'resources', 'arduino-cli.exe'));
+      }
+    }
+  }
   const seen = new Set();
   return candidates.filter((p) => {
     const key = String(p || '').toLowerCase();
@@ -2443,7 +2482,7 @@ function buildWindowsCliCandidates() {
 }
 
 async function autoDetectWindowsCliExecutable(channel) {
-  if (process.platform !== 'win32') return '';
+  if (process.platform !== 'win32' && !_isWslEnv) return '';
   if (sessionCliExeOverride) return sessionCliExeOverride;
   if (cliAutoDetectState.attempted) return cliAutoDetectState.found;
   cliAutoDetectState.attempted = true;
@@ -2471,6 +2510,15 @@ async function autoDetectWindowsCliExecutable(channel) {
     else channel.appendLine(t('cliAutoDetectFound', { path: chosen }));
   }
   return chosen;
+}
+
+async function resolveWindowsCliExecutable(channel) {
+  if (sessionCliExeOverride) return sessionCliExeOverride;
+  if (process.platform === 'win32' || _isWslEnv) {
+    const detected = await autoDetectWindowsCliExecutable(channel);
+    if (detected) return detected;
+  }
+  return 'arduino-cli.exe';
 }
 
 /**
@@ -2749,9 +2797,9 @@ function runCli(args, opts = {}) {
   });
 }
 
-function runWindowsCli(args, opts = {}) {
+async function runWindowsCli(args, opts = {}) {
   const cfg = getConfig();
-  const exe = sessionCliExeOverride || 'arduino-cli.exe';
+  const exe = await resolveWindowsCliExecutable(getOutput());
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
   const finalArgs = [...baseArgs, ...args];
   const channel = getOutput();
@@ -2795,7 +2843,7 @@ function runWindowsCli(args, opts = {}) {
 async function runWindowsCliCaptureOutput(args, opts = {}) {
   const logStdout = opts.logStdout !== false;
   const cfg = getConfig();
-  const exe = 'arduino-cli.exe';
+  const exe = await resolveWindowsCliExecutable(getOutput());
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
   const finalArgs = [...baseArgs, ...args];
   const channel = getOutput();
@@ -2944,7 +2992,8 @@ async function listConnectedBoards() {
 
   if (_isWslEnv) {
     try {
-      const winJson = await runCliForJson('arduino-cli.exe', ['board', 'list', '--format', 'json'], channel);
+      const winExe = await resolveWindowsCliExecutable(channel);
+      const winJson = await runCliForJson(winExe, ['board', 'list', '--format', 'json'], channel);
       const winParsed = JSON.parse(winJson);
       const winBoards = extractBoardsFromParsedList(winParsed, (item) => {
         const rawPort = item.port || 'unknown';
@@ -3275,7 +3324,8 @@ async function getArduinoCliVersionString() {
 }
 
 async function getWindowsArduinoCliVersionString() {
-  return getCliVersionStringForExecutable('arduino-cli.exe', { useJsonFlag: true });
+  const exe = await resolveWindowsCliExecutable(getOutput());
+  return getCliVersionStringForExecutable(exe, { useJsonFlag: true });
 }
 
 async function getCliVersionStringForExecutable(exe, options = {}) {
@@ -8620,8 +8670,9 @@ async function commandMonitor(options = {}) {
   let args = [...baseArgs, 'monitor', '-p', port, '--config', `baudrate=${baud}`];
 
   const useWindowsCli = shouldUseWindowsSerial(portInfo);
-  const exe = useWindowsCli ? 'arduino-cli.exe' : (cfg.exe || 'arduino-cli');
+  let exe = cfg.exe || 'arduino-cli';
   if (useWindowsCli) {
+    exe = await resolveWindowsCliExecutable(getOutput());
     args = await convertArgsForWindowsCli(args);
   }
 

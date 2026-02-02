@@ -3,6 +3,10 @@
 ## Unreleased
 - (EN) On Windows, if arduino-cli is not found, the extension now searches common install locations (Arduino CLI MSI and Arduino IDE bundles) and uses the newest match for the session.
 - (JA) Windows で arduino-cli が見つからない場合、Arduino CLI MSI / Arduino IDE の既知パスを自動検索し、最終更新日時が新しいものをそのセッションで使用するようにしました。
+- (EN) When running in WSL, Windows-only operations now auto-detect `arduino-cli.exe` from common Windows install paths (including per-user Arduino IDE installs).
+- (JA) WSL 環境では、Windows 側でのみ必要な操作に限り、`arduino-cli.exe` を既知の Windows インストール先（ユーザー別 Arduino IDE 含む）から自動検出するようにしました。
+- (EN) WSL compilation continues to use the Linux `arduino-cli`; the Windows executable is only used for Windows-side workflows such as COM port operations.
+- (JA) WSL でのコンパイルは Linux 側の `arduino-cli` を使い続け、Windows 側の実行ファイルは COM ポート等の Windows 専用処理に限定するようにしました。
 
 ## 1.8.4
 - (EN) Added an inline "Open" action on Arduino CLI view projects so you can open the sketch’s main `.ino` directly from the tree.
