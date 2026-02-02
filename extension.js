@@ -2484,8 +2484,7 @@ function buildWindowsCliCandidates() {
 async function autoDetectWindowsCliExecutable(channel) {
   if (process.platform !== 'win32' && !_isWslEnv) return '';
   if (sessionCliExeOverride) return sessionCliExeOverride;
-  if (cliAutoDetectState.attempted) return cliAutoDetectState.found;
-  cliAutoDetectState.attempted = true;
+  if (cliAutoDetectState.attempted && cliAutoDetectState.found) return cliAutoDetectState.found;
   if (channel) channel.appendLine(t('cliAutoDetectStart'));
   const verified = [];
   const candidates = buildWindowsCliCandidates();
@@ -2499,11 +2498,14 @@ async function autoDetectWindowsCliExecutable(channel) {
   }
   if (verified.length === 0) {
     if (channel) channel.appendLine(t('cliAutoDetectNotFound'));
+    cliAutoDetectState.attempted = false;
+    cliAutoDetectState.found = '';
     return '';
   }
   verified.sort((a, b) => b.mtimeMs - a.mtimeMs);
   const chosen = verified[0].path;
   sessionCliExeOverride = chosen;
+  cliAutoDetectState.attempted = true;
   cliAutoDetectState.found = chosen;
   if (channel) {
     if (verified.length > 1) channel.appendLine(t('cliAutoDetectMultiple', { path: chosen }));
