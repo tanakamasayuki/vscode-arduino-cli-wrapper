@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.6
 - (EN) When auto-detection finds nothing, the extension no longer caches the miss so it re-checks common locations on every attempt.
 - (JA) 自動検出で見つからなかった場合は結果をキャッシュせず、毎回既知パスを再検索するようにしました。
 
