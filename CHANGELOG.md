@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Status bar items now appear only when the workspace contains at least one `.ino` file.
+- (JA) ワークスペース内に `.ino` がある場合のみステータスバー項目を表示するようにしました。
 
 ## 1.8.6
 - (EN) When auto-detection finds nothing, the extension no longer caches the miss so it re-checks common locations on every attempt.

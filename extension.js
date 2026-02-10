@@ -6567,6 +6567,12 @@ function activate(context) {
       await updateStatusBar();
     } catch { /* ignore refresh failures */ }
   }, null, context.subscriptions);
+  vscode.workspace.onDidCreateFiles(() => {
+    updateStatusBar();
+  }, null, context.subscriptions);
+  vscode.workspace.onDidDeleteFiles(() => {
+    updateStatusBar();
+  }, null, context.subscriptions);
   vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration('arduino-cli-wrapper.compileWarnings') || event.affectsConfiguration('arduino-cli-wrapper.verbose')) {
       updateStatusBar();
@@ -8180,6 +8186,27 @@ async function detectSketchDirForStatus() {
   return undefined;
 }
 
+/**
+ * Return true if the workspace contains at least one .ino file.
+ * Avoids side effects (e.g., auto-copying sketch.yaml).
+ */
+async function hasInoInWorkspace() {
+  const folders = vscode.workspace.workspaceFolders || [];
+  if (folders.length === 0) return false;
+  try {
+    const files = filterUrisOutsideBuild(
+      await vscode.workspace.findFiles(
+        '**/*.ino',
+        '**/{node_modules,.git,build,out,dist,.vscode,.build}/**',
+        1
+      )
+    );
+    return Array.isArray(files) && files.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function getWarningsShortCode(level) {
   switch ((level || '').toLowerCase()) {
     case 'workspace':
@@ -8413,6 +8440,17 @@ async function updateStatusBar() {
   const wf = vscode.workspace.workspaceFolders;
   const hasWs = wf && wf.length > 0;
   if (!hasWs) {
+    statusBuild.hide();
+    statusUpload.hide();
+    statusMonitor.hide();
+    statusFqbn.hide();
+    statusPort.hide();
+    statusBaud.hide();
+    statusWarnings.hide();
+    return;
+  }
+  const hasIno = await hasInoInWorkspace();
+  if (!hasIno) {
     statusBuild.hide();
     statusUpload.hide();
     statusMonitor.hide();
