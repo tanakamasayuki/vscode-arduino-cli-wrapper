@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.7
 - (EN) Status bar items now appear only when the workspace contains at least one `.ino` file.
 - (JA) ワークスペース内に `.ino` がある場合のみステータスバー項目を表示するようにしました。
 
