@@ -14,6 +14,7 @@ const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 const AUTO_UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_ASSETS_DIR = 'assets';
 const SOURCE_BACKUP_CONFIG_NAME = '.sourcebackupconfig';
+const SOURCE_BACKUP_RESTORE_URL = 'https://tanakamasayuki.github.io/arduino-cli-helper/sourcebackup.html';
 let cachedLatestArduinoCliTag = '';
 let cachedLatestArduinoCliTagFetchedAt = 0;
 let cachedBoardDetailsJson = null;
@@ -8501,6 +8502,8 @@ function buildSourceBackupHeaderContent() {
     'bool writeRawTo(Print& out);',
     'bool writeBlobBase64To(Print& out);',
     'bool writeArchiveBase64To(Print& out);',
+    'bool printRestoreUrl(Print& out);',
+    'bool writeArchiveBase64WithInfoTo(Print& out);',
     '',
     '}  // namespace sourcebackup',
     ''
@@ -8627,6 +8630,21 @@ function buildSourceBackupSourceContent(blob, config, manifestBuffer) {
   lines.push('  View view;');
   lines.push('  if (!loadView(view)) return false;');
   lines.push('  return writeRangeBase64To(out, kHeaderSize + view.manifest_len, view.archive_len);');
+  lines.push('}');
+  lines.push('');
+  lines.push('bool printRestoreUrl(Print& out) {');
+  lines.push(`  return out.print(${JSON.stringify(SOURCE_BACKUP_RESTORE_URL)}) > 0;`);
+  lines.push('}');
+  lines.push('');
+  lines.push('bool writeArchiveBase64WithInfoTo(Print& out) {');
+  lines.push(`  if (out.println(${JSON.stringify('Source Backup Restore:')}) == 0) return false;`);
+  lines.push(`  if (out.println(${JSON.stringify(SOURCE_BACKUP_RESTORE_URL)}) == 0) return false;`);
+  lines.push('  if (out.println() == 0) return false;');
+  lines.push(`  if (out.println(${JSON.stringify('-----BEGIN SOURCEBACKUP ZIP BASE64-----')}) == 0) return false;`);
+  lines.push('  if (!writeArchiveBase64To(out)) return false;');
+  lines.push('  if (out.println() == 0) return false;');
+  lines.push(`  if (out.println(${JSON.stringify('-----END SOURCEBACKUP ZIP BASE64-----')}) == 0) return false;`);
+  lines.push('  return true;');
   lines.push('}');
   lines.push('');
   lines.push('}  // namespace sourcebackup');

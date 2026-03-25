@@ -315,6 +315,8 @@ uint32_t archiveLength();
 bool writeRawTo(Print& out);
 bool writeBlobBase64To(Print& out);
 bool writeArchiveBase64To(Print& out);
+bool printRestoreUrl(Print& out);
+bool writeArchiveBase64WithInfoTo(Print& out);
 
 }  // namespace sourcebackup
 ```
