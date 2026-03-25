@@ -277,6 +277,7 @@ algorithms = sha256, md5
 #### Source Backup を埋め込む
 
 - スケッチの `.ino` と同じ場所に `.sourcebackupconfig` を置いたときだけ有効化します。
+- Arduino CLI ツリーの `Source Backup` を押すと、未作成時は `.sourcebackupconfig` を自動生成して開きます。
 - 現在の assets 自動再生成と同じく、コンパイル前に `sourcebackup_embed.h` と `sourcebackup_embed.cpp` を自動生成します。
 - 保存本体は base64 ではなく圧縮済みの `zip` バイナリをファームに保持します。
 - 抽出ツールがバイナリから確実に見つけられるよう、複数のグローバルへ分散せず `sourcebackup::blob` / `sourcebackup::blob_len` という単一 blob を保持します。

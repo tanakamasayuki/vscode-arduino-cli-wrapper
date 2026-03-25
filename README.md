@@ -273,6 +273,7 @@ The trade-off is size: every embedded byte becomes part of the sketch binary. La
 #### Embed a source backup
 
 - Opt-in via a `.sourcebackupconfig` file placed next to the sketch `.ino`.
+- Use the `Source Backup` action in the Arduino CLI tree to create `.sourcebackupconfig` automatically when the sketch does not have one yet.
 - Auto-generate `sourcebackup_embed.h` and `sourcebackup_embed.cpp` before compile, similar to the current assets regeneration flow.
 - Store the backup payload as a compressed `zip` archive in firmware; do not store it as base64.
 - Emit a single retained blob (`sourcebackup::blob` / `sourcebackup::blob_len`) rather than several unrelated globals, so post-build extraction tools can find it reliably from the binary image.

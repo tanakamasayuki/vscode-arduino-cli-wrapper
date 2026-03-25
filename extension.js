@@ -310,6 +310,9 @@ const MSG = {
     localPortHelperPromptBaud: 'Enter baudrate (optional)',
     localPortHelperRuleSaved: 'Saved local port rule to {path}',
     localPortHelperCreated: 'Created {path}',
+    sourceBackupConfigCreated: 'Created {path}.',
+    sourceBackupConfigExists: '{path} already exists.',
+    sourceBackupDone: 'Generated {source} with {count} backed up files.',
     localPortHelperTitle: 'Local Port Rules',
     localPortHelperAddRuleInline: 'Add empty rule',
     localPortHelperAddCurrent: 'Add from current selection',
@@ -414,6 +417,7 @@ const MSG = {
     treeDebug: 'Debug',
     treeHelper: 'Sketch.yaml Helper',
     treeExamples: 'Open Examples',
+    treeSourceBackup: 'Source Backup',
     treeInspect: 'Inspect',
     treeWokwiRun: 'Run in Wokwi',
     wokwiElfCopied: '[Wokwi] Copied ELF to {dest} for profile {profile}.',
@@ -979,6 +983,9 @@ const MSG = {
     localPortHelperPromptBaud: 'ボーレートを入力（任意）',
     localPortHelperRuleSaved: '{path} にローカルポートのルールを保存しました',
     localPortHelperCreated: '{path} を作成しました',
+    sourceBackupConfigCreated: '{path} を作成しました。',
+    sourceBackupConfigExists: '{path} は既に存在します。',
+    sourceBackupDone: '{source} に {count} 件のファイルをバックアップしました。',
     localPortHelperTitle: 'ローカルポート設定',
     localPortHelperAddRuleInline: '空のルールを追加',
     localPortHelperAddCurrent: '現在の選択から追加',
@@ -1083,6 +1090,7 @@ const MSG = {
     treeDebug: 'デバッグ',
     treeHelper: 'Sketch.yaml ヘルパー',
     treeExamples: 'サンプルを開く',
+    treeSourceBackup: 'ソースバックアップ',
     treeInspect: 'インスペクト',
     treeWokwiRun: 'wokwiで実行',
     wokwiElfCopied: '[Wokwi] プロファイル {profile} の ELF を {dest} に配置しました。',
@@ -5275,6 +5283,11 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
   } catch (err) {
     throw err;
   }
+  try {
+    await generateSourceBackupForSketch(sketchDir, { silent: true, profileName, fqbn });
+  } catch (err) {
+    throw err;
+  }
   const normalizedWarnings = typeof cfg.warnings === 'string' ? cfg.warnings.toLowerCase() : '';
   const warningsLevel = VALID_WARNING_LEVELS.has(normalizedWarnings) ? normalizedWarnings : '';
   const workspaceWarningsOnly = warningsLevel === 'workspace';
@@ -8126,6 +8139,525 @@ async function ensureSourceBackupConfigForSketch(sketchDir, options = {}) {
     vscode.window.showInformationMessage(t(key, { path: configUri.fsPath }));
   }
   return { uri: configUri, created };
+}
+
+async function generateSourceBackupForSketch(sketchDir, options = {}) {
+  const { silent = false, profileName = '', fqbn = '' } = options || {};
+  const configUri = vscode.Uri.file(path.join(sketchDir, SOURCE_BACKUP_CONFIG_NAME));
+  if (!(await pathExists(configUri))) {
+    return { status: 'disabled', configPath: configUri.fsPath };
+  }
+  try {
+    const config = await loadSourceBackupConfig(vscode.Uri.file(sketchDir));
+    const files = await collectSourceBackupEntries(vscode.Uri.file(sketchDir), config);
+    const archive = await buildSourceBackupZip(files);
+    const manifest = await buildSourceBackupManifest(sketchDir, config, files, { profileName, fqbn });
+    const blob = buildSourceBackupBlob(manifest, archive, config);
+    const outputInfo = resolveSourceBackupOutputInfo(sketchDir, config);
+    await ensureDir(vscode.Uri.file(outputInfo.outputDir));
+    await writeTextFile(vscode.Uri.file(outputInfo.headerPath), buildSourceBackupHeaderContent());
+    await writeTextFile(vscode.Uri.file(outputInfo.sourcePath), buildSourceBackupSourceContent(blob, config, manifest));
+    if (!silent) {
+      vscode.window.showInformationMessage(t('sourceBackupDone', { source: outputInfo.sourcePath, count: files.length }));
+    }
+    return { status: 'written', count: files.length, headerPath: outputInfo.headerPath, sourcePath: outputInfo.sourcePath };
+  } catch (error) {
+    if (!silent) showError(error);
+    else throw error;
+    return { status: 'error' };
+  }
+}
+
+async function loadSourceBackupConfig(sketchUri) {
+  const configUri = vscode.Uri.joinPath(sketchUri, SOURCE_BACKUP_CONFIG_NAME);
+  let text = '';
+  if (await pathExists(configUri)) {
+    try {
+      text = await readTextFile(configUri);
+    } catch {
+      text = '';
+    }
+  }
+  return parseSourceBackupConfig(text || '');
+}
+
+function parseSourceBackupConfig(text) {
+  const sections = parseIniConfig(text || '');
+  const general = sections.general || sections;
+  let dir = String(general.dir ?? './').trim();
+  if (!dir) dir = './';
+  const headerName = String(general.header_name ?? 'sourcebackup_embed.h').trim() || 'sourcebackup_embed.h';
+  const sourceName = String(general.source_name ?? 'sourcebackup_embed.cpp').trim() || 'sourcebackup_embed.cpp';
+  const prefix = String(general.prefix ?? 'sourcebackup').trim() || 'sourcebackup';
+  const includeSection = sections.include || {};
+  const excludeSection = sections.exclude || {};
+  const archiveSection = sections.archive || {};
+  const embedSection = sections.embed || {};
+  const manifestSection = sections.manifest || {};
+  const helpersSection = sections.helpers || {};
+  return {
+    general: { dir, headerName, sourceName, prefix },
+    include: {
+      patterns: parseIniPatternList(includeSection.patterns || [
+        '*.ino', '*.pde', '*.c', '*.cc', '*.cpp', '*.cxx', '*.h', '*.hh', '*.hpp', '*.hxx', '*.ipp', '*.tpp', '*.S', '*.asm',
+        'sketch.yaml', 'arduino-cli.yaml', '.vscode/extensions.json', '.vscode/settings.json', 'data/**', 'assets/**', 'assets_*/**'
+      ].join(', '))
+    },
+    exclude: {
+      patterns: parseIniPatternList(excludeSection.patterns || [
+        '.git/**', '.github/**', '.vscode/launch.json', '.vscode/tasks.json', 'build/**', '.build/**', 'dist/**', '.sourcebackup/**',
+        'sourcebackup_embed.h', 'sourcebackup_embed.cpp', '*_embed.h', '*.bin', '*.hex', '*.elf', '*.map', '*.o', '*.a', '*.so', '*.d', '*.tmp', '*.log', '.DS_Store', 'Thumbs.db'
+      ].join(', '))
+    },
+    archive: {
+      format: String(archiveSection.format ?? 'zip').trim().toLowerCase() || 'zip',
+      compression: String(archiveSection.compression ?? 'deflate').trim().toLowerCase() || 'deflate'
+    },
+    embed: {
+      retain: parseIniBoolean(embedSection.retain, true),
+      progmem: parseIniBoolean(embedSection.progmem, true),
+      align: Math.max(1, parseIniInteger(embedSection.align, 4)),
+      section: String(embedSection.section ?? '.rodata.sourcebackup').trim()
+    },
+    manifest: {
+      enable: parseIniBoolean(manifestSection.enable, true),
+      includeProfile: parseIniBoolean(manifestSection.include_profile, true),
+      includeFqbn: parseIniBoolean(manifestSection.include_fqbn, true),
+      includePort: parseIniBoolean(manifestSection.include_port, true),
+      includeBaud: parseIniBoolean(manifestSection.include_baud, true),
+      includeGeneratedAt: parseIniBoolean(manifestSection.include_generated_at, true),
+      hash: String(manifestSection.hash ?? 'sha256').trim().toLowerCase() || 'sha256'
+    },
+    helpers: {
+      emitParse: parseIniBoolean(helpersSection.emit_parse, true),
+      emitBase64: parseIniBoolean(helpersSection.emit_base64, true),
+      emitRaw: parseIniBoolean(helpersSection.emit_raw, true)
+    }
+  };
+}
+
+function resolveSourceBackupOutputInfo(sketchDir, config) {
+  const dirSetting = (config?.general?.dir || './').trim() || './';
+  const outputDir = path.resolve(sketchDir, dirSetting);
+  const headerPath = path.join(outputDir, (config?.general?.headerName || 'sourcebackup_embed.h').trim() || 'sourcebackup_embed.h');
+  const sourcePath = path.join(outputDir, (config?.general?.sourceName || 'sourcebackup_embed.cpp').trim() || 'sourcebackup_embed.cpp');
+  return { outputDir, headerPath, sourcePath };
+}
+
+async function collectSourceBackupEntries(sketchUri, config) {
+  const includeMatcher = buildSourceBackupMatcher(config?.include?.patterns, false);
+  const excludeMatcher = buildSourceBackupMatcher(config?.exclude?.patterns, true);
+  const results = [];
+  await walkSourceBackupEntries(sketchUri, '', includeMatcher, excludeMatcher, results);
+  results.sort((a, b) => String(a.relative || '').localeCompare(String(b.relative || ''), undefined, { sensitivity: 'base' }));
+  return results;
+}
+
+async function walkSourceBackupEntries(baseUri, prefix, includeMatcher, excludeMatcher, results) {
+  let entries = [];
+  try {
+    entries = await vscode.workspace.fs.readDirectory(baseUri);
+  } catch {
+    return;
+  }
+  for (const [name, type] of entries) {
+    const rel = prefix ? `${prefix}/${name}` : name;
+    const normalized = rel.replace(/\\/g, '/');
+    const child = vscode.Uri.joinPath(baseUri, name);
+    if (excludeMatcher(normalized, type === vscode.FileType.Directory)) continue;
+    if (type === vscode.FileType.Directory) {
+      await walkSourceBackupEntries(child, normalized, includeMatcher, excludeMatcher, results);
+      continue;
+    }
+    if (type !== vscode.FileType.File) continue;
+    if (!includeMatcher(normalized, false)) continue;
+    let stat;
+    try { stat = await vscode.workspace.fs.stat(child); } catch { stat = undefined; }
+    const data = await vscode.workspace.fs.readFile(child);
+    results.push({
+      uri: child,
+      relative: normalized,
+      data: Buffer.from(data),
+      size: data.length,
+      mtime: stat && typeof stat.mtime === 'number' ? stat.mtime : 0
+    });
+  }
+}
+
+function buildSourceBackupMatcher(patterns, defaultResult) {
+  const compiled = Array.isArray(patterns)
+    ? patterns.map((pattern) => compileSourceBackupPattern(pattern)).filter((rule) => !!rule)
+    : [];
+  if (!compiled.length) return () => !!defaultResult;
+  return (relativePath, isDirectory) => {
+    const rel = String(relativePath || '').replace(/^[\/]+/, '');
+    const base = rel.split('/').pop() || rel;
+    let matched = false;
+    for (const rule of compiled) {
+      if (rule.dirOnly && !isDirectory) continue;
+      const target = rule.matchBasename ? base : rel;
+      if (rule.regex.test(target)) {
+        matched = true;
+        break;
+      }
+    }
+    return matched;
+  };
+}
+
+function compileSourceBackupPattern(pattern) {
+  let body = String(pattern || '').trim();
+  if (!body) return null;
+  body = body.replace(/^\/+/, '');
+  let dirOnly = false;
+  if (body.endsWith('/')) {
+    dirOnly = true;
+    body = body.replace(/\/+$/, '');
+  }
+  if (!body) return null;
+  const variants = expandGlobPattern(body);
+  const regexes = variants.map((variant) => globToRegExpSource(variant)).filter((source) => !!source).map((source) => new RegExp(`^${source}$`, 'i'));
+  if (!regexes.length) return null;
+  return {
+    dirOnly,
+    matchBasename: !body.includes('/'),
+    regex: {
+      test(value) {
+        return regexes.some((regex) => regex.test(value));
+      }
+    }
+  };
+}
+
+async function buildSourceBackupManifest(sketchDir, config, files, context) {
+  const manifest = {
+    schema_version: 1,
+    sketch: path.basename(sketchDir || '') || sketchDir,
+    files: Array.isArray(files) ? files.map((entry) => ({
+      path: entry.relative,
+      size: entry.size || 0,
+      mtime: Number.isFinite(entry.mtime) && entry.mtime > 0 ? new Date(entry.mtime).toISOString() : '',
+      sha256: computeAssetHashValue(entry.data, config?.manifest?.hash || 'sha256')
+    })) : []
+  };
+  if (config?.manifest?.includeGeneratedAt !== false) {
+    manifest.generated_at = new Date().toISOString();
+  }
+  if (config?.manifest?.includeProfile && context?.profileName) {
+    manifest.profile = context.profileName;
+  }
+  if (config?.manifest?.includeFqbn) {
+    const fqbnValue = context?.fqbn || extContext?.workspaceState.get(STATE_FQBN, '') || '';
+    if (fqbnValue) manifest.fqbn = fqbnValue;
+  }
+  if (config?.manifest?.includePort) {
+    let port = '';
+    if (context?.profileName) port = await getPortFromSketchYaml(sketchDir, context.profileName);
+    if (!port) {
+      const stored = getStoredPortInfo();
+      port = stored && stored.display && !isNoPortSelected(stored) ? stored.display : '';
+    }
+    if (port) manifest.port = port;
+  }
+  if (config?.manifest?.includeBaud) {
+    let baud = '';
+    if (context?.profileName) baud = await getPortConfigBaudFromSketchYaml(sketchDir, context.profileName);
+    if (!baud) baud = extContext?.workspaceState.get(STATE_BAUD, '') || '';
+    if (baud) manifest.baud = String(baud);
+  }
+  return Buffer.from(JSON.stringify(manifest), 'utf8');
+}
+
+function buildSourceBackupBlob(manifestBuffer, archiveBuffer) {
+  const magic = Buffer.from('SRCBAK1\0', 'binary');
+  const header = Buffer.alloc(24);
+  magic.copy(header, 0);
+  header.writeUInt16LE(1, 8);
+  header.writeUInt16LE(0x000F, 10);
+  header.writeUInt32LE(manifestBuffer.length, 12);
+  header.writeUInt32LE(archiveBuffer.length, 16);
+  header.writeUInt32LE(crc32Buffer(header.slice(0, 20)), 20);
+  const payload = Buffer.concat([manifestBuffer, archiveBuffer]);
+  const payloadCrc = Buffer.alloc(4);
+  payloadCrc.writeUInt32LE(crc32Buffer(payload), 0);
+  return Buffer.concat([header, payload, payloadCrc]);
+}
+
+async function buildSourceBackupZip(files) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const file of files) {
+    const nameBuf = Buffer.from(String(file.relative || '').replace(/\\/g, '/'), 'utf8');
+    const raw = Buffer.from(file.data || Buffer.alloc(0));
+    const compressed = await deflateRawBuffer(raw);
+    const crc = crc32Buffer(raw);
+    const dos = toDosDateTime(file.mtime);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(8, 8);
+    local.writeUInt16LE(dos.time, 10);
+    local.writeUInt16LE(dos.date, 12);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(raw.length, 22);
+    local.writeUInt16LE(nameBuf.length, 26);
+    local.writeUInt16LE(0, 28);
+    localParts.push(local, nameBuf, compressed);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0, 8);
+    central.writeUInt16LE(8, 10);
+    central.writeUInt16LE(dos.time, 12);
+    central.writeUInt16LE(dos.date, 14);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(compressed.length, 20);
+    central.writeUInt32LE(raw.length, 24);
+    central.writeUInt16LE(nameBuf.length, 28);
+    central.writeUInt16LE(0, 30);
+    central.writeUInt16LE(0, 32);
+    central.writeUInt16LE(0, 34);
+    central.writeUInt16LE(0, 36);
+    central.writeUInt32LE(0, 38);
+    central.writeUInt32LE(offset, 42);
+    centralParts.push(central, nameBuf);
+
+    offset += local.length + nameBuf.length + compressed.length;
+  }
+  const centralDir = Buffer.concat(centralParts);
+  const localDir = Buffer.concat(localParts);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(files.length, 8);
+  eocd.writeUInt16LE(files.length, 10);
+  eocd.writeUInt32LE(centralDir.length, 12);
+  eocd.writeUInt32LE(localDir.length, 16);
+  eocd.writeUInt16LE(0, 20);
+  return Buffer.concat([localDir, centralDir, eocd]);
+}
+
+function buildSourceBackupHeaderContent() {
+  return [
+    '// Auto-generated by Arduino CLI Wrapper: Source Backup',
+    '#pragma once',
+    '#include <stddef.h>',
+    '#include <stdint.h>',
+    '',
+    '#if __has_include(<Arduino.h>)',
+    '#include <Arduino.h>',
+    '#endif',
+    '',
+    'namespace sourcebackup {',
+    '',
+    'extern const uint8_t blob[];',
+    'extern const size_t blob_len;',
+    '',
+    'struct View {',
+    '  const uint8_t* manifest;',
+    '  uint32_t manifest_len;',
+    '  const uint8_t* archive;',
+    '  uint32_t archive_len;',
+    '  uint16_t version;',
+    '  uint16_t flags;',
+    '  bool valid;',
+    '};',
+    '',
+    'bool parse(View& out);',
+    'bool isValid();',
+    '',
+    'const uint8_t* manifestPtr();',
+    'uint32_t manifestLength();',
+    '',
+    'const uint8_t* archivePtr();',
+    'uint32_t archiveLength();',
+    '',
+    'bool writeRawTo(Print& out);',
+    'bool writeBlobBase64To(Print& out);',
+    'bool writeArchiveBase64To(Print& out);',
+    '',
+    '}  // namespace sourcebackup',
+    ''
+  ].join('\n');
+}
+
+function buildSourceBackupSourceContent(blob, config, manifestBuffer) {
+  const lines = [];
+  const attrs = [];
+  const manifest = parseSourceBackupManifestBuffer(manifestBuffer);
+  if (config?.embed?.retain) attrs.push('__attribute__((used))');
+  if (config?.embed?.section) attrs.push(`__attribute__((section(${JSON.stringify(config.embed.section)})))`);
+  lines.push('// Auto-generated by Arduino CLI Wrapper: Source Backup');
+  if (manifest) {
+    lines.push(`// Schema version: ${manifest.schema_version || 1}`);
+    if (manifest.generated_at) lines.push(`// Generated at: ${manifest.generated_at}`);
+    if (manifest.sketch) lines.push(`// Sketch: ${manifest.sketch}`);
+    if (manifest.profile) lines.push(`// Profile: ${manifest.profile}`);
+    if (manifest.fqbn) lines.push(`// FQBN: ${manifest.fqbn}`);
+    if (manifest.port) lines.push(`// Port: ${manifest.port}`);
+    if (manifest.baud) lines.push(`// Baud: ${manifest.baud}`);
+    const files = Array.isArray(manifest.files) ? manifest.files : [];
+    lines.push(`// Backed up files: ${files.length}`);
+    for (const file of files) {
+      const filePath = String(file?.path || '');
+      const fileSize = Number(file?.size || 0);
+      const fileMtime = String(file?.mtime || '');
+      lines.push(`// - ${filePath} (${fileSize} bytes${fileMtime ? `, ${fileMtime}` : ''})`);
+    }
+  }
+  lines.push(`#include "${(config?.general?.headerName || 'sourcebackup_embed.h').trim() || 'sourcebackup_embed.h'}"`);
+  lines.push('');
+  lines.push('#if defined(ARDUINO_ARCH_AVR) || defined(__AVR__)');
+  lines.push('#include <avr/pgmspace.h>');
+  lines.push('#endif');
+  lines.push('');
+  lines.push('namespace sourcebackup {');
+  lines.push('');
+  if (attrs.length) lines.push(`${attrs.join(' ')}`);
+  lines.push(`alignas(${Math.max(1, Number(config?.embed?.align) || 4)}) const uint8_t blob[]${config?.embed?.progmem ? ' PROGMEM' : ''} = {`);
+  const body = formatAssetBytes(blob);
+  if (body) lines.push(body);
+  lines.push('};');
+  if (config?.embed?.retain) lines.push('__attribute__((used))');
+  lines.push('const size_t blob_len = sizeof(blob);');
+  lines.push('');
+  lines.push('namespace {');
+  lines.push('constexpr size_t kHeaderSize = 24;');
+  lines.push('constexpr size_t kFooterSize = 4;');
+  lines.push('');
+  lines.push('static inline uint8_t readByte(size_t index) {');
+  lines.push('#if defined(ARDUINO_ARCH_AVR) || defined(__AVR__)');
+  lines.push('  return pgm_read_byte(blob + index);');
+  lines.push('#else');
+  lines.push('  return blob[index];');
+  lines.push('#endif');
+  lines.push('}');
+  lines.push('');
+  lines.push('static inline uint16_t readU16(size_t index) {');
+  lines.push('  return static_cast<uint16_t>(readByte(index)) | (static_cast<uint16_t>(readByte(index + 1)) << 8);');
+  lines.push('}');
+  lines.push('');
+  lines.push('static inline uint32_t readU32(size_t index) {');
+  lines.push('  return static_cast<uint32_t>(readByte(index)) | (static_cast<uint32_t>(readByte(index + 1)) << 8) | (static_cast<uint32_t>(readByte(index + 2)) << 16) | (static_cast<uint32_t>(readByte(index + 3)) << 24);');
+  lines.push('}');
+  lines.push('');
+  lines.push('static bool loadView(View& out) {');
+  lines.push('  out = {};');
+  lines.push('  if (blob_len < (kHeaderSize + kFooterSize)) return false;');
+  lines.push('  const char magic[] = {\'S\', \'R\', \'C\', \'B\', \'A\', \'K\', \'1\', \'\\0\'};');
+  lines.push('  for (size_t i = 0; i < sizeof(magic); ++i) { if (readByte(i) != static_cast<uint8_t>(magic[i])) return false; }');
+  lines.push('  const uint32_t manifestLen = readU32(12);');
+  lines.push('  const uint32_t archiveLen = readU32(16);');
+  lines.push('  const size_t totalPayload = static_cast<size_t>(manifestLen) + static_cast<size_t>(archiveLen);');
+  lines.push('  if (blob_len < (kHeaderSize + totalPayload + kFooterSize)) return false;');
+  lines.push('  out.version = readU16(8);');
+  lines.push('  out.flags = readU16(10);');
+  lines.push('  out.manifest = blob + kHeaderSize;');
+  lines.push('  out.manifest_len = manifestLen;');
+  lines.push('  out.archive = blob + kHeaderSize + manifestLen;');
+  lines.push('  out.archive_len = archiveLen;');
+  lines.push('  out.valid = true;');
+  lines.push('  return true;');
+  lines.push('}');
+  lines.push('');
+  lines.push('static const char kBase64Table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";');
+  lines.push('');
+  lines.push('static bool writeRangeBase64To(Print& out, size_t offset, size_t length) {');
+  lines.push('  size_t index = 0;');
+  lines.push('  while (index < length) {');
+  lines.push('    const uint8_t a = readByte(offset + index++);');
+  lines.push('    const bool hasB = index < length;');
+  lines.push('    const uint8_t b = hasB ? readByte(offset + index++) : 0;');
+  lines.push('    const bool hasC = index < length;');
+  lines.push('    const uint8_t c = hasC ? readByte(offset + index++) : 0;');
+  lines.push('    const char chunk[4] = {');
+  lines.push('      kBase64Table[(a >> 2) & 0x3F],');
+  lines.push('      kBase64Table[((a & 0x03) << 4) | ((b >> 4) & 0x0F)],');
+  lines.push('      hasB ? kBase64Table[((b & 0x0F) << 2) | ((c >> 6) & 0x03)] : \'=\',');
+  lines.push('      hasC ? kBase64Table[c & 0x3F] : \'=\'');
+  lines.push('    };');
+  lines.push('    if (out.write(reinterpret_cast<const uint8_t*>(chunk), sizeof(chunk)) != sizeof(chunk)) return false;');
+  lines.push('  }');
+  lines.push('  return true;');
+  lines.push('}');
+  lines.push('}  // namespace');
+  lines.push('');
+  lines.push('bool parse(View& out) { return loadView(out); }');
+  lines.push('bool isValid() { View view; return loadView(view); }');
+  lines.push('const uint8_t* manifestPtr() { View view; return loadView(view) ? view.manifest : nullptr; }');
+  lines.push('uint32_t manifestLength() { View view; return loadView(view) ? view.manifest_len : 0u; }');
+  lines.push('const uint8_t* archivePtr() { View view; return loadView(view) ? view.archive : nullptr; }');
+  lines.push('uint32_t archiveLength() { View view; return loadView(view) ? view.archive_len : 0u; }');
+  lines.push('');
+  lines.push('bool writeRawTo(Print& out) {');
+  lines.push('  for (size_t i = 0; i < blob_len; ++i) {');
+  lines.push('    const uint8_t value = readByte(i);');
+  lines.push('    if (out.write(&value, 1) != 1) return false;');
+  lines.push('  }');
+  lines.push('  return true;');
+  lines.push('}');
+  lines.push('');
+  lines.push('bool writeBlobBase64To(Print& out) { return writeRangeBase64To(out, 0, blob_len); }');
+  lines.push('bool writeArchiveBase64To(Print& out) {');
+  lines.push('  View view;');
+  lines.push('  if (!loadView(view)) return false;');
+  lines.push('  return writeRangeBase64To(out, kHeaderSize + view.manifest_len, view.archive_len);');
+  lines.push('}');
+  lines.push('');
+  lines.push('}  // namespace sourcebackup');
+  lines.push('');
+  return lines.join('\n');
+}
+
+function parseSourceBackupManifestBuffer(buffer) {
+  try {
+    const text = Buffer.from(buffer || Buffer.alloc(0)).toString('utf8');
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function toDosDateTime(mtime) {
+  const date = Number.isFinite(mtime) && mtime > 0 ? new Date(mtime) : new Date(0);
+  const year = Math.min(Math.max(date.getFullYear(), 1980), 2107);
+  const month = Math.min(Math.max(date.getMonth() + 1, 1), 12);
+  const day = Math.min(Math.max(date.getDate(), 1), 31);
+  const hours = Math.min(Math.max(date.getHours(), 0), 23);
+  const minutes = Math.min(Math.max(date.getMinutes(), 0), 59);
+  const seconds = Math.min(Math.max(Math.floor(date.getSeconds() / 2), 0), 29);
+  return {
+    date: ((year - 1980) << 9) | (month << 5) | day,
+    time: (hours << 11) | (minutes << 5) | seconds
+  };
+}
+
+function deflateRawBuffer(buffer) {
+  return new Promise((resolve, reject) => {
+    zlib.deflateRaw(buffer, (err, result) => {
+      if (err) reject(err);
+      else resolve(result);
+    });
+  });
+}
+
+function crc32Buffer(buffer) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < buffer.length; i += 1) {
+    crc ^= buffer[i];
+    for (let bit = 0; bit < 8; bit += 1) {
+      const mask = -(crc & 1);
+      crc = (crc >>> 1) ^ (0xEDB88320 & mask);
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
 async function embedAssetsForSketch(sketchDir, options = {}) {
