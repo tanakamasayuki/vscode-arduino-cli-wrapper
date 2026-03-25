@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 const AUTO_UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_ASSETS_DIR = 'assets';
+const SOURCE_BACKUP_CONFIG_NAME = '.sourcebackupconfig';
 let cachedLatestArduinoCliTag = '';
 let cachedLatestArduinoCliTagFetchedAt = 0;
 let cachedBoardDetailsJson = null;
@@ -623,6 +624,8 @@ const MSG = {
     commandCenterLocalPortHelperDesc: 'Open the wizard to manage .vscode/arduino-cli-wrapper.json (glob rules for sketch/profile → port/baud).',
     commandCenterEmbedAssetsTitle: 'Embed Assets',
     commandCenterEmbedAssetsDesc: 'Convert files under assets/ and assets_*/ folders into matching <folder>_embed.h headers.',
+    commandCenterSourceBackupTitle: 'Source Backup',
+    commandCenterSourceBackupDesc: 'Create .sourcebackupconfig in the sketch folder and open it for editing.',
     commandCenterRunWokwiTitle: 'Run in Wokwi',
     commandCenterRunWokwiDesc: 'Copy firmware artifacts and open the Wokwi simulator for the profile.',
     commandCenterRunArbitraryTitle: 'Run Arduino CLI Command',
@@ -860,6 +863,8 @@ const MSG = {
     commandCenterLocalPortHelperDesc: '.vscode/arduino-cli-wrapper.json のウィザードを開き、スケッチ/プロファイルの glob からポート/ボーレートを設定します。',
     commandCenterEmbedAssetsTitle: 'アセットを埋め込む',
     commandCenterEmbedAssetsDesc: 'assets/ および assets_*/ フォルダー内のファイルを <フォルダー名>_embed.h に変換します。',
+    commandCenterSourceBackupTitle: 'ソースバックアップ',
+    commandCenterSourceBackupDesc: 'スケッチフォルダーに .sourcebackupconfig を作成し、編集用に開きます。',
     commandCenterRunWokwiTitle: 'Wokwi で実行',
     commandCenterRunWokwiDesc: 'プロファイルの成果物をコピーして Wokwi シミュレーターを起動します。',
     commandCenterRunArbitraryTitle: 'Arduino CLI コマンドを実行',
@@ -1189,6 +1194,7 @@ const COMMAND_CENTER_ITEMS = Object.freeze([
   { command: 'arduino-cli.configureIntelliSense', titleKey: 'commandCenterConfigureIntelliSenseTitle', descKey: 'commandCenterConfigureIntelliSenseDesc', requiresProfile: true, cliKey: 'commandCenterCompileCli' },
   { command: 'arduino-cli.inspector', titleKey: 'commandCenterInspectorTitle', descKey: 'commandCenterInspectorDesc', requiresProfile: true, cliKey: 'commandCenterInspectorCli' },
   { command: 'arduino-cli.embedAssets', titleKey: 'commandCenterEmbedAssetsTitle', descKey: 'commandCenterEmbedAssetsDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
+  { command: 'arduino-cli.sourceBackup', titleKey: 'commandCenterSourceBackupTitle', descKey: 'commandCenterSourceBackupDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.runWokwi', titleKey: 'commandCenterRunWokwiTitle', descKey: 'commandCenterRunWokwiDesc', requiresProfile: true, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.runArbitrary', titleKey: 'commandCenterRunArbitraryTitle', descKey: 'commandCenterRunArbitraryDesc', requiresProfile: false, cliKey: 'commandCenterRunArbitraryCli' },
   { command: 'arduino-cli.expandAll', titleKey: 'commandCenterExpandAllTitle', descKey: 'commandCenterExpandAllDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
@@ -6472,6 +6478,10 @@ function activate(context) {
           if (sketchDir) return embedAssetsForSketch(sketchDir, { createDirIfMissing: true });
           return vscode.commands.executeCommand('arduino-cli.embedAssets');
         }
+        if (action === 'sourceBackup') {
+          if (sketchDir) return ensureSourceBackupConfigForSketch(sketchDir, { openDocument: true });
+          return vscode.commands.executeCommand('arduino-cli.sourceBackup');
+        }
         if (action === 'sketchNew') return vscode.commands.executeCommand('arduino-cli.sketchNew');
         if (action === 'runArbitrary') return vscode.commands.executeCommand('arduino-cli.runArbitrary');
         if (action === 'uploadData') return commandUploadDataFor(sketchDir, profile);
@@ -6512,6 +6522,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.buildCheck', commandBuildCheck),
     vscode.commands.registerCommand('arduino-cli.cleanCompile', commandCleanCompile),
     vscode.commands.registerCommand('arduino-cli.embedAssets', commandEmbedAssets),
+    vscode.commands.registerCommand('arduino-cli.sourceBackup', commandSourceBackup),
     vscode.commands.registerCommand('arduino-cli.upload', commandUpload),
     vscode.commands.registerCommand('arduino-cli.debug', () => commandDebug()),
     vscode.commands.registerCommand('arduino-cli.monitor', commandMonitor),
@@ -6699,6 +6710,7 @@ function defaultCommandItems(dir, profile, parent, features = {}) {
   }
   items.push(
     new CommandItem('Embed Assets', 'embedAssets', dir, profile, parent, t('treeEmbedAssets')),
+    new CommandItem('Source Backup', 'sourceBackup', dir, profile, parent, t('treeSourceBackup')),
     new CommandItem('Upload Data', 'uploadData', dir, profile, parent, t('treeUploadData'))
   );
   items.push(
@@ -8049,6 +8061,71 @@ async function commandEmbedAssets() {
   const ino = await pickInoFromWorkspace();
   if (!ino) return;
   await embedAssetsForSketch(path.dirname(ino), { silent: false, createDirIfMissing: true });
+}
+
+async function commandSourceBackup() {
+  const ino = await pickInoFromWorkspace();
+  if (!ino) return;
+  await ensureSourceBackupConfigForSketch(path.dirname(ino), { openDocument: true, silent: false });
+}
+
+function getDefaultSourceBackupConfigText() {
+  return [
+    'dir = ./',
+    'header_name = sourcebackup_embed.h',
+    'source_name = sourcebackup_embed.cpp',
+    'prefix = sourcebackup',
+    '',
+    '[include]',
+    'patterns = *.ino, *.pde, *.c, *.cc, *.cpp, *.cxx, *.h, *.hh, *.hpp, *.hxx, *.ipp, *.tpp, *.S, *.asm, sketch.yaml, arduino-cli.yaml, .vscode/extensions.json, .vscode/settings.json, data/**, assets/**, assets_*/**',
+    '',
+    '[exclude]',
+    'patterns = .git/**, .github/**, .vscode/launch.json, .vscode/tasks.json, build/**, .build/**, dist/**, .sourcebackup/**, sourcebackup_embed.h, sourcebackup_embed.cpp, *_embed.h, *.bin, *.hex, *.elf, *.map, *.o, *.a, *.so, *.d, *.tmp, *.log, .DS_Store, Thumbs.db',
+    '',
+    '[archive]',
+    'format = zip',
+    'compression = deflate',
+    '',
+    '[embed]',
+    'retain = true',
+    'progmem = true',
+    'align = 4',
+    'section = .rodata.sourcebackup',
+    '',
+    '[manifest]',
+    'enable = true',
+    'include_profile = true',
+    'include_fqbn = true',
+    'include_port = true',
+    'include_baud = true',
+    'include_generated_at = true',
+    'hash = sha256',
+    '',
+    '[helpers]',
+    'emit_parse = true',
+    'emit_base64 = true',
+    'emit_raw = true',
+    ''
+  ].join('\n');
+}
+
+async function ensureSourceBackupConfigForSketch(sketchDir, options = {}) {
+  const { openDocument = false, silent = true } = options || {};
+  const configUri = vscode.Uri.file(path.join(sketchDir, SOURCE_BACKUP_CONFIG_NAME));
+  let created = false;
+  if (!(await pathExists(configUri))) {
+    await writeTextFile(configUri, getDefaultSourceBackupConfigText());
+    created = true;
+  }
+  if (openDocument) {
+    const doc = await vscode.workspace.openTextDocument(configUri);
+    await vscode.window.showTextDocument(doc, { preview: false });
+  }
+  if (!silent) {
+    const key = created ? 'sourceBackupConfigCreated' : 'sourceBackupConfigExists';
+    vscode.window.showInformationMessage(t(key, { path: configUri.fsPath }));
+  }
+  return { uri: configUri, created };
 }
 
 async function embedAssetsForSketch(sketchDir, options = {}) {

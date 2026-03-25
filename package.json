@@ -146,6 +146,10 @@
         "title": "%cmd.embedAssets%"
       },
       {
+        "command": "arduino-cli.sourceBackup",
+        "title": "%cmd.sourceBackup%"
+      },
+      {
         "command": "arduino-cli.upload",
         "title": "%cmd.upload%"
       },
