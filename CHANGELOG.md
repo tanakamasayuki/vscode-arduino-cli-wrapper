@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.8
 - (EN) Added Source Backup support: the Arduino CLI tree now includes a `Source Backup` action that creates `.sourcebackupconfig`, and compile runs auto-generate `sourcebackup_embed.h` / `sourcebackup_embed.cpp` when that config exists.
 - (JA) Source Backup を追加し、Arduino CLI ツリーから `Source Backup` で `.sourcebackupconfig` を作成できるようにしました。さらに設定ファイルが存在する場合はコンパイル時に `sourcebackup_embed.h` / `sourcebackup_embed.cpp` を自動生成します。
 - (EN) Source Backup stores sketch files as a ZIP archive inside a single retained blob, emits manifest-style summary comments at the top of `sourcebackup_embed.cpp`, keeps generated files stable by default (`include_generated_at = false` and write-only-on-change), and includes `.sourcebackupconfig` itself in the backup set.
