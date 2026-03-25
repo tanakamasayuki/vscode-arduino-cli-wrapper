@@ -322,6 +322,19 @@ bool writeArchiveBase64WithInfoTo(Print& out);
 }  // namespace sourcebackup
 ```
 
+実運用では、常時出力するよりも、起動時に特定の GPIO 状態を見て Source Backup を吐き出す形が便利です。例えば、ブート時に特定ピンが Low のときだけ出力するなら次のように書けます。
+
+```cpp
+pinMode(kBackupTriggerPin, INPUT_PULLUP);
+delay(10);
+if (digitalRead(kBackupTriggerPin) == LOW) {
+  sourcebackup::writeArchiveBase64WithInfoTo(Serial);
+}
+```
+
+利用方法のまとまった例は、以下の companion examples リポジトリにもあります。
+https://github.com/tanakamasayuki/vscode-arduino-cli-wrapper-examples/tree/main/03_source-backup
+
 生成される blob は、固定ヘッダーに続いて manifest JSON と zip 本体を並べる形式です。
 
 ```text

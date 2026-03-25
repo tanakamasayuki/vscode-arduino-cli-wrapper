@@ -318,6 +318,19 @@ bool writeArchiveBase64WithInfoTo(Print& out);
 }  // namespace sourcebackup
 ```
 
+For field recovery, a startup-time GPIO trigger is often more practical than always printing the archive. For example, you can only emit the backup when a specific pin is held low during boot:
+
+```cpp
+pinMode(kBackupTriggerPin, INPUT_PULLUP);
+delay(10);
+if (digitalRead(kBackupTriggerPin) == LOW) {
+  sourcebackup::writeArchiveBase64WithInfoTo(Serial);
+}
+```
+
+See the companion example project for a full usage sample:
+https://github.com/tanakamasayuki/vscode-arduino-cli-wrapper-examples/tree/main/03_source-backup
+
 The generated blob uses one fixed header followed by the manifest JSON and the zip payload:
 
 ```text
