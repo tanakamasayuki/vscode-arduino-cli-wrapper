@@ -274,6 +274,103 @@ algorithms = sha256, md5
 
 一方 **Arduino CLI: Upload Data** は初回に `data/` からファイルシステムイメージを転送する手間があるものの、以降はスケッチを書き換えても data 側を再送する必要がなく、OTA でもファームウェアを肥大化させません。サイズが大きい、頻繁に更新する、あるいは OTA での運用を想定している場合は data フォルダー方式を選び、軽量なセットだけを手軽に配布したいときに埋め込みを使い分けるのがおすすめです。
 
+#### Source Backup を埋め込む
+
+- スケッチの `.ino` と同じ場所に `.sourcebackupconfig` を置いたときだけ有効化します。
+- 現在の assets 自動再生成と同じく、コンパイル前に `sourcebackup_embed.h` と `sourcebackup_embed.cpp` を自動生成します。
+- 保存本体は base64 ではなく圧縮済みの `zip` バイナリをファームに保持します。
+- 抽出ツールがバイナリから確実に見つけられるよう、複数のグローバルへ分散せず `sourcebackup::blob` / `sourcebackup::blob_len` という単一 blob を保持します。
+- 解析や base64 出力のヘルパー関数は blob 本体と分離し、未使用ならリンカ最適化で削除されてもよい設計にします。
+- manifest には、生成時点で拡張機能がすでに把握している情報だけを入れます。Source Backup のためだけに追加の `arduino-cli` コマンドは実行しません。
+- 既定では広めにファイルを含め、サイズが気になる場合は除外設定を足して削る運用を想定します。
+
+生成される API は次の通りです。
+
+```cpp
+namespace sourcebackup {
+
+extern const uint8_t blob[];
+extern const size_t blob_len;
+
+struct View {
+  const uint8_t* manifest;
+  uint32_t manifest_len;
+  const uint8_t* archive;
+  uint32_t archive_len;
+  uint16_t version;
+  uint16_t flags;
+  bool valid;
+};
+
+bool parse(View& out);
+bool isValid();
+
+const uint8_t* manifestPtr();
+uint32_t manifestLength();
+
+const uint8_t* archivePtr();
+uint32_t archiveLength();
+
+bool writeRawTo(Print& out);
+bool writeBlobBase64To(Print& out);
+bool writeArchiveBase64To(Print& out);
+
+}  // namespace sourcebackup
+```
+
+生成される blob は、固定ヘッダーに続いて manifest JSON と zip 本体を並べる形式です。
+
+```text
+[magic "SRCBAK1\\0" 8B]
+[schema_version u16]
+[flags u16]
+[manifest_len u32]
+[archive_len u32]
+[header_crc32 u32]
+[manifest bytes]
+[zip bytes]
+[payload_crc32 u32]
+```
+
+`.sourcebackupconfig` では次のように生成内容を調整できます。
+
+```ini
+dir = ./
+header_name = sourcebackup_embed.h
+source_name = sourcebackup_embed.cpp
+prefix = sourcebackup
+
+[include]
+patterns = *.ino, *.pde, *.c, *.cc, *.cpp, *.cxx, *.h, *.hh, *.hpp, *.hxx, *.ipp, *.tpp, *.S, *.asm, sketch.yaml, arduino-cli.yaml, .vscode/extensions.json, .vscode/settings.json, data/**, assets/**, assets_*/**
+
+[exclude]
+patterns = .git/**, .github/**, .vscode/launch.json, .vscode/tasks.json, build/**, .build/**, dist/**, .sourcebackup/**, sourcebackup_embed.h, sourcebackup_embed.cpp, *_embed.h, *.bin, *.hex, *.elf, *.map, *.o, *.a, *.so, *.d, *.tmp, *.log, .DS_Store, Thumbs.db
+
+[archive]
+format = zip
+compression = deflate
+
+[embed]
+retain = true
+progmem = true
+align = 4
+section = .rodata.sourcebackup
+
+[manifest]
+enable = true
+include_profile = true
+include_fqbn = true
+include_port = true
+include_baud = true
+include_generated_at = true
+hash = sha256
+
+[helpers]
+emit_parse = true
+emit_base64 = true
+emit_raw = true
+```
+
 ### sketch.yaml とプロファイル
 
 - `sketch.yaml` があるときはプロファイルを優先。ない場合は FQBN を使用します。

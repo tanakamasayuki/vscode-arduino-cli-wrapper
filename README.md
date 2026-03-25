@@ -270,6 +270,103 @@ The trade-off is size: every embedded byte becomes part of the sketch binary. La
 
 **Arduino CLI: Upload Data** takes the opposite approach. You upload a filesystem image from `data/` once, but afterward the sketch can be rebuilt or flashed without re-sending those files, keeping OTA and serial uploads small. For large or frequently changing assets—especially with OTA workflows—prefer the data image so the firmware stays lean. Reserve Embed Assets for lightweight bundles where the convenience outweighs the extra firmware size.
 
+#### Embed a source backup
+
+- Opt-in via a `.sourcebackupconfig` file placed next to the sketch `.ino`.
+- Auto-generate `sourcebackup_embed.h` and `sourcebackup_embed.cpp` before compile, similar to the current assets regeneration flow.
+- Store the backup payload as a compressed `zip` archive in firmware; do not store it as base64.
+- Emit a single retained blob (`sourcebackup::blob` / `sourcebackup::blob_len`) rather than several unrelated globals, so post-build extraction tools can find it reliably from the binary image.
+- Keep helper functions separate from the retained blob so unused helpers can still be removed by the linker.
+- Record only context that the extension already knows at generation time (for example profile, FQBN, port, baud, timestamps, file hashes); it does not launch extra `arduino-cli` commands just to enrich the manifest.
+- Default to a broad include set and let users trim it through exclude rules when firmware size becomes a concern.
+
+The generated API looks like this:
+
+```cpp
+namespace sourcebackup {
+
+extern const uint8_t blob[];
+extern const size_t blob_len;
+
+struct View {
+  const uint8_t* manifest;
+  uint32_t manifest_len;
+  const uint8_t* archive;
+  uint32_t archive_len;
+  uint16_t version;
+  uint16_t flags;
+  bool valid;
+};
+
+bool parse(View& out);
+bool isValid();
+
+const uint8_t* manifestPtr();
+uint32_t manifestLength();
+
+const uint8_t* archivePtr();
+uint32_t archiveLength();
+
+bool writeRawTo(Print& out);
+bool writeBlobBase64To(Print& out);
+bool writeArchiveBase64To(Print& out);
+
+}  // namespace sourcebackup
+```
+
+The generated blob uses one fixed header followed by the manifest JSON and the zip payload:
+
+```text
+[magic "SRCBAK1\\0" 8B]
+[schema_version u16]
+[flags u16]
+[manifest_len u32]
+[archive_len u32]
+[header_crc32 u32]
+[manifest bytes]
+[zip bytes]
+[payload_crc32 u32]
+```
+
+Use `.sourcebackupconfig` to tune the generated files:
+
+```ini
+dir = ./
+header_name = sourcebackup_embed.h
+source_name = sourcebackup_embed.cpp
+prefix = sourcebackup
+
+[include]
+patterns = *.ino, *.pde, *.c, *.cc, *.cpp, *.cxx, *.h, *.hh, *.hpp, *.hxx, *.ipp, *.tpp, *.S, *.asm, sketch.yaml, arduino-cli.yaml, .vscode/extensions.json, .vscode/settings.json, data/**, assets/**, assets_*/**
+
+[exclude]
+patterns = .git/**, .github/**, .vscode/launch.json, .vscode/tasks.json, build/**, .build/**, dist/**, .sourcebackup/**, sourcebackup_embed.h, sourcebackup_embed.cpp, *_embed.h, *.bin, *.hex, *.elf, *.map, *.o, *.a, *.so, *.d, *.tmp, *.log, .DS_Store, Thumbs.db
+
+[archive]
+format = zip
+compression = deflate
+
+[embed]
+retain = true
+progmem = true
+align = 4
+section = .rodata.sourcebackup
+
+[manifest]
+enable = true
+include_profile = true
+include_fqbn = true
+include_port = true
+include_baud = true
+include_generated_at = true
+hash = sha256
+
+[helpers]
+emit_parse = true
+emit_base64 = true
+emit_raw = true
+```
+
 ### sketch.yaml and Profiles
 
 - When `sketch.yaml` exists, compile/upload use profiles; otherwise FQBN is used.
