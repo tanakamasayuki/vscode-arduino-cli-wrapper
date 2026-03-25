@@ -281,6 +281,7 @@ algorithms = sha256, md5
 - 現在の assets 自動再生成と同じく、コンパイル前に `sourcebackup_embed.h` と `sourcebackup_embed.cpp` を自動生成します。
 - 保存本体は base64 ではなく圧縮済みの `zip` バイナリをファームに保持します。
 - 抽出ツールがバイナリから確実に見つけられるよう、複数のグローバルへ分散せず `sourcebackup::blob` / `sourcebackup::blob_len` という単一 blob を保持します。
+- `retain = true` のときは、スケッチ側で直接参照しなくてもリンク時のガベージコレクションで落ちにくくするため、生成される `.cpp` に `sourcebackup::isValid()` を静的初期化時に呼び出し、その結果を volatile フラグへ保持する内部用の自動参照オブジェクトも出力します。
 - 解析や base64 出力のヘルパー関数は blob 本体と分離し、未使用ならリンカ最適化で削除されてもよい設計にします。
 - manifest には、生成時点で拡張機能がすでに把握している情報だけを入れます。Source Backup のためだけに追加の `arduino-cli` コマンドは実行しません。
 - 既定では広めにファイルを含め、サイズが気になる場合は除外設定を足して削る運用を想定します。

@@ -277,6 +277,7 @@ The trade-off is size: every embedded byte becomes part of the sketch binary. La
 - Auto-generate `sourcebackup_embed.h` and `sourcebackup_embed.cpp` before compile, similar to the current assets regeneration flow.
 - Store the backup payload as a compressed `zip` archive in firmware; do not store it as base64.
 - Emit a single retained blob (`sourcebackup::blob` / `sourcebackup::blob_len`) rather than several unrelated globals, so post-build extraction tools can find it reliably from the binary image.
+- When `retain = true`, the generated `.cpp` also emits an internal auto-reference object that calls `sourcebackup::isValid()` during static initialization and stores the result in a volatile flag, so link-time garbage collection is less likely to discard the blob even if your sketch never references it directly.
 - Keep helper functions separate from the retained blob so unused helpers can still be removed by the linker.
 - Record only context that the extension already knows at generation time (for example profile, FQBN, port, baud, timestamps, file hashes); it does not launch extra `arduino-cli` commands just to enrich the manifest.
 - Default to a broad include set and let users trim it through exclude rules when firmware size becomes a concern.

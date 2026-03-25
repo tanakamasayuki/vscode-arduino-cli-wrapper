@@ -8550,6 +8550,18 @@ function buildSourceBackupSourceContent(blob, config, manifestBuffer) {
   lines.push('const size_t blob_len = sizeof(blob);');
   lines.push('');
   lines.push('namespace {');
+  if (config?.embed?.retain) {
+    lines.push('volatile bool g_sourcebackup_keep = false;');
+    lines.push('');
+    lines.push('struct SourceBackupAutoRef {');
+    lines.push('  SourceBackupAutoRef() {');
+    lines.push('    g_sourcebackup_keep = sourcebackup::isValid();');
+    lines.push('  }');
+    lines.push('};');
+    lines.push('');
+    lines.push('__attribute__((used)) SourceBackupAutoRef g_sourcebackup_auto_ref;');
+    lines.push('');
+  }
   lines.push('constexpr size_t kHeaderSize = 24;');
   lines.push('constexpr size_t kFooterSize = 4;');
   lines.push('');
