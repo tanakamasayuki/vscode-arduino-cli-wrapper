@@ -7960,6 +7960,8 @@ async function handleExportBinariesArtifacts({ sketchDir, channel, compileResult
 
 async function runBuildCheckCompile(exe, sketchDir, profile) {
   const cfg = getConfig();
+  await embedAssetsForSketch(sketchDir, { silent: true });
+  await generateSourceBackupForSketch(sketchDir, { silent: true, profileName: profile, fqbn: '' });
   const args = ['compile', '--profile', profile, '--warnings=all', '--clean', '--json'];
   if (cfg.localBuildPath) {
     const buildPath = await ensureLocalBuildPath(sketchDir, profile, '');
