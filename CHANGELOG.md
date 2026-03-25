@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.8.9
 - (EN) Build Check now runs the same pre-build generators as normal compile, so `assets_embed.h` and `sourcebackup_embed.h` / `sourcebackup_embed.cpp` are refreshed there as well.
 - (JA) Build Check でも通常コンパイルと同じ事前生成処理を実行するようにし、`assets_embed.h` と `sourcebackup_embed.h` / `sourcebackup_embed.cpp` も更新されるようにしました。
 
