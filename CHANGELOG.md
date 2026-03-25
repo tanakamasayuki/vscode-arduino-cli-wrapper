@@ -1,6 +1,12 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Added Source Backup support: the Arduino CLI tree now includes a `Source Backup` action that creates `.sourcebackupconfig`, and compile runs auto-generate `sourcebackup_embed.h` / `sourcebackup_embed.cpp` when that config exists.
+- (JA) Source Backup を追加し、Arduino CLI ツリーから `Source Backup` で `.sourcebackupconfig` を作成できるようにしました。さらに設定ファイルが存在する場合はコンパイル時に `sourcebackup_embed.h` / `sourcebackup_embed.cpp` を自動生成します。
+- (EN) Source Backup stores sketch files as a ZIP archive inside a single retained blob, emits manifest-style summary comments at the top of `sourcebackup_embed.cpp`, keeps generated files stable by default (`include_generated_at = false` and write-only-on-change), and includes `.sourcebackupconfig` itself in the backup set.
+- (JA) Source Backup はスケッチ一式を単一 blob 内の ZIP として保持し、`sourcebackup_embed.cpp` の先頭に manifest 相当の要約コメントを出力するようにしました。既定では `include_generated_at = false` と内容差分がある場合のみ再書き込みすることで生成物の差分を安定化し、`.sourcebackupconfig` 自体もバックアップ対象へ含めます。
+- (EN) Added restore-oriented helper APIs including `printRestoreUrl()` and `writeArchiveBase64WithInfoTo()`, which point users at the published Source Backup restore page.
+- (JA) 公開済みの Source Backup 復元ページへ案内できるよう、`printRestoreUrl()` と `writeArchiveBase64WithInfoTo()` など復元向けヘルパー API を追加しました。
 
 ## 1.8.7
 - (EN) Status bar items now appear only when the workspace contains at least one `.ino` file.
