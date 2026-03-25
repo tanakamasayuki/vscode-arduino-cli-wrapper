@@ -280,6 +280,7 @@ The trade-off is size: every embedded byte becomes part of the sketch binary. La
 - Keep helper functions separate from the retained blob so unused helpers can still be removed by the linker.
 - Record only context that the extension already knows at generation time (for example profile, FQBN, port, baud, timestamps, file hashes); it does not launch extra `arduino-cli` commands just to enrich the manifest.
 - Default to a broad include set and let users trim it through exclude rules when firmware size becomes a concern.
+- Markdown documents (`*.md`) are not included by default because they usually do not affect firmware reproducibility; add them explicitly to `include.patterns` when you want project notes or READMEs preserved in the backup.
 
 The generated API looks like this:
 
