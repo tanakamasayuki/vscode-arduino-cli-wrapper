@@ -338,7 +338,7 @@ source_name = sourcebackup_embed.cpp
 prefix = sourcebackup
 
 [include]
-patterns = *.ino, *.pde, *.c, *.cc, *.cpp, *.cxx, *.h, *.hh, *.hpp, *.hxx, *.ipp, *.tpp, *.S, *.asm, sketch.yaml, arduino-cli.yaml, .vscode/extensions.json, .vscode/settings.json, data/**, assets/**, assets_*/**
+patterns = *.ino, *.pde, *.c, *.cc, *.cpp, *.cxx, *.h, *.hh, *.hpp, *.hxx, *.ipp, *.tpp, *.S, *.asm, sketch.yaml, arduino-cli.yaml, .sourcebackupconfig, .vscode/extensions.json, .vscode/settings.json, data/**, assets/**, assets_*/**
 
 [exclude]
 patterns = .git/**, .github/**, .vscode/launch.json, .vscode/tasks.json, build/**, .build/**, dist/**, .sourcebackup/**, sourcebackup_embed.h, sourcebackup_embed.cpp, *_embed.h, *.bin, *.hex, *.elf, *.map, *.o, *.a, *.so, *.d, *.tmp, *.log, .DS_Store, Thumbs.db
@@ -359,7 +359,7 @@ include_profile = true
 include_fqbn = true
 include_port = true
 include_baud = true
-include_generated_at = true
+include_generated_at = false
 hash = sha256
 
 [helpers]

@@ -8090,7 +8090,7 @@ function getDefaultSourceBackupConfigText() {
     'prefix = sourcebackup',
     '',
     '[include]',
-    'patterns = *.ino, *.pde, *.c, *.cc, *.cpp, *.cxx, *.h, *.hh, *.hpp, *.hxx, *.ipp, *.tpp, *.S, *.asm, sketch.yaml, arduino-cli.yaml, .vscode/extensions.json, .vscode/settings.json, data/**, assets/**, assets_*/**',
+    'patterns = *.ino, *.pde, *.c, *.cc, *.cpp, *.cxx, *.h, *.hh, *.hpp, *.hxx, *.ipp, *.tpp, *.S, *.asm, sketch.yaml, arduino-cli.yaml, .sourcebackupconfig, .vscode/extensions.json, .vscode/settings.json, data/**, assets/**, assets_*/**',
     '',
     '[exclude]',
     'patterns = .git/**, .github/**, .vscode/launch.json, .vscode/tasks.json, build/**, .build/**, dist/**, .sourcebackup/**, sourcebackup_embed.h, sourcebackup_embed.cpp, *_embed.h, *.bin, *.hex, *.elf, *.map, *.o, *.a, *.so, *.d, *.tmp, *.log, .DS_Store, Thumbs.db',
@@ -8111,7 +8111,7 @@ function getDefaultSourceBackupConfigText() {
     'include_fqbn = true',
     'include_port = true',
     'include_baud = true',
-    'include_generated_at = true',
+    'include_generated_at = false',
     'hash = sha256',
     '',
     '[helpers]',
@@ -8150,13 +8150,14 @@ async function generateSourceBackupForSketch(sketchDir, options = {}) {
   try {
     const config = await loadSourceBackupConfig(vscode.Uri.file(sketchDir));
     const files = await collectSourceBackupEntries(vscode.Uri.file(sketchDir), config);
-    const archive = await buildSourceBackupZip(files);
+    const archiveRoot = await getSourceBackupArchiveRootName(sketchDir);
+    const archive = await buildSourceBackupZip(files, archiveRoot);
     const manifest = await buildSourceBackupManifest(sketchDir, config, files, { profileName, fqbn });
     const blob = buildSourceBackupBlob(manifest, archive, config);
     const outputInfo = resolveSourceBackupOutputInfo(sketchDir, config);
     await ensureDir(vscode.Uri.file(outputInfo.outputDir));
-    await writeTextFile(vscode.Uri.file(outputInfo.headerPath), buildSourceBackupHeaderContent());
-    await writeTextFile(vscode.Uri.file(outputInfo.sourcePath), buildSourceBackupSourceContent(blob, config, manifest));
+    await writeTextFileIfChanged(vscode.Uri.file(outputInfo.headerPath), buildSourceBackupHeaderContent());
+    await writeTextFileIfChanged(vscode.Uri.file(outputInfo.sourcePath), buildSourceBackupSourceContent(blob, config, manifest));
     if (!silent) {
       vscode.window.showInformationMessage(t('sourceBackupDone', { source: outputInfo.sourcePath, count: files.length }));
     }
@@ -8166,6 +8167,16 @@ async function generateSourceBackupForSketch(sketchDir, options = {}) {
     else throw error;
     return { status: 'error' };
   }
+}
+
+async function getSourceBackupArchiveRootName(sketchDir) {
+  const primaryIno = await getPrimaryInoUri(sketchDir);
+  if (primaryIno && primaryIno.fsPath) {
+    const base = path.basename(primaryIno.fsPath, path.extname(primaryIno.fsPath)).trim();
+    if (base) return base;
+  }
+  const fallback = path.basename(sketchDir || '').trim();
+  return fallback || 'sketch';
 }
 
 async function loadSourceBackupConfig(sketchUri) {
@@ -8200,7 +8211,7 @@ function parseSourceBackupConfig(text) {
     include: {
       patterns: parseIniPatternList(includeSection.patterns || [
         '*.ino', '*.pde', '*.c', '*.cc', '*.cpp', '*.cxx', '*.h', '*.hh', '*.hpp', '*.hxx', '*.ipp', '*.tpp', '*.S', '*.asm',
-        'sketch.yaml', 'arduino-cli.yaml', '.vscode/extensions.json', '.vscode/settings.json', 'data/**', 'assets/**', 'assets_*/**'
+        'sketch.yaml', 'arduino-cli.yaml', '.sourcebackupconfig', '.vscode/extensions.json', '.vscode/settings.json', 'data/**', 'assets/**', 'assets_*/**'
       ].join(', '))
     },
     exclude: {
@@ -8225,7 +8236,7 @@ function parseSourceBackupConfig(text) {
       includeFqbn: parseIniBoolean(manifestSection.include_fqbn, true),
       includePort: parseIniBoolean(manifestSection.include_port, true),
       includeBaud: parseIniBoolean(manifestSection.include_baud, true),
-      includeGeneratedAt: parseIniBoolean(manifestSection.include_generated_at, true),
+      includeGeneratedAt: parseIniBoolean(manifestSection.include_generated_at, false),
       hash: String(manifestSection.hash ?? 'sha256').trim().toLowerCase() || 'sha256'
     },
     helpers: {
@@ -8383,12 +8394,15 @@ function buildSourceBackupBlob(manifestBuffer, archiveBuffer) {
   return Buffer.concat([header, payload, payloadCrc]);
 }
 
-async function buildSourceBackupZip(files) {
+async function buildSourceBackupZip(files, rootName = '') {
   const localParts = [];
   const centralParts = [];
+  const archiveRoot = sanitizeSourceBackupArchiveRoot(rootName);
   let offset = 0;
   for (const file of files) {
-    const nameBuf = Buffer.from(String(file.relative || '').replace(/\\/g, '/'), 'utf8');
+    const relativePath = String(file.relative || '').replace(/\\/g, '/').replace(/^[\/]+/, '');
+    const archivePath = archiveRoot ? `${archiveRoot}/${relativePath}` : relativePath;
+    const nameBuf = Buffer.from(archivePath, 'utf8');
     const raw = Buffer.from(file.data || Buffer.alloc(0));
     const compressed = await deflateRawBuffer(raw);
     const crc = crc32Buffer(raw);
@@ -8441,6 +8455,12 @@ async function buildSourceBackupZip(files) {
   eocd.writeUInt32LE(localDir.length, 16);
   eocd.writeUInt16LE(0, 20);
   return Buffer.concat([localDir, centralDir, eocd]);
+}
+
+function sanitizeSourceBackupArchiveRoot(name) {
+  const value = String(name || '').replace(/\\/g, '/').replace(/^[\/]+|[\/]+$/g, '').trim();
+  if (!value) return '';
+  return value.split('/').filter((part) => !!part && part !== '.' && part !== '..').join('/');
 }
 
 function buildSourceBackupHeaderContent() {
@@ -8507,8 +8527,7 @@ function buildSourceBackupSourceContent(blob, config, manifestBuffer) {
     for (const file of files) {
       const filePath = String(file?.path || '');
       const fileSize = Number(file?.size || 0);
-      const fileMtime = String(file?.mtime || '');
-      lines.push(`// - ${filePath} (${fileSize} bytes${fileMtime ? `, ${fileMtime}` : ''})`);
+      lines.push(`// - ${filePath} (${fileSize} bytes)`);
     }
   }
   lines.push(`#include "${(config?.general?.headerName || 'sourcebackup_embed.h').trim() || 'sourcebackup_embed.h'}"`);
@@ -9744,6 +9763,18 @@ async function pathExists(uri) {
 async function writeTextFile(uri, text) {
   const enc = new TextEncoder();
   await vscode.workspace.fs.writeFile(uri, enc.encode(text));
+}
+
+async function writeTextFileIfChanged(uri, text) {
+  let current = null;
+  try {
+    current = await readTextFile(uri);
+  } catch {
+    current = null;
+  }
+  if (current === String(text)) return false;
+  await writeTextFile(uri, text);
+  return true;
 }
 
 /**
