@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.9.0
 - (EN) Dependency version checks now compare each platform's `platform_index_url` with the latest package URL and update it together with platform versions.
 - (JA) 依存関係バージョン確認で各プラットフォームの `platform_index_url` も最新の package URL と比較し、プラットフォームのバージョン更新時に合わせて更新するようにしました。
 
