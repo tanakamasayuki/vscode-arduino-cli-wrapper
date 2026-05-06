@@ -173,6 +173,7 @@
           <th id="platformColId">Platform</th>
           <th id="platformColCurrent">Current</th>
           <th id="platformColLatest">Latest</th>
+          <th id="platformColIndexUrl">Index URL</th>
           <th id="platformColStatus">Status</th>
           <th id="platformColAction">Action</th>
         </tr>
@@ -254,7 +255,7 @@
 
       btnUpdatePlatforms.addEventListener('click', () => {
         if (!state.report) return;
-        const rows = (state.report.platforms || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing'));
+        const rows = (state.report.platforms || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing' || r.indexUrlStatus === 'outdated' || r.indexUrlStatus === 'missing'));
         if (rows.length === 0) {
           setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
           return;
@@ -264,7 +265,8 @@
             sketchDir: r.sketchDir,
             profile: r.profile,
             platformId: r.platformId,
-            latestVersion: r.latestVersion
+            latestVersion: r.latestVersion,
+            latestIndexUrl: r.latestIndexUrl || r.packageUrl || ''
           }))
         });
       });
@@ -303,7 +305,7 @@
         if (rows.length === 0) {
           const tr = document.createElement('tr');
           const td = document.createElement('td');
-          td.colSpan = 7;
+          td.colSpan = 8;
           td.className = 'small';
           td.textContent = state.strings.versionCheckNoData || 'No data available.';
           tr.appendChild(td);
@@ -312,8 +314,8 @@
         }
         for (const row of rows) {
           const tr = document.createElement('tr');
-          tr.className = row.status || '';
-          const updatable = row.status === 'outdated' || row.status === 'missing';
+          tr.className = row.status === 'ok' && (row.indexUrlStatus === 'outdated' || row.indexUrlStatus === 'missing') ? row.indexUrlStatus : (row.status || '');
+          const updatable = row.status === 'outdated' || row.status === 'missing' || row.indexUrlStatus === 'outdated' || row.indexUrlStatus === 'missing';
 
           const sketch = document.createElement('td');
           sketch.textContent = row.sketchLabel || row.sketchDir || '';
@@ -344,6 +346,19 @@
           latest.textContent = row.latestVersion ? String(row.latestVersion) : '';
           tr.appendChild(latest);
 
+          const indexUrl = document.createElement('td');
+          const indexLabelKey = row.indexUrlStatus || 'unknown';
+          indexUrl.textContent = labels[indexLabelKey] || labels.unknown;
+          if (row.latestIndexUrl || row.packageUrl) {
+            const link = document.createElement('a');
+            link.href = row.latestIndexUrl || row.packageUrl;
+            link.textContent = ' ⤴';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            indexUrl.appendChild(link);
+          }
+          tr.appendChild(indexUrl);
+
           const statusTd = document.createElement('td');
           const labelKey = row.status || 'unknown';
           statusTd.textContent = labels[labelKey] || labels.unknown;
@@ -361,7 +376,8 @@
                 sketchDir: row.sketchDir,
                 profile: row.profile,
                 platformId: row.platformId,
-                latestVersion: row.latestVersion
+                latestVersion: row.latestVersion,
+                latestIndexUrl: row.latestIndexUrl || row.packageUrl || ''
               }]
             });
           });
@@ -470,7 +486,7 @@
         renderPlatforms(report);
         renderLibraries(report);
         renderWarnings(report);
-        const hasPlatformUpdates = (report.platforms || []).some(r => r && (r.status === 'outdated' || r.status === 'missing'));
+        const hasPlatformUpdates = (report.platforms || []).some(r => r && (r.status === 'outdated' || r.status === 'missing' || r.indexUrlStatus === 'outdated' || r.indexUrlStatus === 'missing'));
         const hasLibraryUpdates = (report.libraries || []).some(r => r && (r.status === 'outdated' || r.status === 'missing'));
         btnUpdatePlatforms.disabled = !hasPlatformUpdates;
         btnUpdateLibraries.disabled = !hasLibraryUpdates;
@@ -496,6 +512,7 @@
               document.getElementById('platformColId').textContent = state.strings.versionCheckColPlatform || 'Platform';
               document.getElementById('platformColCurrent').textContent = state.strings.versionCheckColCurrent || 'Current';
               document.getElementById('platformColLatest').textContent = state.strings.versionCheckColLatest || 'Latest';
+              document.getElementById('platformColIndexUrl').textContent = state.strings.versionCheckColIndexUrl || 'Index URL';
               document.getElementById('platformColStatus').textContent = state.strings.versionCheckColStatus || 'Status';
               document.getElementById('platformColAction').textContent = state.strings.versionCheckColAction || 'Action';
               document.getElementById('librariesHeading').textContent = state.strings.versionCheckLibrariesHeading || 'Libraries';

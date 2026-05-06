@@ -470,6 +470,7 @@ const MSG = {
     versionCheckColLibrary: 'Library',
     versionCheckColCurrent: 'Current',
     versionCheckColLatest: 'Latest',
+    versionCheckColIndexUrl: 'Index URL',
     versionCheckColStatus: 'Status',
     versionCheckColAction: 'Action',
     versionCheckStatusOk: 'Up to date',
@@ -1143,6 +1144,7 @@ const MSG = {
     versionCheckColLibrary: 'ライブラリー',
     versionCheckColCurrent: '現在',
     versionCheckColLatest: '最新',
+    versionCheckColIndexUrl: 'インデックス URL',
     versionCheckColStatus: '状態',
     versionCheckColAction: '操作',
     versionCheckStatusOk: '最新です',
@@ -11639,6 +11641,7 @@ function buildVersionCheckStrings() {
     'versionCheckColLibrary',
     'versionCheckColCurrent',
     'versionCheckColLatest',
+    'versionCheckColIndexUrl',
     'versionCheckColStatus',
     'versionCheckColAction',
     'versionCheckStatusOk',
@@ -11929,9 +11932,12 @@ async function buildVersionCheckReport(sketches, metadata) {
       }
       for (const plat of platformEntries) {
         const currentRaw = typeof plat.version === 'string' ? plat.version.trim() : '';
+        const currentIndexUrl = typeof plat.indexUrl === 'string' ? plat.indexUrl.trim() : '';
         const latestEntry = platformMap.get(plat.id) || null;
         const latestRaw = latestEntry && typeof latestEntry.version === 'string' ? latestEntry.version : '';
+        const latestIndexUrl = latestEntry && typeof latestEntry.packageUrl === 'string' ? latestEntry.packageUrl.trim() : '';
         const status = evaluateVersionStatus(currentRaw, latestRaw);
+        const indexUrlStatus = evaluateIndexUrlStatus(currentIndexUrl, latestIndexUrl);
         platformRows.push({
           sketchDir,
           sketchLabel,
@@ -11940,8 +11946,11 @@ async function buildVersionCheckReport(sketches, metadata) {
           platformId: plat.id,
           currentVersion: currentRaw,
           latestVersion: latestRaw,
+          currentIndexUrl,
+          latestIndexUrl,
+          indexUrlStatus,
           status,
-          packageUrl: latestEntry && typeof latestEntry.packageUrl === 'string' ? latestEntry.packageUrl : '',
+          packageUrl: latestIndexUrl,
           platformName: latestEntry && typeof latestEntry.name === 'string' ? latestEntry.name : ''
         });
       }
@@ -12001,6 +12010,7 @@ async function buildVersionCheckReport(sketches, metadata) {
     profiles: profileCount,
     platformTotal: totalPlatforms,
     platformOutdated: platformRows.filter(r => r.status === 'outdated').length,
+    platformIndexUrlOutdated: platformRows.filter(r => r.indexUrlStatus === 'outdated').length,
     platformMissing: platformRows.filter(r => r.status === 'missing').length,
     platformUnknown: platformRows.filter(r => r.status === 'unknown').length,
     platformAhead: platformRows.filter(r => r.status === 'ahead').length,
@@ -12036,6 +12046,19 @@ function evaluateVersionStatus(currentRaw, latestRaw) {
   return 'ok';
 }
 
+function evaluateIndexUrlStatus(currentRaw, latestRaw) {
+  const current = String(currentRaw || '').trim();
+  const latest = String(latestRaw || '').trim();
+  if (!current && !latest) return 'unknown';
+  if (!latest) return 'unknown';
+  if (!current) return 'missing';
+  return normalizeIndexUrl(current) === normalizeIndexUrl(latest) ? 'ok' : 'outdated';
+}
+
+function normalizeIndexUrl(url) {
+  return String(url || '').trim().replace(/\/+$/, '');
+}
+
 async function applyPlatformVersionUpdates(entries) {
   const result = { applied: 0, errors: [] };
   if (!Array.isArray(entries) || entries.length === 0) return result;
@@ -12047,9 +12070,10 @@ async function applyPlatformVersionUpdates(entries) {
     const profile = typeof entry.profile === 'string' ? entry.profile : '';
     const platformId = typeof entry.platformId === 'string' ? entry.platformId : '';
     const newVersion = typeof entry.latestVersion === 'string' ? entry.latestVersion : '';
-    if (!sketchDir || !profile || !platformId || !newVersion) continue;
+    const newIndexUrl = typeof entry.latestIndexUrl === 'string' ? entry.latestIndexUrl : '';
+    if (!sketchDir || !profile || !platformId || (!newVersion && !newIndexUrl)) continue;
     const key = `${path.normalize(sketchDir)}|${profile}|${platformId}`;
-    dedup.set(key, { sketchDir, profile, platformId, newVersion });
+    dedup.set(key, { sketchDir, profile, platformId, newVersion, newIndexUrl });
   }
 
   const grouped = new Map();
@@ -12073,7 +12097,8 @@ async function applyPlatformVersionUpdates(entries) {
     let mutated = text;
     let changed = 0;
     for (const upd of info.updates) {
-      const next = patchPlatformVersionInYamlText(mutated, upd.profile, upd.platformId, upd.newVersion);
+      let next = patchPlatformVersionInYamlText(mutated, upd.profile, upd.platformId, upd.newVersion);
+      next = patchPlatformIndexUrlInYamlText(next, upd.profile, upd.platformId, upd.newIndexUrl);
       if (next !== mutated) {
         mutated = next;
         changed += 1;
@@ -12195,6 +12220,40 @@ function patchPlatformVersionInYamlText(yamlText, profileName, platformId, newVe
     const after = lines.slice(targetStart + 1).join('\n');
     const block = ['    platforms:', desired].join('\n');
     return [before, block, after].join('\n');
+  } catch (_) {
+    return yamlText;
+  }
+}
+
+function patchPlatformIndexUrlInYamlText(yamlText, profileName, platformId, newIndexUrl) {
+  try {
+    const id = String(platformId || '').trim();
+    const url = String(newIndexUrl || '').trim();
+    if (!id || !url) return yamlText;
+    const lines = String(yamlText || '').split(/\r?\n/);
+    const bounds = findProfileBounds(lines, profileName);
+    if (!bounds) return yamlText;
+    const { targetStart, targetEnd } = bounds;
+    for (let i = targetStart + 1; i < targetEnd; i++) {
+      const line = lines[i];
+      const m = line.match(/^(\s*)(?:-\s*)?platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\([^)]*\))?\s*$/);
+      if (!m || m[2] !== id) continue;
+      const childIndent = `${m[1]}  `;
+      const desired = `${childIndent}platform_index_url: ${url}`;
+      for (let j = i + 1; j < targetEnd; j++) {
+        const next = lines[j];
+        if (/^\s{6}-\s*platform\s*:/.test(next) || /^\s{4}platform\s*:/.test(next)) break;
+        if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(next) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(next) || /^\S/.test(next) || /^\s*default_profile\s*:\s*/.test(next)) break;
+        if (next.trim().startsWith('platform_index_url')) {
+          if (next === desired) return yamlText;
+          lines[j] = desired;
+          return lines.join('\n');
+        }
+      }
+      lines.splice(i + 1, 0, desired);
+      return lines.join('\n');
+    }
+    return yamlText;
   } catch (_) {
     return yamlText;
   }
@@ -12326,7 +12385,11 @@ function extractProfilePlatformsFromYaml(yamlText, profileName) {
           const line = lines[j];
           const m = line.match(/^\s{6}-\s*platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
           if (m) {
-            result.push({ id: m[1], version: m[2] ? m[2].trim() : '' });
+            result.push({
+              id: m[1],
+              version: m[2] ? m[2].trim() : '',
+              indexUrl: extractPlatformIndexUrlAfterLine(lines, j + 1, targetEnd)
+            });
             continue;
           }
           if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) {
@@ -12339,13 +12402,35 @@ function extractProfilePlatformsFromYaml(yamlText, profileName) {
     for (let i = targetStart + 1; i < targetEnd; i++) {
       const m = lines[i].match(/^\s{4}platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
       if (m) {
-        result.push({ id: m[1], version: m[2] ? m[2].trim() : '' });
+        result.push({
+          id: m[1],
+          version: m[2] ? m[2].trim() : '',
+          indexUrl: extractPlatformIndexUrlAfterLine(lines, i + 1, targetEnd)
+        });
       }
     }
     return result;
   } catch (_) {
     return result;
   }
+}
+
+function extractPlatformIndexUrlAfterLine(lines, start, end) {
+  for (let i = start; i < end; i++) {
+    const line = lines[i] || '';
+    if (/^\s{6}-\s*platform\s*:/.test(line) || /^\s{4}platform\s*:/.test(line)) break;
+    if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) break;
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('platform_index_url')) continue;
+    const idx = trimmed.indexOf(':');
+    if (idx < 0) continue;
+    let value = trimmed.slice(idx + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value;
+  }
+  return '';
 }
 
 function extractProfileLibrariesFromYaml(yamlText, profileName) {

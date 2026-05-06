@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Dependency version checks now compare each platform's `platform_index_url` with the latest package URL and update it together with platform versions.
+- (JA) 依存関係バージョン確認で各プラットフォームの `platform_index_url` も最新の package URL と比較し、プラットフォームのバージョン更新時に合わせて更新するようにしました。
 
 ## 1.8.9
 - (EN) Build Check now runs the same pre-build generators as normal compile, so `assets_embed.h` and `sourcebackup_embed.h` / `sourcebackup_embed.cpp` are refreshed there as well.
