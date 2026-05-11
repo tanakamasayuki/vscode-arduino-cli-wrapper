@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.9.1
 - (EN) Serial Monitor now launches the integrated terminal with the selected sketch directory as `cwd` (preferring the invoked sketch, then the last selected sketch), so monitor runs follow sketch context instead of always using the workspace root.
 - (JA) シリアルモニター起動時の統合ターミナル `cwd` を選択中のスケッチフォルダー（呼び出し元のスケッチを優先し、無ければ最後に選択したスケッチ）に合わせるようにし、常にワークスペースルートで実行される挙動を改善しました。
 
