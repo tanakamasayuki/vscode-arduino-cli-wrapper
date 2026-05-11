@@ -9366,6 +9366,8 @@ async function commandConfigureWarnings() {
 async function commandMonitor(options = {}) {
   const sketchDir = options && typeof options === 'object' ? (options.sketchDir || '') : '';
   const profile = options && typeof options === 'object' ? (options.profile || '') : '';
+  const selected = getSelectedProfileState();
+  const monitorCwd = sketchDir || selected.sketchDir || '';
   if (sketchDir && profile) {
     try { await rememberSelectedProfile(sketchDir, profile); } catch (_) { /* ignore profile sync errors */ }
   }
@@ -9403,7 +9405,9 @@ async function commandMonitor(options = {}) {
   }
 
   // Run in integrated terminal for interactive monitoring
-  monitorTerminal = vscode.window.createTerminal({ name: `${OUTPUT_NAME} Monitor` });
+  const terminalOptions = { name: `${OUTPUT_NAME} Monitor` };
+  if (monitorCwd) terminalOptions.cwd = monitorCwd;
+  monitorTerminal = vscode.window.createTerminal(terminalOptions);
   monitorTerminal.show(true);
   const exeForTerminal = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : `${quoteArg(exe)}`;
   const cmd = `${exeForTerminal} ${args.map(quoteArg).join(' ')}`;
