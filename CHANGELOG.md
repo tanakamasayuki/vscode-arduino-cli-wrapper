@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.9.2
 - (EN) Build Check now opens a dedicated selector panel before compiling, letting you choose which sketches to build and how to filter profiles — all without leaving the editor.
 - (JA) ビルドチェック実行前に専用の選択パネルを表示するようにし、ビルド対象スケッチとプロファイル絞り込みをエディター内で設定できるようにしました。
 - (EN) The sketch selector shows all sketches in a table with checkboxes. A folder-name filter narrows visible rows, and "Select Filtered" checks only matching sketches (deselecting all others first if they were all already checked).
