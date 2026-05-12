@@ -4,3 +4,4 @@
 temp
 .vscode
 .arduino-cli-flags
+.*

@@ -1,6 +1,12 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Build Check now opens a dedicated selector panel before compiling, letting you choose which sketches to build and how to filter profiles — all without leaving the editor.
+- (JA) ビルドチェック実行前に専用の選択パネルを表示するようにし、ビルド対象スケッチとプロファイル絞り込みをエディター内で設定できるようにしました。
+- (EN) The sketch selector shows all sketches in a table with checkboxes. A folder-name filter narrows visible rows, and "Select Filtered" checks only matching sketches (deselecting all others first if they were all already checked).
+- (JA) スケッチ選択テーブルでチェックボックスによる複数選択が可能です。フォルダ名フィルタで行を絞り込み、「フィルタ済みを選択」ボタンで一致するスケッチのみにチェックを絞り込めます（表示中が全選択済みの場合は全解除してから選択）。
+- (EN) Profile filtering offers three modes: all profiles, default profile only, or direct multi-select from the list of all profile names collected across sketches.
+- (JA) プロファイル絞り込みは「全プロファイル」「デフォルトのみ」「プロファイルを選択」の3択で、「プロファイルを選択」では全スケッチから収集したプロファイル名をチェックボックスで直接選択できます。
 
 ## 1.9.1
 - (EN) Serial Monitor now launches the integrated terminal with the selected sketch directory as `cwd` (preferring the invoked sketch, then the last selected sketch), so monitor runs follow sketch context instead of always using the workspace root.

@@ -396,6 +396,35 @@ const MSG = {
     buildCheckParseError: '[build-check] Failed to parse JSON output for {sketch} ({profile}): {msg}',
     buildCheckCliError: '[build-check] Compile failed to run for {sketch} ({profile}): exit {code}',
     buildCheckSummary: '[build-check] Completed {total} compile(s): success {success}, failed {failed}, warnings {warnings}, errors {errors}.',
+    buildCheckPickSketchTitle: 'Build Check: Select Sketches',
+    buildCheckPickSketchPlaceholder: 'Select sketches to build. Type to filter visible items.',
+    buildCheckPickSketchBtnAll: 'Select All',
+    buildCheckPickSketchBtnNone: 'Clear All',
+    buildCheckPickSketchBtnFilter: 'Check Matching Folder…',
+    buildCheckPickSketchFilterPrompt: 'Enter folder name (partial match). Matching sketches will be selected.',
+    buildCheckPickSketchCancelled: '[build-check] Sketch selection cancelled.',
+    buildCheckPickProfileTitle: 'Build Check: Profile Filter',
+    buildCheckPickProfileAll: 'All profiles',
+    buildCheckPickProfileAllDesc: 'Build all profiles defined in each sketch.yaml',
+    buildCheckPickProfileDefault: 'Default profile only',
+    buildCheckPickProfileDefaultDesc: 'Build only the default_profile of each sketch.yaml',
+    buildCheckPickProfileMatch: 'Profile name match…',
+    buildCheckPickProfileMatchDesc: 'Build only profiles whose name contains a specified string',
+    buildCheckPickProfileMatchPrompt: 'Enter string to match profile names (partial match)',
+    buildCheckPickProfileSelect: 'Select profiles',
+    buildCheckPickProfileSelectDesc: 'Build only the checked profiles',
+    buildCheckPickProfileSelectAll: 'Select All',
+    buildCheckPickProfileSelectNone: 'Clear All',
+    buildCheckSelectorTitle: 'Build Check: Select Target',
+    buildCheckSelectorSketchSection: 'Sketches',
+    buildCheckSelectorSketch: 'Sketch',
+    buildCheckSelectorProfiles: 'Profiles',
+    buildCheckSelectorFilterPlaceholder: 'Filter by folder name…',
+    buildCheckSelectorFilterApply: 'Select Filtered',
+    buildCheckSelectorNoProfiles: '(no profiles)',
+    buildCheckSelectorSelectedCount: '{selected} / {total} selected',
+    buildCheckSelectorRun: 'Run Build Check',
+    buildCheckSelectorCancel: 'Cancel',
     exportAllStart: '[export-all] Exporting binaries for all sketch.yaml profiles...',
     exportAllNoWorkspace: '[export-all] No workspace folder is open. Open a folder and re-run the command.',
     exportAllNoSketchYaml: '[export-all] No sketch.yaml files were found.',
@@ -1070,6 +1099,35 @@ const MSG = {
     buildCheckParseError: '[build-check] {sketch} ({profile}) の JSON 出力解析に失敗しました: {msg}',
     buildCheckCliError: '[build-check] {sketch} ({profile}) のコンパイル実行に失敗しました (終了コード {code})。',
     buildCheckSummary: '[build-check] 合計 {total} 件 (成功 {success} / 失敗 {failed}) 警告 {warnings} 件 / エラー {errors} 件。',
+    buildCheckPickSketchTitle: 'ビルドチェック: スケッチ選択',
+    buildCheckPickSketchPlaceholder: 'ビルドするスケッチを選択（複数可）。文字入力でフィルタ表示。',
+    buildCheckPickSketchBtnAll: 'すべて選択',
+    buildCheckPickSketchBtnNone: 'すべて解除',
+    buildCheckPickSketchBtnFilter: 'フォルダ名でマッチを選択…',
+    buildCheckPickSketchFilterPrompt: 'フォルダ名を入力してください（部分一致）。マッチするスケッチが選択されます。',
+    buildCheckPickSketchCancelled: '[build-check] スケッチ選択がキャンセルされました。',
+    buildCheckPickProfileTitle: 'ビルドチェック: プロファイル絞り込み',
+    buildCheckPickProfileAll: '全プロファイル',
+    buildCheckPickProfileAllDesc: '各 sketch.yaml に定義されたすべてのプロファイルをビルドします',
+    buildCheckPickProfileDefault: 'デフォルトプロファイルのみ',
+    buildCheckPickProfileDefaultDesc: '各 sketch.yaml の default_profile のみをビルドします',
+    buildCheckPickProfileMatch: '文字列マッチのみ…',
+    buildCheckPickProfileMatchDesc: '指定した文字列を含むプロファイル名のみビルドします',
+    buildCheckPickProfileMatchPrompt: 'プロファイル名の絞り込み文字列を入力（部分一致）',
+    buildCheckPickProfileSelect: 'プロファイルを選択',
+    buildCheckPickProfileSelectDesc: 'チェックしたプロファイルのみビルドします',
+    buildCheckPickProfileSelectAll: 'すべて選択',
+    buildCheckPickProfileSelectNone: 'すべて解除',
+    buildCheckSelectorTitle: 'ビルドチェック: 対象選択',
+    buildCheckSelectorSketchSection: 'スケッチ',
+    buildCheckSelectorSketch: 'スケッチ',
+    buildCheckSelectorProfiles: 'プロファイル',
+    buildCheckSelectorFilterPlaceholder: 'フォルダ名でフィルタ…',
+    buildCheckSelectorFilterApply: 'フィルタ済みを選択',
+    buildCheckSelectorNoProfiles: '(プロファイルなし)',
+    buildCheckSelectorSelectedCount: '{selected} / {total} 件選択中',
+    buildCheckSelectorRun: 'ビルドチェック実行',
+    buildCheckSelectorCancel: 'キャンセル',
     exportAllStart: '[export-all] sketch.yaml の全プロファイルでバイナリを生成します…',
     exportAllNoWorkspace: '[export-all] ワークスペースフォルダーが開かれていません。フォルダーを開いてから再実行してください。',
     exportAllNoSketchYaml: '[export-all] sketch.yaml が見つかりませんでした。',
@@ -7330,12 +7388,36 @@ async function commandBuildCheck() {
     return a.sketchDir.localeCompare(b.sketchDir, undefined, { sensitivity: 'base' });
   });
 
+  // Pre-read yamlInfo for all sketches to populate the selector UI
+  const sketchInfos = [];
+  for (const entry of sketches) {
+    const yamlInfo = await readSketchYamlInfo(entry.sketchDir);
+    const profiles = yamlInfo && Array.isArray(yamlInfo.profiles)
+      ? Array.from(new Set(yamlInfo.profiles.filter(p => typeof p === 'string' && p.trim().length > 0)))
+      : [];
+    sketchInfos.push({
+      sketchDir: entry.sketchDir,
+      label: formatBuildCheckSketchLabel(entry.sketchDir, entry.uri, entry.folder),
+      profiles,
+      defaultProfile: (yamlInfo && yamlInfo.defaultProfile) || null,
+      _entry: entry,
+    });
+  }
+
+  const selection = await openBuildCheckSelector(sketchInfos);
+  if (!selection) return;
+
+  const selectedDirSet = new Set(selection.selectedDirs);
+  const selectedSketches = sketches.filter(e => selectedDirSet.has(e.sketchDir));
+  if (selectedSketches.length === 0) return;
+  const profileMode = selection.profileMode;
+
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const totals = { total: 0, success: 0, failed: 0, warnings: 0, errors: 0 };
   const report = { totals, results: [], generatedAt: '' };
 
-  for (const entry of sketches) {
+  for (const entry of selectedSketches) {
     const { sketchDir, uri, folder } = entry;
     const sketchLabel = formatBuildCheckSketchLabel(sketchDir, uri, folder);
 
@@ -7353,6 +7435,14 @@ async function commandBuildCheck() {
     if (yamlInfo && yamlInfo.defaultProfile && uniqueProfiles.includes(yamlInfo.defaultProfile)) {
       profiles = uniqueProfiles.filter(p => p !== yamlInfo.defaultProfile);
       profiles.push(yamlInfo.defaultProfile);
+    }
+
+    if (profileMode.mode === 'default') {
+      const def = yamlInfo && yamlInfo.defaultProfile;
+      profiles = def && profiles.includes(def) ? [def] : profiles.slice(0, 1);
+    } else if (profileMode.mode === 'select') {
+      const selectedSet = new Set(Array.isArray(profileMode.profiles) ? profileMode.profiles : []);
+      profiles = profiles.filter(p => selectedSet.has(p));
     }
 
     if (!profiles || profiles.length === 0) {
@@ -11624,6 +11714,96 @@ function buildBuildReportStrings() {
     result[key] = t(key);
   }
   return result;
+}
+
+function buildBuildCheckSelectorStrings() {
+  const keys = [
+    'buildCheckSelectorTitle',
+    'buildCheckSelectorSketchSection',
+    'buildCheckSelectorSketch',
+    'buildCheckSelectorProfiles',
+    'buildCheckSelectorFilterPlaceholder',
+    'buildCheckSelectorFilterApply',
+    'buildCheckSelectorNoProfiles',
+    'buildCheckSelectorSelectedCount',
+    'buildCheckSelectorRun',
+    'buildCheckSelectorCancel',
+    'buildCheckPickSketchBtnAll',
+    'buildCheckPickSketchBtnNone',
+    'buildCheckPickProfileTitle',
+    'buildCheckPickProfileAll',
+    'buildCheckPickProfileAllDesc',
+    'buildCheckPickProfileDefault',
+    'buildCheckPickProfileDefaultDesc',
+    'buildCheckPickProfileSelect',
+    'buildCheckPickProfileSelectDesc',
+    'buildCheckPickProfileSelectAll',
+    'buildCheckPickProfileSelectNone',
+  ];
+  const result = {};
+  for (const key of keys) result[key] = t(key);
+  return result;
+}
+
+async function openBuildCheckSelector(sketchInfos) {
+  return new Promise(async (resolve) => {
+    let resolved = false;
+    const done = (value) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(value);
+    };
+
+    let panel;
+    try {
+      panel = vscode.window.createWebviewPanel(
+        'arduinoBuildCheckSelector',
+        t('buildCheckSelectorTitle'),
+        vscode.ViewColumn.Active,
+        { enableScripts: true, retainContextWhenHidden: true }
+      );
+    } catch (err) {
+      showError(err);
+      done(null);
+      return;
+    }
+
+    panel.onDidDispose(() => done(null));
+
+    const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'build-check-selector.html');
+    try {
+      panel.webview.html = await readTextFile(htmlUri);
+    } catch (err) {
+      showError(err);
+      panel.dispose();
+      return;
+    }
+
+    const payload = {
+      locale: _isJa ? 'ja' : 'en',
+      strings: buildBuildCheckSelectorStrings(),
+      sketches: sketchInfos.map(info => ({
+        sketchDir: info.sketchDir,
+        label: info.label,
+        profiles: info.profiles,
+        defaultProfile: info.defaultProfile,
+      })),
+    };
+
+    panel.webview.onDidReceiveMessage((msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'ready') {
+        panel.webview.postMessage({ type: 'init', payload });
+      } else if (msg.type === 'run') {
+        const sel = msg.payload || {};
+        done({ selectedDirs: sel.selectedDirs || [], profileMode: sel.profileMode || { mode: 'all', profiles: [] } });
+        panel.dispose();
+      } else if (msg.type === 'cancel') {
+        done(null);
+        panel.dispose();
+      }
+    });
+  });
 }
 
 function buildVersionCheckStrings() {

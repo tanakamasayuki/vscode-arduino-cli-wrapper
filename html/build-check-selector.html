@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Build Check Selector</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 16px 20px 24px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 1.3rem;
+    }
+
+    section {
+      border: 1px solid rgba(128, 128, 128, 0.3);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.6;
+      margin: 0 0 10px;
+    }
+
+    /* Profile radios */
+    .profile-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .profile-option {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .profile-option input[type="radio"] {
+      margin: 0;
+      cursor: pointer;
+      flex-shrink: 0;
+      position: relative;
+      top: 1px;
+    }
+
+    .profile-desc {
+      font-size: 0.82rem;
+      opacity: 0.65;
+    }
+
+    /* Profile select list */
+    .profile-select-area {
+      display: none;
+      margin-top: 8px;
+      padding-left: 20px;
+    }
+
+    .profile-select-area.visible {
+      display: block;
+    }
+
+    .profile-select-controls {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .profile-checkboxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 20px;
+    }
+
+    .profile-checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .profile-checkbox-item input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .profile-none-msg {
+      font-size: 0.85rem;
+      opacity: 0.5;
+      font-style: italic;
+    }
+
+    /* Sketch controls */
+    .sketch-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .sketch-controls .sep {
+      width: 1px;
+      height: 18px;
+      background: rgba(128, 128, 128, 0.35);
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+    }
+
+    #sketchFilter {
+      padding: 4px 8px;
+      border: 1px solid rgba(128, 128, 128, 0.4);
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      font-size: 0.85rem;
+      width: 180px;
+    }
+
+    .selected-count {
+      font-size: 0.82rem;
+      opacity: 0.65;
+      white-space: nowrap;
+    }
+
+    /* Buttons */
+    button {
+      padding: 3px 10px;
+      border: 1px solid rgba(128, 128, 128, 0.4);
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      font-size: 0.84rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button:hover {
+      background: rgba(128, 128, 128, 0.15);
+    }
+
+    button.icon-btn {
+      padding: 3px 7px;
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }
+
+    button.icon-btn:hover {
+      opacity: 1;
+    }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    th,
+    td {
+      border: 1px solid rgba(128, 128, 128, 0.25);
+      padding: 5px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: rgba(128, 128, 128, 0.1);
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+
+    th.col-check {
+      width: 36px;
+      text-align: center;
+    }
+
+    td.col-check {
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    td input[type="checkbox"],
+    th input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+    }
+
+    td.col-label {
+      word-break: break-all;
+    }
+
+    td.col-profiles {
+      width: 38%;
+    }
+
+    .profile-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+    }
+
+    .profile-tag {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 3px;
+      background: rgba(128, 128, 128, 0.15);
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+
+    .profile-tag.is-default {
+      background: rgba(0, 122, 204, 0.18);
+      font-weight: 600;
+    }
+
+    .no-profiles {
+      font-size: 0.82rem;
+      opacity: 0.45;
+      font-style: italic;
+    }
+
+    tr.row-hidden {
+      display: none;
+    }
+
+    tbody tr:hover td {
+      background: rgba(128, 128, 128, 0.07);
+    }
+
+    /* Footer */
+    .footer {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .footer button.primary {
+      padding: 6px 18px;
+      font-size: 0.95rem;
+      background: var(--vscode-button-background, #007acc);
+      color: var(--vscode-button-foreground, #fff);
+      border-color: transparent;
+    }
+
+    .footer button.primary:hover {
+      opacity: 0.85;
+    }
+  </style>
+</head>
+
+<body>
+  <h1 id="pageTitle">Build Check: Select Target</h1>
+
+  <section>
+    <div class="section-title" id="profileSectionTitle">Profile Filter</div>
+    <div class="profile-options">
+      <label class="profile-option">
+        <input type="radio" name="profileMode" value="all" checked />
+        <span id="profileAllLabel">All profiles</span>
+        <span class="profile-desc" id="profileAllDesc"></span>
+      </label>
+      <label class="profile-option">
+        <input type="radio" name="profileMode" value="default" />
+        <span id="profileDefaultLabel">Default profile only</span>
+        <span class="profile-desc" id="profileDefaultDesc"></span>
+      </label>
+      <label class="profile-option">
+        <input type="radio" name="profileMode" value="select" />
+        <span id="profileSelectLabel">Select profiles</span>
+        <span class="profile-desc" id="profileSelectDesc"></span>
+      </label>
+    </div>
+    <div class="profile-select-area" id="profileSelectArea">
+      <div class="profile-select-controls">
+        <button id="btnProfileSelectAll">Select All</button>
+        <button id="btnProfileSelectNone">Clear All</button>
+      </div>
+      <div id="profileCheckboxes" class="profile-checkboxes"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title" id="sketchSectionTitle">Sketches</div>
+    <div class="sketch-controls">
+      <button id="btnSelectAll">Select All</button>
+      <button id="btnClearAll">Clear All</button>
+      <div class="sep"></div>
+      <span class="selected-count" id="selectedCount"></span>
+      <div class="filter-group">
+        <input type="text" id="sketchFilter" placeholder="Filter by folder name…" />
+        <button id="btnFilterSelect">Select Filtered</button>
+        <button class="icon-btn" id="btnFilterClear" title="Clear filter">✕</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-check">
+            <input type="checkbox" id="headerCheckbox" />
+          </th>
+          <th id="colSketch">Sketch</th>
+          <th id="colProfiles">Profiles</th>
+        </tr>
+      </thead>
+      <tbody id="sketchTableBody"></tbody>
+    </table>
+  </section>
+
+  <div class="footer">
+    <button id="btnCancel">Cancel</button>
+    <button class="primary" id="btnRun">Run Build Check</button>
+  </div>
+
+  <script>
+    (function () {
+      const vscode = acquireVsCodeApi();
+      let sketches = [];
+      let strings = {};
+
+      vscode.postMessage({ type: 'ready' });
+
+      window.addEventListener('message', (ev) => {
+        const msg = ev.data;
+        if (!msg) return;
+        if (msg.type === 'init') {
+          strings = msg.payload.strings || {};
+          sketches = msg.payload.sketches || [];
+          applyStrings();
+          initProfileCheckboxes();
+          renderTable();
+        }
+      });
+
+      function s(key, fallback) {
+        return strings[key] || fallback || key;
+      }
+
+      function applyStrings() {
+        document.getElementById('pageTitle').textContent = s('buildCheckSelectorTitle', 'Build Check: Select Target');
+        document.getElementById('profileSectionTitle').textContent = s('buildCheckPickProfileTitle', 'Profile Filter');
+        document.getElementById('profileAllLabel').textContent = s('buildCheckPickProfileAll', 'All profiles');
+        document.getElementById('profileAllDesc').textContent = s('buildCheckPickProfileAllDesc', '');
+        document.getElementById('profileDefaultLabel').textContent = s('buildCheckPickProfileDefault', 'Default profile only');
+        document.getElementById('profileDefaultDesc').textContent = s('buildCheckPickProfileDefaultDesc', '');
+        document.getElementById('profileSelectLabel').textContent = s('buildCheckPickProfileSelect', 'Select profiles');
+        document.getElementById('profileSelectDesc').textContent = s('buildCheckPickProfileSelectDesc', '');
+        document.getElementById('btnProfileSelectAll').textContent = s('buildCheckPickProfileSelectAll', 'Select All');
+        document.getElementById('btnProfileSelectNone').textContent = s('buildCheckPickProfileSelectNone', 'Clear All');
+        document.getElementById('sketchSectionTitle').textContent = s('buildCheckSelectorSketchSection', 'Sketches');
+        document.getElementById('colSketch').textContent = s('buildCheckSelectorSketch', 'Sketch');
+        document.getElementById('colProfiles').textContent = s('buildCheckSelectorProfiles', 'Profiles');
+        document.getElementById('btnSelectAll').textContent = s('buildCheckPickSketchBtnAll', 'Select All');
+        document.getElementById('btnClearAll').textContent = s('buildCheckPickSketchBtnNone', 'Clear All');
+        document.getElementById('btnFilterSelect').textContent = s('buildCheckSelectorFilterApply', 'Select Filtered');
+        document.getElementById('sketchFilter').placeholder = s('buildCheckSelectorFilterPlaceholder', 'Filter by folder name…');
+        document.getElementById('btnCancel').textContent = s('buildCheckSelectorCancel', 'Cancel');
+        document.getElementById('btnRun').textContent = s('buildCheckSelectorRun', 'Run Build Check');
+      }
+
+      function initProfileCheckboxes() {
+        const seen = new Set();
+        const allProfiles = [];
+        for (const sk of sketches) {
+          if (Array.isArray(sk.profiles)) {
+            for (const p of sk.profiles) {
+              if (p && !seen.has(p)) { seen.add(p); allProfiles.push(p); }
+            }
+          }
+        }
+        allProfiles.sort((a, b) => a.localeCompare(b));
+
+        const container = document.getElementById('profileCheckboxes');
+        container.innerHTML = '';
+        if (allProfiles.length === 0) {
+          const msg = document.createElement('span');
+          msg.className = 'profile-none-msg';
+          msg.textContent = s('buildCheckSelectorNoProfiles', '(no profiles)');
+          container.appendChild(msg);
+          return;
+        }
+        for (const p of allProfiles) {
+          const label = document.createElement('label');
+          label.className = 'profile-checkbox-item';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.value = p;
+          cb.checked = true;
+          label.appendChild(cb);
+          label.appendChild(document.createTextNode(p));
+          container.appendChild(label);
+        }
+      }
+
+      function renderTable() {
+        const tbody = document.getElementById('sketchTableBody');
+        tbody.innerHTML = '';
+        for (const sk of sketches) {
+          const tr = document.createElement('tr');
+          tr.dataset.dir = sk.sketchDir;
+          tr.dataset.label = (sk.label || sk.sketchDir || '').toLowerCase();
+
+          const checkTd = document.createElement('td');
+          checkTd.className = 'col-check';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = true;
+          cb.addEventListener('change', () => { updateCount(); syncHeaderCheckbox(); });
+          checkTd.appendChild(cb);
+
+          const labelTd = document.createElement('td');
+          labelTd.className = 'col-label';
+          labelTd.textContent = sk.label || sk.sketchDir;
+
+          const profilesTd = document.createElement('td');
+          profilesTd.className = 'col-profiles';
+          if (!sk.profiles || sk.profiles.length === 0) {
+            const span = document.createElement('span');
+            span.className = 'no-profiles';
+            span.textContent = s('buildCheckSelectorNoProfiles', '(no profiles)');
+            profilesTd.appendChild(span);
+          } else {
+            const wrap = document.createElement('div');
+            wrap.className = 'profile-tags';
+            for (const p of sk.profiles) {
+              const tag = document.createElement('span');
+              const isDef = p === sk.defaultProfile;
+              tag.className = isDef ? 'profile-tag is-default' : 'profile-tag';
+              tag.textContent = isDef ? p + ' ★' : p;
+              wrap.appendChild(tag);
+            }
+            profilesTd.appendChild(wrap);
+          }
+
+          tr.appendChild(checkTd);
+          tr.appendChild(labelTd);
+          tr.appendChild(profilesTd);
+          tbody.appendChild(tr);
+        }
+        updateCount();
+        syncHeaderCheckbox();
+      }
+
+      function updateCount() {
+        const rows = document.querySelectorAll('#sketchTableBody tr');
+        const total = rows.length;
+        let selected = 0;
+        rows.forEach(tr => { if (tr.querySelector('input[type="checkbox"]').checked) selected++; });
+        const tpl = s('buildCheckSelectorSelectedCount', '{selected} / {total}');
+        document.getElementById('selectedCount').textContent =
+          tpl.replace('{selected}', selected).replace('{total}', total);
+      }
+
+      function syncHeaderCheckbox() {
+        const visible = [...document.querySelectorAll('#sketchTableBody tr:not(.row-hidden)')];
+        const hdr = document.getElementById('headerCheckbox');
+        if (visible.length === 0) { hdr.checked = false; hdr.indeterminate = false; return; }
+        const n = visible.filter(tr => tr.querySelector('input[type="checkbox"]').checked).length;
+        if (n === 0) { hdr.checked = false; hdr.indeterminate = false; }
+        else if (n === visible.length) { hdr.checked = true; hdr.indeterminate = false; }
+        else { hdr.checked = false; hdr.indeterminate = true; }
+      }
+
+      document.getElementById('headerCheckbox').addEventListener('change', (e) => {
+        document.querySelectorAll('#sketchTableBody tr:not(.row-hidden) input[type="checkbox"]')
+          .forEach(cb => { cb.checked = e.target.checked; });
+        updateCount();
+      });
+
+      document.getElementById('btnSelectAll').addEventListener('click', () => {
+        document.querySelectorAll('#sketchTableBody input[type="checkbox"]').forEach(cb => { cb.checked = true; });
+        updateCount(); syncHeaderCheckbox();
+      });
+
+      document.getElementById('btnClearAll').addEventListener('click', () => {
+        document.querySelectorAll('#sketchTableBody input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+        updateCount(); syncHeaderCheckbox();
+      });
+
+      const filterInput = document.getElementById('sketchFilter');
+
+      function applyFilter() {
+        const q = filterInput.value.trim().toLowerCase();
+        document.querySelectorAll('#sketchTableBody tr').forEach(tr => {
+          tr.classList.toggle('row-hidden', !(!q || tr.dataset.label.includes(q)));
+        });
+        syncHeaderCheckbox();
+      }
+
+      filterInput.addEventListener('input', applyFilter);
+
+      // "Select Filtered": if all visible are already checked → deselect all, then check only visible
+      document.getElementById('btnFilterSelect').addEventListener('click', () => {
+        const visible = [...document.querySelectorAll('#sketchTableBody tr:not(.row-hidden)')];
+        const allChecked = visible.length > 0 &&
+          visible.every(tr => tr.querySelector('input[type="checkbox"]').checked);
+        if (allChecked) {
+          document.querySelectorAll('#sketchTableBody input[type="checkbox"]')
+            .forEach(cb => { cb.checked = false; });
+        }
+        visible.forEach(tr => { tr.querySelector('input[type="checkbox"]').checked = true; });
+        updateCount();
+        syncHeaderCheckbox();
+      });
+
+      document.getElementById('btnFilterClear').addEventListener('click', () => {
+        filterInput.value = '';
+        applyFilter();
+      });
+
+      // Profile mode — show/hide select area
+      document.querySelectorAll('input[name="profileMode"]').forEach(r => {
+        r.addEventListener('change', () => {
+          const sel = document.querySelector('input[name="profileMode"]:checked');
+          document.getElementById('profileSelectArea').classList.toggle('visible', sel && sel.value === 'select');
+        });
+      });
+
+      // Profile select all / none
+      document.getElementById('btnProfileSelectAll').addEventListener('click', () => {
+        document.querySelectorAll('#profileCheckboxes input[type="checkbox"]')
+          .forEach(cb => { cb.checked = true; });
+      });
+      document.getElementById('btnProfileSelectNone').addEventListener('click', () => {
+        document.querySelectorAll('#profileCheckboxes input[type="checkbox"]')
+          .forEach(cb => { cb.checked = false; });
+      });
+
+      document.getElementById('btnCancel').addEventListener('click', () => {
+        vscode.postMessage({ type: 'cancel' });
+      });
+
+      document.getElementById('btnRun').addEventListener('click', () => {
+        const selectedDirs = [];
+        document.querySelectorAll('#sketchTableBody tr').forEach(tr => {
+          const cb = tr.querySelector('input[type="checkbox"]');
+          if (cb && cb.checked) selectedDirs.push(tr.dataset.dir);
+        });
+
+        const modeRadio = document.querySelector('input[name="profileMode"]:checked');
+        const mode = modeRadio ? modeRadio.value : 'all';
+        const profiles = mode === 'select'
+          ? [...document.querySelectorAll('#profileCheckboxes input[type="checkbox"]:checked')].map(cb => cb.value)
+          : [];
+
+        vscode.postMessage({
+          type: 'run',
+          payload: { selectedDirs, profileMode: { mode, profiles } }
+        });
+      });
+    })();
+  </script>
+</body>
+
+</html>
