@@ -14,3 +14,4 @@ images/icon_big.png
 .gitignore
 temp
 AGENTS.md
+.*/
