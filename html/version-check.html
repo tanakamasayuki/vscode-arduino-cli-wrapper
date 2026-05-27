@@ -72,6 +72,33 @@
       margin-bottom: 20px;
     }
 
+    .group-actions {
+      margin: 0 0 20px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .group-action-block {
+      display: none;
+    }
+
+    .group-action-block.visible {
+      display: block;
+    }
+
+    .group-action-title {
+      margin: 0 0 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      opacity: 0.8;
+    }
+
+    .group-action-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
     button {
       padding: 6px 12px;
       font-size: 0.9rem;
@@ -163,6 +190,17 @@
     <button id="btnUpdateLibraries" type="button">Update all libraries</button>
   </div>
 
+  <div class="group-actions">
+    <div id="platformGroupActionsBlock" class="group-action-block">
+      <div id="platformGroupActionsTitle" class="group-action-title">Platform updates</div>
+      <div id="platformGroupActions" class="group-action-list"></div>
+    </div>
+    <div id="libraryGroupActionsBlock" class="group-action-block">
+      <div id="libraryGroupActionsTitle" class="group-action-title">Library updates</div>
+      <div id="libraryGroupActions" class="group-action-list"></div>
+    </div>
+  </div>
+
   <section>
     <h2 id="platformsHeading">Platforms</h2>
     <table>
@@ -229,6 +267,12 @@
       const btnRefresh = document.getElementById('btnRefresh');
       const btnUpdatePlatforms = document.getElementById('btnUpdatePlatforms');
       const btnUpdateLibraries = document.getElementById('btnUpdateLibraries');
+      const platformGroupActionsBlock = document.getElementById('platformGroupActionsBlock');
+      const platformGroupActionsTitle = document.getElementById('platformGroupActionsTitle');
+      const platformGroupActions = document.getElementById('platformGroupActions');
+      const libraryGroupActionsBlock = document.getElementById('libraryGroupActionsBlock');
+      const libraryGroupActionsTitle = document.getElementById('libraryGroupActionsTitle');
+      const libraryGroupActions = document.getElementById('libraryGroupActions');
 
       const statusLabels = () => ({
         ok: state.strings.versionCheckStatusOk || 'Up to date',
@@ -248,45 +292,107 @@
         vscode.postMessage(Object.assign({ type }, payload || {}));
       }
 
+      function platformUpdateRows() {
+        if (!state.report) return [];
+        return (state.report.platforms || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing' || r.indexUrlStatus === 'outdated' || r.indexUrlStatus === 'missing'));
+      }
+
+      function libraryUpdateRows() {
+        if (!state.report) return [];
+        return (state.report.libraries || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing'));
+      }
+
+      function platformEntry(row) {
+        return {
+          sketchDir: row.sketchDir,
+          profile: row.profile,
+          platformId: row.platformId,
+          latestVersion: row.latestVersion,
+          latestIndexUrl: row.latestIndexUrl || row.packageUrl || ''
+        };
+      }
+
+      function libraryEntry(row) {
+        return {
+          sketchDir: row.sketchDir,
+          profile: row.profile,
+          libraryName: row.libraryName,
+          latestVersion: row.latestVersion
+        };
+      }
+
+      function updatePlatformRows(rows) {
+        if (!Array.isArray(rows) || rows.length === 0) {
+          setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
+          return;
+        }
+        sendMessage('updatePlatforms', { entries: rows.map(platformEntry) });
+      }
+
+      function updateLibraryRows(rows) {
+        if (!Array.isArray(rows) || rows.length === 0) {
+          setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
+          return;
+        }
+        sendMessage('updateLibraries', { entries: rows.map(libraryEntry) });
+      }
+
       btnRefresh.addEventListener('click', () => {
         setStatus(state.strings.versionCheckPending || 'Gathering data…', 'info');
         sendMessage('refresh');
       });
 
       btnUpdatePlatforms.addEventListener('click', () => {
-        if (!state.report) return;
-        const rows = (state.report.platforms || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing' || r.indexUrlStatus === 'outdated' || r.indexUrlStatus === 'missing'));
-        if (rows.length === 0) {
-          setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
-          return;
-        }
-        sendMessage('updatePlatforms', {
-          entries: rows.map(r => ({
-            sketchDir: r.sketchDir,
-            profile: r.profile,
-            platformId: r.platformId,
-            latestVersion: r.latestVersion,
-            latestIndexUrl: r.latestIndexUrl || r.packageUrl || ''
-          }))
-        });
+        updatePlatformRows(platformUpdateRows());
       });
 
       btnUpdateLibraries.addEventListener('click', () => {
-        if (!state.report) return;
-        const rows = (state.report.libraries || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing'));
-        if (rows.length === 0) {
-          setStatus(state.strings.versionCheckUpdateNoChanges || '', 'info');
-          return;
-        }
-        sendMessage('updateLibraries', {
-          entries: rows.map(r => ({
-            sketchDir: r.sketchDir,
-            profile: r.profile,
-            libraryName: r.libraryName,
-            latestVersion: r.latestVersion
-          }))
-        });
+        updateLibraryRows(libraryUpdateRows());
       });
+
+      function renderGroupedActions(report) {
+        platformGroupActions.innerHTML = '';
+        libraryGroupActions.innerHTML = '';
+
+        const platformGroups = new Map();
+        for (const row of platformUpdateRows()) {
+          const key = row.platformId || '';
+          if (!key) continue;
+          if (!platformGroups.has(key)) platformGroups.set(key, []);
+          platformGroups.get(key).push(row);
+        }
+
+        const libraryGroups = new Map();
+        for (const row of libraryUpdateRows()) {
+          const key = row.libraryName || '';
+          if (!key) continue;
+          if (!libraryGroups.has(key)) libraryGroups.set(key, []);
+          libraryGroups.get(key).push(row);
+        }
+
+        for (const [platformId, rows] of Array.from(platformGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = state.strings.versionCheckBtnUpdatePlatformGroup
+            ? state.strings.versionCheckBtnUpdatePlatformGroup.replace('{name}', platformId)
+            : `Update all ${platformId}`;
+          btn.addEventListener('click', () => updatePlatformRows(rows));
+          platformGroupActions.appendChild(btn);
+        }
+
+        for (const [libraryName, rows] of Array.from(libraryGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = state.strings.versionCheckBtnUpdateLibraryGroup
+            ? state.strings.versionCheckBtnUpdateLibraryGroup.replace('{name}', libraryName)
+            : `Update all ${libraryName}`;
+          btn.addEventListener('click', () => updateLibraryRows(rows));
+          libraryGroupActions.appendChild(btn);
+        }
+
+        platformGroupActionsBlock.className = `group-action-block${platformGroups.size ? ' visible' : ''}`;
+        libraryGroupActionsBlock.className = `group-action-block${libraryGroups.size ? ' visible' : ''}`;
+      }
 
       function renderSummary(report) {
         summarySketches.textContent = String(report.totals?.sketches ?? 0);
@@ -371,15 +477,7 @@
           btn.disabled = !updatable;
           btn.addEventListener('click', () => {
             if (!updatable) return;
-            sendMessage('updatePlatforms', {
-              entries: [{
-                sketchDir: row.sketchDir,
-                profile: row.profile,
-                platformId: row.platformId,
-                latestVersion: row.latestVersion,
-                latestIndexUrl: row.latestIndexUrl || row.packageUrl || ''
-              }]
-            });
+            updatePlatformRows([row]);
           });
           action.appendChild(btn);
           tr.appendChild(action);
@@ -439,14 +537,7 @@
           btn.disabled = !updatable;
           btn.addEventListener('click', () => {
             if (!updatable) return;
-            sendMessage('updateLibraries', {
-              entries: [{
-                sketchDir: row.sketchDir,
-                profile: row.profile,
-                libraryName: row.libraryName,
-                latestVersion: row.latestVersion
-              }]
-            });
+            updateLibraryRows([row]);
           });
           action.appendChild(btn);
           tr.appendChild(action);
@@ -479,10 +570,15 @@
           platformsBody.innerHTML = '';
           librariesBody.innerHTML = '';
           warningsList.innerHTML = '';
+          platformGroupActions.innerHTML = '';
+          libraryGroupActions.innerHTML = '';
+          platformGroupActionsBlock.className = 'group-action-block';
+          libraryGroupActionsBlock.className = 'group-action-block';
           return;
         }
         setStatus(state.strings.versionCheckReportReady || 'Dependency report generated.', 'info');
         renderSummary(report);
+        renderGroupedActions(report);
         renderPlatforms(report);
         renderLibraries(report);
         renderWarnings(report);
@@ -527,6 +623,8 @@
               btnRefresh.textContent = state.strings.versionCheckBtnRefresh || 'Refresh';
               btnUpdatePlatforms.textContent = state.strings.versionCheckBtnUpdateAllPlatforms || 'Update all platforms';
               btnUpdateLibraries.textContent = state.strings.versionCheckBtnUpdateAllLibraries || 'Update all libraries';
+              platformGroupActionsTitle.textContent = state.strings.versionCheckPlatformGroupHeading || 'Platform updates';
+              libraryGroupActionsTitle.textContent = state.strings.versionCheckLibraryGroupHeading || 'Library updates';
             }
             if (msg.payload.locale) state.locale = msg.payload.locale;
             renderReport(msg.payload.report || null);

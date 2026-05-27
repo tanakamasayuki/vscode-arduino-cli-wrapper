@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) The sketch.yaml version report now adds grouped update buttons per platform ID and library name, so matching dependencies can be updated across profiles without applying every pending update.
+- (JA) sketch.yaml バージョンレポートにプラットフォーム ID 別・ライブラリー名別の一括更新ボタンを追加し、すべての更新を適用せずに同じ依存関係だけをプロファイル横断で更新できるようにしました。
 
 ## 1.9.2
 - (EN) Build Check now opens a dedicated selector panel before compiling, letting you choose which sketches to build and how to filter profiles — all without leaving the editor.
