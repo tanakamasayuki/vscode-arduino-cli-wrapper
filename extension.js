@@ -270,9 +270,11 @@ const MSG = {
     compileProgressMessageProfile: 'Running arduino-cli compile for profile {profile}',
     compileProgressMessageFqbn: 'Running arduino-cli compile for {fqbn}',
     compileExtraFlagsApplied: 'Added build.extra_flags from {file}',
+    compileExtraFlagsAppliedTarget: 'Added build flags from {file} via {target}',
     compileExtraFlagsReadError: 'Failed to read extra flags file {file}: {msg}',
     compileExtraFlagsEmpty: 'Extra flags file {file} is empty; skipping.',
     compileExtraFlagsSkipExisting: 'Skipped {file} because build.extra_flags is already provided.',
+    compileExtraFlagsPropsFail: 'Could not read build properties via --show-properties; skipping build flag injection. ({msg})',
     uploadProgressTitle: 'Uploading sketch…',
     uploadProgressMessage: 'Running arduino-cli upload…',
     uploadProgressMessageProfile: 'Running arduino-cli upload for profile {profile}',
@@ -977,9 +979,11 @@ const MSG = {
     compileProgressMessageProfile: 'プロファイル {profile} 向けに arduino-cli compile を実行中です',
     compileProgressMessageFqbn: '{fqbn} 向けに arduino-cli compile を実行中です',
     compileExtraFlagsApplied: '{file} から build.extra_flags を追加しました',
+    compileExtraFlagsAppliedTarget: '{file} のビルドフラグを {target} 経由で追加しました',
     compileExtraFlagsReadError: '{file} の読み込みに失敗したため、追加できませんでした: {msg}',
     compileExtraFlagsEmpty: '{file} が空または有効な行がないためスキップしました',
     compileExtraFlagsSkipExisting: '既に build.extra_flags が指定されているため {file} をスキップしました',
+    compileExtraFlagsPropsFail: '--show-properties でビルドプロパティを取得できなかったため、ビルドフラグの注入をスキップしました（{msg}）',
     uploadProgressTitle: 'スケッチを書き込み中です…',
     uploadProgressMessage: 'arduino-cli upload を実行中です…',
     uploadProgressMessageProfile: 'プロファイル {profile} 向けに arduino-cli upload を実行中です',
@@ -2395,7 +2399,7 @@ function getConfig() {
     verbose: !!verbose,
     warnings: normalizedWarnings,
     localBuildPath: cfg.get('arduino-cli-wrapper.localBuildPath', false),
-    injectTimezoneMacros: cfg.get('arduino-cli-wrapper.injectTimezoneMacros', true),
+    injectTimezoneMacros: cfg.get('arduino-cli-wrapper.injectTimezoneMacros', false),
     autoCopySketchYaml: cfg.get('arduino-cli-wrapper.autoCopySketchYaml', true),
   };
 }
@@ -4827,7 +4831,7 @@ function hasBuildExtraFlagsArg(args) {
   return false;
 }
 
-async function appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, channel) {
+async function appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, channel, exe) {
   if (!sketchDir) return;
   const extraPath = path.join(sketchDir, EXTRA_FLAGS_FILENAME);
   const extraUri = vscode.Uri.file(extraPath);
@@ -4869,11 +4873,15 @@ async function appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, chann
     }
     return;
   }
-  const sketchIdx = originalArgs.lastIndexOf(sketchDir);
-  const insertIdx = sketchIdx >= 0 ? sketchIdx : originalArgs.length;
-  originalArgs.splice(insertIdx, 0, '--build-property', `build.extra_flags=${flags}`);
+  const props = await resolveCompileProperties(exe, baseArgs, originalArgs, sketchDir, channel);
+  if (!props) return;
+  const target = decideFlagTarget(props);
+  injectBuildFlags(originalArgs, sketchDir, target.key, flags, target.base, null);
   if (channel) {
-    channel.appendLine(t('compileExtraFlagsApplied', { file: EXTRA_FLAGS_FILENAME }));
+    channel.appendLine(t('compileExtraFlagsAppliedTarget', {
+      file: EXTRA_FLAGS_FILENAME,
+      target: target.key
+    }));
   }
 }
 
@@ -4887,64 +4895,150 @@ function shouldInjectTimezoneMacros(cfg) {
       return direct;
     }
   } catch (_) { }
-  return true;
+  return false;
 }
 
-function ensureTimezoneDefines(originalArgs, baseArgs, sketchDir, cfg) {
-  if (!shouldInjectTimezoneMacros(cfg)) return;
-  const payload = getTimezoneBuildDefines();
-  const addition = payload && payload.flags ? payload.flags : '';
-  if (!addition) return;
-  if (appendTimezoneFlagsToArgs(originalArgs, addition)) return;
-  if (appendTimezoneFlagsToArgs(baseArgs, addition)) return;
-  if (!Array.isArray(originalArgs)) return;
-  const sketchIdx = typeof sketchDir === 'string' && sketchDir
-    ? originalArgs.lastIndexOf(sketchDir)
-    : -1;
-  const insertIdx = sketchIdx >= 0 ? sketchIdx : originalArgs.length;
-  originalArgs.splice(insertIdx, 0, '--build-property', `build.extra_flags=${addition}`);
+function joinBuildFlagValue(existing, addition) {
+  const cur = (existing || '').trim();
+  return cur ? `${cur} ${addition}` : addition;
 }
 
-function appendTimezoneFlagsToArgs(arr, addition) {
+// Cache of parsed `compile --show-properties` output, keyed by the resolved
+// command (exe + global extra args + fqbn/profile/build-path). Lives for the
+// session so repeated compiles of the same board pay the resolution cost once.
+const showPropertiesCache = new Map();
+
+function buildShowPropertiesArgs(originalArgs, sketchDir) {
+  const out = ['compile'];
+  if (Array.isArray(originalArgs)) {
+    for (let i = 0; i < originalArgs.length; i += 1) {
+      const v = originalArgs[i];
+      if (typeof v !== 'string') continue;
+      if (v === '--fqbn' || v === '--profile' || v === '--build-path') {
+        const next = originalArgs[i + 1];
+        if (typeof next === 'string') { out.push(v, next); i += 1; }
+        continue;
+      }
+      if (v.startsWith('--fqbn=') || v.startsWith('--profile=') || v.startsWith('--build-path=')) {
+        out.push(v);
+      }
+    }
+  }
+  out.push('--show-properties', sketchDir);
+  return out;
+}
+
+// Run `arduino-cli compile --show-properties` (without our injected build
+// properties) and return the parsed property map, or null on failure. Cached for
+// the session keyed by the resolved board command.
+async function resolveCompileProperties(exe, baseArgs, originalArgs, sketchDir, channel) {
+  if (!exe || !sketchDir) return null;
+  const propArgs = buildShowPropertiesArgs(originalArgs, sketchDir);
+  const base = Array.isArray(baseArgs) ? baseArgs : [];
+  const cacheKey = JSON.stringify([exe, base, propArgs]);
+  if (showPropertiesCache.has(cacheKey)) return showPropertiesCache.get(cacheKey);
+  const promise = (async () => {
+    const finalArgs = [...base, ...propArgs];
+    let text = '';
+    try {
+      text = await new Promise((resolve, reject) => {
+        let out = '';
+        const child = cp.spawn(exe, finalArgs, { shell: false, cwd: sketchDir });
+        const wasCancelled = trackChildCancellation(child);
+        child.stdout.on('data', (d) => { out += d.toString(); });
+        child.stderr.on('data', () => { });
+        child.on('error', (err) => {
+          wasCancelled() ? reject(createCancellationError()) : reject(err);
+        });
+        child.on('close', (code) => {
+          if (wasCancelled()) { reject(createCancellationError()); return; }
+          code === 0 ? resolve(out) : reject(new Error(`show-properties exit ${code}`));
+        });
+      });
+    } catch (err) {
+      if (channel) {
+        channel.appendLine(t('compileExtraFlagsPropsFail', {
+          msg: err && err.message ? err.message : String(err || 'unknown')
+        }));
+      }
+      return null;
+    }
+    return parseShowPropertiesOutput(text);
+  })();
+  showPropertiesCache.set(cacheKey, promise);
+  const result = await promise;
+  if (!result) showPropertiesCache.delete(cacheKey);
+  return result;
+}
+
+// Decide which build property to inject user flags into, based on the platform's
+// resolved properties (from --show-properties):
+//   - build.extra_flags empty                          -> overwrite build.extra_flags (it was empty)
+//   - build.extra_flags non-empty + build.defines slot -> append to build.defines (e.g. ESP32)
+//   - build.extra_flags non-empty + no build.defines   -> append to build.extra_flags's current value
+// In every non-empty case the platform's existing value is preserved, never clobbered.
+function decideFlagTarget(props) {
+  const extra = props && typeof props['build.extra_flags'] === 'string'
+    ? props['build.extra_flags'].trim()
+    : '';
+  if (!extra) return { key: 'build.extra_flags', base: '' };
+  if (props && Object.prototype.hasOwnProperty.call(props, 'build.defines')) {
+    const defines = typeof props['build.defines'] === 'string' ? props['build.defines'].trim() : '';
+    return { key: 'build.defines', base: defines };
+  }
+  return { key: 'build.extra_flags', base: extra };
+}
+
+// Inject `addition` into build property `key`. If a `--build-property key=...`
+// already exists in `arr`, merge into it; otherwise splice a new entry whose value
+// is `base` (the platform's current value) followed by `addition`, so a non-empty
+// platform value is preserved rather than overwritten. When `marker` is provided
+// the call is idempotent (skipped if the marker already appears in `arr`).
+function injectBuildFlags(arr, sketchDir, key, addition, base, marker) {
   if (!Array.isArray(arr) || !addition) return false;
+  if (marker && arr.some((e) => typeof e === 'string' && e.includes(marker))) return false;
+  const prefix = `${key}=`;
   for (let i = 0; i < arr.length; i += 1) {
     const entry = arr[i];
     if (typeof entry !== 'string') continue;
     if (entry === '--build-property') {
       const next = arr[i + 1];
-      if (typeof next === 'string' && next.startsWith('build.extra_flags=')) {
-        arr[i + 1] = mergeBuildExtraFlags(next, addition);
+      if (typeof next === 'string' && next.startsWith(prefix)) {
+        arr[i + 1] = `${prefix}${joinBuildFlagValue(next.slice(prefix.length), addition)}`;
         return true;
       }
       continue;
     }
     if (entry.startsWith('--build-property=')) {
-      const idx = entry.indexOf('=');
-      const prop = entry.slice(idx + 1);
-      if (prop.startsWith('build.extra_flags=')) {
-        const mergedProp = mergeBuildExtraFlags(prop, addition);
-        arr[i] = `${entry.slice(0, idx + 1)}${mergedProp}`;
+      const inner = entry.slice('--build-property='.length);
+      if (inner.startsWith(prefix)) {
+        arr[i] = `--build-property=${prefix}${joinBuildFlagValue(inner.slice(prefix.length), addition)}`;
         return true;
       }
       continue;
     }
-    if (entry.startsWith('build.extra_flags=')) {
-      arr[i] = mergeBuildExtraFlags(entry, addition);
+    if (entry.startsWith(prefix)) {
+      arr[i] = `${prefix}${joinBuildFlagValue(entry.slice(prefix.length), addition)}`;
       return true;
     }
   }
-  return false;
+  const sketchIdx = typeof sketchDir === 'string' && sketchDir ? arr.lastIndexOf(sketchDir) : -1;
+  const insertIdx = sketchIdx >= 0 ? sketchIdx : arr.length;
+  arr.splice(insertIdx, 0, '--build-property', `${prefix}${joinBuildFlagValue(base, addition)}`);
+  return true;
 }
 
-function mergeBuildExtraFlags(current, addition) {
-  if (!addition) return current;
-  const prefix = 'build.extra_flags=';
-  if (!current.startsWith(prefix)) return current;
-  if (current.includes('CLI_BUILD_TZ_IANA')) return current;
-  const existing = current.slice(prefix.length).trim();
-  if (!existing) return `${prefix}${addition}`;
-  if (existing.includes('CLI_BUILD_TZ_IANA')) return current;
-  return `${prefix}${existing} ${addition}`;
+async function ensureTimezoneDefines(originalArgs, baseArgs, sketchDir, cfg, exe) {
+  if (!shouldInjectTimezoneMacros(cfg)) return;
+  const payload = getTimezoneBuildDefines();
+  const addition = payload && payload.flags ? payload.flags : '';
+  if (!addition) return;
+  if (!Array.isArray(originalArgs)) return;
+  const channel = getOutput();
+  const props = await resolveCompileProperties(exe, baseArgs, originalArgs, sketchDir, channel);
+  if (!props) return;
+  const target = decideFlagTarget(props);
+  injectBuildFlags(originalArgs, sketchDir, target.key, addition, target.base, 'CLI_BUILD_TZ_IANA');
 }
 
 function getTimezoneBuildDefines() {
@@ -5400,8 +5494,8 @@ async function compileWithIntelliSense(sketchDir, args, opts = {}) {
     }
   }
 
-  await appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, channel);
-  ensureTimezoneDefines(originalArgs, baseArgs, sketchDir, cfg);
+  await appendExtraFlagsFromFile(originalArgs, baseArgs, sketchDir, channel, exe);
+  await ensureTimezoneDefines(originalArgs, baseArgs, sketchDir, cfg, exe);
 
   const compileArgs = originalArgs.slice();
 
@@ -12982,8 +13076,8 @@ async function runInspectorAnalysis({ sketchDir, profile, inoPath, clean }) {
   args.push(sketchDir);
   const channel = getOutput();
   channel.show();
-  await appendExtraFlagsFromFile(args, baseArgs, sketchDir, channel);
-  ensureTimezoneDefines(args, baseArgs, sketchDir, cfg);
+  await appendExtraFlagsFromFile(args, baseArgs, sketchDir, channel, exe);
+  await ensureTimezoneDefines(args, baseArgs, sketchDir, cfg, exe);
   const finalArgs = [...baseArgs, ...args];
   const displayExe = needsPwshCallOperator() ? `& ${quoteArg(exe)}` : quoteArg(exe);
   channel.appendLine(`${ANSI.cyan}[inspector] $ ${displayExe} ${finalArgs.map(quoteArg).join(' ')}${ANSI.reset}`);

@@ -102,7 +102,12 @@ If you must inject extra `build.extra_flags` on every compile, you can place an 
 
 - Write one flag per line, for example `-DWIFI_SSID="MySSID"`.
 - Lines starting with `#` or `//`, as well as blank lines, are ignored.
-- The remaining flags are joined with spaces and passed as a single `--build-property build.extra_flags=...` argument.
+- The remaining flags are joined with spaces and injected into a build property chosen by inspecting the platform's resolved `build.extra_flags` (read once per board via `arduino-cli compile --show-properties`):
+  - If `build.extra_flags` is **empty** (e.g. classic AVR), the flags overwrite `build.extra_flags`.
+  - If `build.extra_flags` is **non-empty** (e.g. ESP32) and the platform exposes a `build.defines` slot, the flags are appended to `build.defines`.
+  - Otherwise the flags are appended to the platform's existing `build.extra_flags` value.
+  - In every non-empty case the platform's own flags are preserved rather than overwritten, so builds such as ESP32 are not broken.
+- If `--show-properties` cannot be read, build-flag injection is skipped (a warning is logged) rather than risking an unsafe overwrite.
 - If you already provide `build.extra_flags` via settings, tasks, or the command palette, that configuration takes precedence and the file is skipped.
 
 Because the filename starts with a dot it stays hidden by default. Add it to source control ignore lists (the extension’s `.gitignore` already contains an entry) so credentials never leak into commits.

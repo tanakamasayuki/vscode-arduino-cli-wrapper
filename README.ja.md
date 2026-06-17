@@ -103,12 +103,17 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 
 - 1 行につき 1 個のフラグを書きます（例: `-DWIFI_SSID="MySSID"`）。
 - `#` または `//` で始まる行と空行は無視されます。
-- 有効な行はスペース区切りで連結され、`--build-property build.extra_flags=...` として渡されます。
+- 有効な行はスペース区切りで連結され、プラットフォームの `build.extra_flags`（`arduino-cli compile --show-properties` でボードごとに 1 回読み取り）を確認して、入れ先のビルドプロパティを自動的に選びます。
+  - `build.extra_flags` が**空**の場合（例: 旧来の AVR）は `build.extra_flags` を上書きします。
+  - `build.extra_flags` が**非空**で（例: ESP32）プラットフォームに `build.defines` 枠がある場合は `build.defines` へ追記します。
+  - それ以外の場合はプラットフォームの既存 `build.extra_flags` の値に末尾追記します。
+  - 非空のいずれの場合もプラットフォーム側のフラグは上書きせず保持するため、ESP32 などのビルドを壊しません。
+- `--show-properties` を取得できない場合は、安全でない上書きを避けるため注入をスキップします（警告を出力します）。
 - 既に設定、タスク、コマンドパレットなどで `build.extra_flags` を指定している場合はそちらが優先され、ファイルは読み込まれません。
 
 ドットから始まるファイル名のため既定では隠しファイルとして扱われます。認証情報がコミットに含まれないよう、必要に応じて `.gitignore` へ追加してください（本拡張の `.gitignore` には既にエントリを用意済みです）。
 
-また、ビルド環境のタイムゾーンをコードから参照できるよう、拡張機能は既定でビルド時に次のプリプロセッサーマクロを `build.extra_flags` へ追加します。必要に応じて設定 **Arduino CLI Wrapper › Inject Timezone Macros** を無効化すると自動付与を停止できます。
+また、ビルド環境のタイムゾーンをコードから参照できるよう、拡張機能は既定でビルド時に次のプリプロセッサーマクロを追加します（入れ先は `.arduino-cli-flags` と同じ判定で選びます）。必要に応じて設定 **Arduino CLI Wrapper › Inject Timezone Macros** を無効化すると自動付与を停止できます。
 
 - `CLI_BUILD_TZ_IANA` – `Asia/Tokyo` のような IANA タイムゾーン ID。
 - `CLI_BUILD_TZ_POSIX` – newlib の `TZ` 変数へ設定できる POSIX 形式（例: `JST-9` や `PST8PDT,M3.2.0/2,M11.1.0/2`）。
