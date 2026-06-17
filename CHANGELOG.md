@@ -1,10 +1,12 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.9.4
 - (EN) `.arduino-cli-flags` and the timezone macros now choose a safe build property by reading the platform's resolved `build.extra_flags` via `arduino-cli compile --show-properties` (cached per board): overwrite `build.extra_flags` when it is empty, otherwise append to `build.defines` (or to the existing `build.extra_flags` value), so non-empty platform flags such as ESP32's are no longer clobbered. `--show-properties` only runs when there is something to inject.
 - (JA) `.arduino-cli-flags` とタイムゾーンマクロの注入先を、`arduino-cli compile --show-properties`（ボードごとにキャッシュ）で読み取ったプラットフォームの `build.extra_flags` を見て安全に選ぶようにしました。空なら `build.extra_flags` を上書き、非空なら `build.defines`（無ければ既存 `build.extra_flags` の値）へ追記するため、ESP32 など非空のプラットフォームフラグを壊さなくなりました。`--show-properties` は注入対象がある時のみ実行します。
 
-# 1.9.3
+## 1.9.3
 - (EN) The sketch.yaml version report now adds grouped update buttons per platform ID and library name, so matching dependencies can be updated across profiles without applying every pending update.
 - (JA) sketch.yaml バージョンレポートにプラットフォーム ID 別・ライブラリー名別の一括更新ボタンを追加し、すべての更新を適用せずに同じ依存関係だけをプロファイル横断で更新できるようにしました。
 
