@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Removed the 50-file cap on the tree view's sketch search, so Refresh View now lists every sketch even in workspaces with a very large number of `.ino` files.
+- (JA) ツリー表示のスケッチ検索にあった 50 ファイルの上限を撤廃し、`.ino` が非常に多いワークスペースでも Refresh View で全スケッチが表示されるようにしました。
 
 ## 1.9.4
 - (EN) `.arduino-cli-flags` and the timezone macros now choose a safe build property by reading the platform's resolved `build.extra_flags` via `arduino-cli compile --show-properties` (cached per board): overwrite `build.extra_flags` when it is empty, otherwise append to `build.defines` (or to the existing `build.extra_flags` value), so non-empty platform flags such as ESP32's are no longer clobbered. `--show-properties` only runs when there is something to inject.

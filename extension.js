@@ -6919,7 +6919,7 @@ async function findSketches() {
   try {
     const cfg = getConfig();
     const autoCopySketchYaml = cfg.autoCopySketchYaml !== false;
-    const uris = filterUrisOutsideBuild(await vscode.workspace.findFiles('**/*.ino', '**/{node_modules,.git}/**', 50));
+    const uris = filterUrisOutsideBuild(await vscode.workspace.findFiles('**/*.ino', '**/{node_modules,.git}/**'));
     const seen = new Set();
     for (const u of uris) {
       const dir = path.dirname(u.fsPath);
