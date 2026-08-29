@@ -5,3 +5,4 @@ temp
 .vscode
 .arduino-cli-flags
 .*
+node_modules/

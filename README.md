@@ -232,6 +232,8 @@ All command logs are unified in a dedicated pseudo terminal with ANSI colors so 
 
 #### Embed assets or upload a data image?
 
+Asset generation is provided by the published [`embed-asset-tool`](https://www.npmjs.com/package/embed-asset-tool) package, which can also run as a standalone CLI. The extension uses the same package API for manual commands, pre-build regeneration, and diagnostics.
+
 **Arduino CLI: Embed Assets** is the quickest option: open the Arduino CLI explorer, use the `Embed Assets` action in the profile section (it appears above `Upload Data`), drop files under `assets/` or any sketch-root folder whose name starts with `assets_` (for example `assets_wifi/` or `assets_ui/`), and the extension regenerates `<folder>_embed.h` with a `PROGMEM` byte array and length constant for each file. Each header reuses the folder name for the exported arrays and symbols (`assets_wifi_file_names`, etc.) so multiple asset bundles can coexist. If neither the base `assets/` nor any `assets_*` folder exists yet, the manual action bootstraps `assets/` for you; compile-time auto-regeneration continues to skip headers when their source folder doesn't exist so builds no longer recreate them unexpectedly. Add a `.assetsignore` file inside each assets folder to skip files or directories with gitignore-style rules (e.g., use `# comment`, `foo/`, `*.psd`, `**/tmp/**`, `!important.bin`), and the generator will only embed the files you keep. Unicode or symbol-heavy filenames are still embedded; the extension now hashes those paths to create valid, unique C++ identifiers automatically.
 
 Need more control? Drop an `.assetsconfig` file next to `.assetsignore` and describe how the folder should be processed using the INI-style sections shown below:
