@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+## 1.9.6
 - (EN) Replaced the extension's built-in asset embedding implementation with the published `embed-asset-tool` 1.0.0 package, so the VS Code command, pre-build generation, and diagnostics now share the same implementation as the standalone CLI.
 - (JA) 拡張機能内蔵のアセット埋め込み実装を公開済みの `embed-asset-tool` 1.0.0 に置き換え、VS Code コマンド、コンパイル前生成、診断がスタンドアロン CLI と同じ実装を利用するようにしました。
 
