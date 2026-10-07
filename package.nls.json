@@ -98,5 +98,12 @@
   "msg.uploadDataWindowsImagePathFail": "Could not convert the filesystem image path for esptool.exe; aborting.",
   "msg.progressBusyWarn": "Another command is already running. Please wait for it to finish.",
   "msg.progressCancelled": "Command cancelled.",
-  "inspectorCleanOptionLabel": "Clean build (--clean)"
+  "inspectorCleanOptionLabel": "Clean build (--clean)",
+  "sketchEditConflict": "sketch.yaml changed. Reopen the helper or refresh the report before applying changes.",
+  "sketchLocalCoreProtected": "Unversioned development cores are excluded from bulk updates.",
+  "sketchNoPlatform": "No platform entry is configured.",
+  "sketchBoardMetadataWarning": "Board options describe catalog version {catalog}; the configured core is {configured}. Older cores may have different options.",
+  "sketchLocalCoreLabel": "Unversioned (local development)",
+  "sketchLibraryDataDirMissing": "Arduino CLI data directory is unavailable",
+  "sketchLibraryIndexFallback": "Cannot read the CLI library index; using the official index: {msg}"
 }

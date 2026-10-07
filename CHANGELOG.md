@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Shared sketch.yaml creation/editing, version checks/updates, board catalogs and core version listings with published `arduino-sketch-tool` 1.1.0. Bulk updates protect unversioned cores and preserve local libraries, custom fields and unsaved edits. Library metadata prefers CLI-downloaded indexes, with direct official downloads as fallback.
+- (JA) `sketch.yaml` の作成・編集、版チェック・更新、ボードカタログとコア版一覧を公開済みの `arduino-sketch-tool` 1.1.0 に共通化しました。版指定なしコアを一括更新から保護し、ローカルライブラリ・独自項目・未保存の編集を保持します。ライブラリ情報は CLI が取得したインデックスを優先し、読めない場合は公式インデックスを直接取得します。
 
 ## 1.9.6
 - (EN) Replaced the extension's built-in asset embedding implementation with the published `embed-asset-tool` 1.0.0 package, so the VS Code command, pre-build generation, and diagnostics now share the same implementation as the standalone CLI.

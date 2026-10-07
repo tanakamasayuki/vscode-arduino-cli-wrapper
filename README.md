@@ -172,7 +172,7 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 ### Keep sketches organised
 
 - **Sketch.yaml Helper** – Opens a helper view where you can review or update board packages, platforms, and libraries without editing YAML by hand.
-- **Check Sketch.yaml Versions** – Audits every profile against the official indexes and offers inline upgrades when newer versions are available.
+- **Check Sketch.yaml Versions** – Compares profiles with catalog metadata and updates dependencies individually, by name, or together. Unversioned cores are protected from bulk updates. Comparison needs no installed cores, but the extension runs `arduino-cli update` before checking as a precaution for subsequent builds, refreshing both core and library indexes.
 - **New Sketch** – Creates a fresh sketch folder, opens the generated `.ino`, and launches the helper so you can configure profiles immediately.
 
 ![Sketch.yaml Helper webview](images/sketch.yaml_helper.png)
@@ -182,6 +182,20 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 ![Sketch.yaml version comparison](images/sketch.yaml_versions.png)
 
 *See which platforms and libraries have updates pending and apply them in place.*
+
+### Use the same configuration management in CLI and CI
+
+Creation, editing and version comparisons use the published [arduino-sketch-tool](https://www.npmjs.com/package/arduino-sketch-tool) ([source code](https://github.com/tanakamasayuki/ArduinoSketchToolJs)). Run `npx arduino-sketch-tool --help` outside VS Code; pin the tool with `npx --yes arduino-sketch-tool@1.1.0 --help` in reproducible CI workflows. See its beginner and advanced guides for commands. Arduino CLI continues to handle builds and uploads.
+
+The Helper edits the current sketch/profile or creates a new profile with a pinned core version and project index URL. It retains existing `platform_index_url`, `dir:`, `dependency:` and custom fields. Bulk updates exclude unversioned development cores; select a specific version in the Helper to switch to a published core explicitly. Board options describe the catalog snapshot, with a notice when its core version differs from the configured version.
+
+Board names and options use the [arduino-cli-helper catalog](https://github.com/tanakamasayuki/arduino-cli-helper), captured by querying installed cores. Generating this catalog for all boards takes time, so its snapshot can lag a newly published core. Libraries prefer `library_index.json` under the configured Arduino CLI `directories.data`; changes to that file invalidate the cache. If it cannot be read, the extension uses the official index downloaded directly and displays a warning. Version Check first runs `arduino-cli update` and compares with the refreshed index. Run "Arduino CLI: Update" before opening the Helper when you need current library releases.
+
+Choosing a different board prepares an additional profile named after that board, preserving the existing workflow. Option changes on the same board edit the original profile. Redisplaying board search results retains in-progress edits. Fields explicitly deleted from the YAML textarea are also removed on apply.
+
+For the Helper and version checks, open editor buffers take precedence over disk. Documents that were already dirty remain unsaved. If YAML changes after opening the Helper or retrieving a version report, reopen the Helper or refresh the report before applying changes. Structural edits of anchored/aliased or flow-style profiles, and edits of profile names containing characters other than letters, digits, underscore, dot or dash, report errors through the shared module. Build/upload profile selection continues to read the on-disk configuration independently of management validation, so unrelated incomplete profiles do not block selection.
+
+**Index caches:** Changing YAML pins does not refresh Arduino CLI indexes. Stale indexes can cause builds to fail because a newer version is missing. Especially after restoring CI caches, run `arduino-cli update` at the start or before/after changing pins. This refreshes both core and library indexes. Updating pins and compiling every profile can check compatibility with current releases; committing these changes remains a user decision.
 
 ### Explore examples quickly
 
@@ -395,7 +409,7 @@ emit_raw = true
 ### sketch.yaml and Profiles
 
 - When `sketch.yaml` exists, compile/upload use profiles; otherwise FQBN is used.
-  - To bootstrap a `sketch.yaml`, use the Helper view to generate a template for your board and libraries, then copy it into a new `sketch.yaml` in your sketch folder.
+  - To bootstrap a `sketch.yaml`, select your board and libraries in the Helper, then use "Apply to sketch.yaml" to create the file in your sketch folder.
 - The status bar FQBN indicator switches to a profile name if profiles exist. Use "Arduino CLI: Set Profile" to change it.
 - "Sketch.yaml Helper" shows a helper UI to inspect/apply FQBN, libraries, and platform info for a selected profile.
 - Profiles with `wokwi: true` automatically maintain `.wokwi/<profile>/wokwi.elf`, `diagram.json`, and `wokwi.toml` after each compile so the Wokwi extension can simulate the latest firmware. The generated `diagram.json` seeds board-specific layouts (UNO, MEGA, Nano, ESP32 S3 Box, M5Stack CoreS3, Seeed XIAO ESP32 families, and generic ESP32).

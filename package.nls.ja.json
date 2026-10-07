@@ -98,5 +98,12 @@
   "msg.progressBusyWarn": "別のコマンドが実行中です。完了するまでお待ちください。",
   "msg.progressCancelled": "コマンドをキャンセルしました。",
   "inspectorCleanOptionLabel": "クリーンビルド (--clean)",
-  "lang.buildOpt.alias": "Arduino ビルドオプション"
+  "lang.buildOpt.alias": "Arduino ビルドオプション",
+  "sketchEditConflict": "sketch.yaml が変更されています。Helper を開き直すか、レポートを再取得してから反映してください。",
+  "sketchLocalCoreProtected": "版指定なしの開発用コアは一括更新の対象外です。",
+  "sketchNoPlatform": "プラットフォームが指定されていません。",
+  "sketchBoardMetadataWarning": "ボードオプションはカタログの {catalog} 版の情報です。指定中のコアは {configured} 版で、古い版ではオプションが異なる場合があります。",
+  "sketchLocalCoreLabel": "版指定なし（ローカル開発用）",
+  "sketchLibraryDataDirMissing": "Arduino CLI のデータ保存先を取得できません",
+  "sketchLibraryIndexFallback": "CLI のライブラリインデックスを読めないため公式インデックスを使用します: {msg}"
 }

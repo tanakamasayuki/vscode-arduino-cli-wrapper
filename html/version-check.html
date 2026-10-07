@@ -294,17 +294,20 @@
 
       function platformUpdateRows() {
         if (!state.report) return [];
-        return (state.report.platforms || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing' || r.indexUrlStatus === 'outdated' || r.indexUrlStatus === 'missing'));
+        return (state.report.platforms || []).filter(r => r && r.updateEligible !== false && (r.status === 'outdated' || r.status === 'missing' || r.indexUrlStatus === 'outdated' || r.indexUrlStatus === 'missing'));
       }
 
       function libraryUpdateRows() {
         if (!state.report) return [];
-        return (state.report.libraries || []).filter(r => r && (r.status === 'outdated' || r.status === 'missing'));
+        return (state.report.libraries || []).filter(r => r && r.updateEligible !== false && (r.status === 'outdated' || r.status === 'missing'));
       }
 
       function platformEntry(row) {
         return {
           sketchDir: row.sketchDir,
+          index: row.index,
+          currentVersion: row.currentVersion,
+          currentIndexUrl: row.currentIndexUrl,
           profile: row.profile,
           platformId: row.platformId,
           latestVersion: row.latestVersion,
@@ -315,6 +318,9 @@
       function libraryEntry(row) {
         return {
           sketchDir: row.sketchDir,
+          index: row.index,
+          currentVersion: row.currentVersion,
+          currentIndexUrl: row.currentIndexUrl,
           profile: row.profile,
           libraryName: row.libraryName,
           latestVersion: row.latestVersion
@@ -421,7 +427,7 @@
         for (const row of rows) {
           const tr = document.createElement('tr');
           tr.className = row.status === 'ok' && (row.indexUrlStatus === 'outdated' || row.indexUrlStatus === 'missing') ? row.indexUrlStatus : (row.status || '');
-          const updatable = row.status === 'outdated' || row.status === 'missing' || row.indexUrlStatus === 'outdated' || row.indexUrlStatus === 'missing';
+          const updatable = row.updateEligible !== false && (row.status === 'outdated' || row.status === 'missing' || row.indexUrlStatus === 'outdated' || row.indexUrlStatus === 'missing');
 
           const sketch = document.createElement('td');
           sketch.textContent = row.sketchLabel || row.sketchDir || '';
@@ -503,7 +509,7 @@
         for (const row of rows) {
           const tr = document.createElement('tr');
           tr.className = row.status || '';
-          const updatable = row.status === 'outdated' || row.status === 'missing';
+          const updatable = row.updateEligible !== false && (row.status === 'outdated' || row.status === 'missing');
 
           const sketch = document.createElement('td');
           sketch.textContent = row.sketchLabel || row.sketchDir || '';
@@ -582,8 +588,8 @@
         renderPlatforms(report);
         renderLibraries(report);
         renderWarnings(report);
-        const hasPlatformUpdates = (report.platforms || []).some(r => r && (r.status === 'outdated' || r.status === 'missing' || r.indexUrlStatus === 'outdated' || r.indexUrlStatus === 'missing'));
-        const hasLibraryUpdates = (report.libraries || []).some(r => r && (r.status === 'outdated' || r.status === 'missing'));
+        const hasPlatformUpdates = (report.platforms || []).some(r => r && r.updateEligible !== false && (r.status === 'outdated' || r.status === 'missing' || r.indexUrlStatus === 'outdated' || r.indexUrlStatus === 'missing'));
+        const hasLibraryUpdates = (report.libraries || []).some(r => r && r.updateEligible !== false && (r.status === 'outdated' || r.status === 'missing'));
         btnUpdatePlatforms.disabled = !hasPlatformUpdates;
         btnUpdateLibraries.disabled = !hasLibraryUpdates;
       }

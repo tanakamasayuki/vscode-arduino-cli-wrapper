@@ -1,6 +1,9 @@
 // JavaScript-only VS Code extension that wraps Arduino CLI.
 
 const vscode = require('vscode');
+const sketchTool = require('./sketch-tool-adapter');
+const sketchDocuments = require('./sketch-document')(vscode);
+const YAML = require('yaml');
 const cp = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -205,10 +208,7 @@ let lastAutoUpdateAt = 0;
 let sessionCliExeOverride = '';
 const cliAutoDetectState = { attempted: false, found: '' };
 
-// Simple i18n without external deps.
-// Note: We intentionally avoid bundling any library to keep
-// this extension lightweight and compatible with VS Code's
-// extension host sandbox.
+// Simple i18n for extension UI messages.
 const _locale = (vscode.env.language || 'en').toLowerCase();
 const _isJa = _locale.startsWith('ja');
 const _remoteName = (vscode.env.remoteName || '').toLowerCase();
@@ -530,6 +530,13 @@ const MSG = {
     versionCheckPending: 'Gathering data…',
     versionCheckReportReady: 'Dependency report generated.',
     yamlApplied: 'Applied profile to sketch.yaml: {name}',
+    sketchEditConflict: 'sketch.yaml changed. Reopen the helper or refresh the report before applying changes.',
+    sketchLocalCoreProtected: 'Unversioned development cores are excluded from bulk updates.',
+    sketchNoPlatform: 'No platform entry is configured.',
+    sketchBoardMetadataWarning: 'Board options describe catalog version {catalog}; the configured core is {configured}. Older cores may have different options.',
+    sketchLocalCoreLabel: 'Unversioned (local development)',
+    sketchLibraryDataDirMissing: 'Arduino CLI data directory is unavailable',
+    sketchLibraryIndexFallback: 'Cannot read the CLI library index; using the official index: {msg}',
     yamlApplyError: 'Failed to apply to sketch.yaml: {msg}',
     yamlNoSketchDir: 'Could not determine a sketch folder in this workspace.',
     enterSketchName: 'Enter new sketch name',
@@ -1239,6 +1246,13 @@ const MSG = {
     versionCheckPending: 'データを収集中…',
     versionCheckReportReady: 'バージョン比較レポートを生成しました。',
     yamlApplied: 'sketch.yaml にプロファイルを反映しました: {name}',
+    sketchEditConflict: 'sketch.yaml が変更されています。Helper を開き直すか、レポートを再取得してから反映してください。',
+    sketchLocalCoreProtected: '版指定なしの開発用コアは一括更新の対象外です。',
+    sketchNoPlatform: 'プラットフォームが指定されていません。',
+    sketchBoardMetadataWarning: 'ボードオプションはカタログの {catalog} 版の情報です。指定中のコアは {configured} 版で、古い版ではオプションが異なる場合があります。',
+    sketchLocalCoreLabel: '版指定なし（ローカル開発用）',
+    sketchLibraryDataDirMissing: 'Arduino CLI のデータ保存先を取得できません',
+    sketchLibraryIndexFallback: 'CLI のライブラリインデックスを読めないため公式インデックスを使用します: {msg}',
     yamlApplyError: 'sketch.yaml への反映に失敗しました: {msg}',
     yamlNoSketchDir: 'ワークスペース内のスケッチフォルダを特定できませんでした。',
   }
@@ -7841,6 +7855,7 @@ function formatBuildCheckSketchLabel(sketchDir, uri, fallbackFolder) {
  */
 async function commandVersionCheck() {
   if (!(await ensureCliReady())) return;
+  // Refresh CLI indexes as a precaution for subsequent profile builds.
   try {
     await runArduinoCliUpdate({ auto: false, skipEnsure: true });
   } catch (err) {
@@ -9413,10 +9428,8 @@ async function commandSetProfile(required) {
   );
   if (!pick) return false;
   const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
-  let text = await readTextFile(yamlUri);
-  text = replaceYamlKey(text, 'default_profile', pick.value);
-  text = formatSketchYamlLayout(text);
-  await writeTextFile(yamlUri, text);
+  const text = await sketchDocuments.read(yamlUri);
+  await sketchDocuments.write(yamlUri, text, await sketchTool.setDefaultProfile(text, pick.value));
   await rememberSelectedProfile(sketchDir, pick.value);
   vscode.window.setStatusBarMessage(_isJa ? `Profile を設定: ${pick.value}` : `Set profile: ${pick.value}`, 2000);
   return true;
@@ -10025,53 +10038,17 @@ async function readTextFile(uri) {
  */
 async function readSketchYamlInfo(sketchDir) {
   try {
-    const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
-    await vscode.workspace.fs.stat(yamlUri);
-    const text = await readTextFile(yamlUri);
-    // Extract default_profile
-    let defaultProfile = '';
-    const mDef = text.match(/^\s*default_profile\s*:\s*([^\n#]+)\s*$/m);
-    if (mDef) {
-      defaultProfile = mDef[1].trim().replace(/^"|"$/g, '');
-    }
-    // Extract profile names under profiles:
-    const profiles = [];
-    const wokwiProfiles = new Set();
-    const lines = text.split(/\r?\n/);
-    let inProfiles = false;
-    let currentProfile = '';
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!inProfiles) {
-        if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true;
-        continue;
-      }
-      const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
-      if (mKey) {
-        currentProfile = mKey[1].trim();
-        profiles.push(currentProfile);
-        continue;
-      }
-      if (/^\S/.test(line)) break; // end of profiles block
-      if (!currentProfile) continue;
-      const wokwiMatch = line.match(/^\s{4}wokwi\s*:\s*([^#]+)(?:#.*)?$/);
-      if (wokwiMatch) {
-        let value = wokwiMatch[1].trim();
-        if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
-          value = value.slice(1, -1);
-        } else if (value.startsWith('\'') && value.endsWith('\'') && value.length >= 2) {
-          value = value.slice(1, -1);
-        }
-        if (/^(true|yes|on|1)$/i.test(value)) {
-          wokwiProfiles.add(currentProfile);
-        }
-        continue;
-      }
-    }
-    return { defaultProfile, profiles, wokwiProfiles };
-  } catch {
-    return null;
-  }
+    // Build/profile selection describes the on-disk file consumed by Arduino CLI.
+    // Dependency validation belongs to the management commands, not this UI metadata read.
+    const text = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
+    const doc = YAML.parseDocument(text);
+    if (doc.errors.length) throw doc.errors[0];
+    const mapping = doc.get('profiles', true);
+    if (!YAML.isMap(mapping)) return null;
+    const profiles = mapping.items.map(pair => String(pair.key.value));
+    const wokwiProfiles = new Set(profiles.filter(name => /^(true|yes|on|1)$/i.test(String(doc.getIn(['profiles', name, 'wokwi'])))));
+    return { defaultProfile: String(doc.get('default_profile') || ''), profiles, wokwiProfiles };
+  } catch { return null; }
 }
 
 function isProfileWokwiEnabled(yamlInfo, profileName) {
@@ -10157,182 +10134,52 @@ async function getDumpProfileYaml(fqbn, sketchDir) {
 }
 
 /**
- * Get Arduino CLI configuration directories via `config dump --format json`.
- * Returns `{ dataDir, userDir }` or empty strings on failure.
+ * Resolve Arduino CLI directories, including defaults omitted by config dump.
+ * Returns `{ dataDir, userDir }`, keeping successful values on partial failure.
  */
 async function getCliConfigDirs() {
   const channel = getOutput();
   const cfg = getConfig();
   const exe = cfg.exe || 'arduino-cli';
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-  const args = [...baseArgs, 'config', 'dump', '--format', 'json'];
-  let stdout = '';
-  try {
+  const readDirectory = async name => {
+    let stdout = '';
     await new Promise((resolve, reject) => {
-      const child = cp.spawn(exe, args, { shell: false });
+      const child = cp.spawn(exe, [...baseArgs, 'config', 'get', `directories.${name}`, '--json'], { shell: false });
       const wasCancelled = trackChildCancellation(child);
       child.stdout.on('data', d => { stdout += d.toString(); });
       child.stderr.on('data', d => channel.append(d.toString()));
-      child.on('error', e => {
-        if (wasCancelled()) {
-          reject(createCancellationError());
-          return;
-        }
-        reject(e);
-      });
+      child.on('error', e => reject(wasCancelled() ? createCancellationError() : e));
       child.on('close', code => {
-        if (wasCancelled()) {
-          reject(createCancellationError());
-          return;
-        }
-        code === 0 ? resolve() : reject(new Error(`config dump exit ${code}`));
+        if (wasCancelled()) reject(createCancellationError());
+        else code === 0 ? resolve() : reject(new Error(`config get directories.${name} exit ${code}`));
       });
     });
-    const json = JSON.parse(stdout);
-    const dirs = json.directories || {};
-    return {
-      dataDir: dirs.data || '',
-      userDir: dirs.user || '',
-    };
-  } catch (e) {
-    // Demote to warning to avoid noisy errors during compile
-    channel.appendLine(`[warn] ${e.message}`);
-    return { dataDir: '', userDir: '' };
+    const value = JSON.parse(stdout);
+    if (typeof value !== 'string' || !value.trim()) throw new Error(`Invalid directories.${name}`);
+    return value;
+  };
+  const results = await Promise.allSettled(['data', 'user'].map(readDirectory));
+  for (const result of results) {
+    if (result.status === 'rejected') channel.appendLine(`[warn] ${result.reason.message}`);
   }
+  return {
+    dataDir: results[0].status === 'fulfilled' ? results[0].value : '',
+    userDir: results[1].status === 'fulfilled' ? results[1].value : '',
+  };
 }
 
-/**
- * Extract `vendor:arch` and `version` from a dump-profile YAML text.
- * Optionally prefer a given profile name.
- */
-function parsePlatformFromProfileYaml(profileYaml, preferProfileName) {
-  // Try to find the profile block and extract vendor:arch, version, and optional platform_index_url
-  const lines = (profileYaml || '').split(/\r?\n/);
-  let inProfiles = false;
-  let currentKey = '';
-  const targetKey = preferProfileName ? String(preferProfileName).trim() : '';
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!inProfiles) {
-      if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true;
-      continue;
-    }
-    const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
-    if (mKey) {
-      currentKey = mKey[1].trim();
-      continue;
-    }
-    const mPlat = line.match(/^\s{6}(?:-\s*)?platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
-    if (mPlat && (!targetKey || targetKey === currentKey)) {
-      const info = { vendorArch: mPlat[1], version: mPlat[2] ? mPlat[2] : '' };
-      for (let j = i + 1; j < lines.length; j++) {
-        const next = lines[j];
-        if (/^\s{6}-\s*platform\s*:/.test(next)) break;
-        if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(next)) break;
-        if (/^\s{2}[^\s:#][^:]*\s*:\s*$/.test(next)) break;
-        if (/^\s*default_profile\s*:\s*/.test(next)) break;
-        if (/^\S/.test(next)) break;
-        const trimmed = next.trim();
-        if (!trimmed) continue;
-        if (trimmed.startsWith('platform_index_url')) {
-          const idx = trimmed.indexOf(':');
-          if (idx >= 0) {
-            let url = trimmed.slice(idx + 1).trim();
-            if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
-              url = url.slice(1, -1);
-            }
-            info.indexUrl = url;
-          }
-        }
-      }
-      return info;
-    }
-  }
-  return null;
-}
-
-/**
- * Create `sketch.yaml` in the current sketch directory.
- * If FQBN is selected, append dump-profile profiles and set default_profile.
- */
-// createSketchYaml command removed by request
-
-/**
- * From dump-profile YAML, find a profile key whose `fqbn` matches.
- * Falls back to the first profile key when no exact match is found.
- */
-function extractProfileNameFromDump(profileYaml, fqbn) {
-  if (!profileYaml) return '';
-  const lines = profileYaml.split(/\r?\n/);
-  let inProfiles = false;
-  let currentKey = '';
-  let firstKey = '';
-  const stripQuotes = (s) => s.replace(/^"|"$/g, '').trim();
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!inProfiles) {
-      if (/^\s*profiles\s*:\s*$/.test(line)) {
-        inProfiles = true;
-      }
-      continue;
-    }
-    const mKey = line.match(/^\s{2}([^\s:][^:]*)\s*:\s*$/);
-    if (mKey) {
-      currentKey = mKey[1].trim();
-      if (!firstKey) firstKey = currentKey;
-      continue;
-    }
-    const mFqbn = line.match(/^\s{4}fqbn\s*:\s*(.+)\s*$/);
-    if (mFqbn && currentKey) {
-      const val = stripQuotes(mFqbn[1]);
-      if (!fqbn) continue;
-      if (val === fqbn) {
-        return currentKey;
-      }
-    }
-  }
-  return firstKey;
-}
-
-/**
- * From sketch.yaml, get `fqbn` under profiles.<profileName> if present.
- */
+/** Read the selected profile FQBN independently of dependency validation. */
 async function getFqbnFromSketchYaml(sketchDir, profileName) {
   try {
-    const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
-    const text = await readTextFile(yamlUri);
-    const lines = text.split(/\r?\n/);
-    let inProfiles = false;
-    let currentKey = '';
-    for (const line of lines) {
-      if (!inProfiles) {
-        if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true;
-        continue;
-      }
-      const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
-      if (mKey) { currentKey = mKey[1].trim(); continue; }
-      const mFqbn = line.match(/^\s{4}fqbn\s*:\s*(.+)\s*$/);
-      if (mFqbn && (!profileName || profileName === currentKey)) {
-        return mFqbn[1].trim().replace(/^"|"$/g, '');
-      }
-      if (/^\S/.test(line)) break;
-    }
-  } catch { }
-  return '';
-}
-
-/**
- * Replace or append a top-level YAML key with a scalar value.
- */
-function replaceYamlKey(text, key, value) {
-  const re = new RegExp(`^(\n?|[\s\S]*?)$`);
-  try {
-    const pattern = new RegExp(`(^|\n)\s*${key}\s*:\s*.*(?=\n|$)`, 'm');
-    if (pattern.test(text)) {
-      return text.replace(pattern, (m) => m.replace(/:\s*.*/, `: ${encodeYamlString(value)}`));
-    }
-  } catch { }
-  return text + `\n${key}: ${encodeYamlString(value)}`;
+    const text = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
+    const doc = YAML.parseDocument(text);
+    if (doc.errors.length) throw doc.errors[0];
+    const profiles = doc.get('profiles', true);
+    const name = profileName || doc.get('default_profile') || profiles?.items[0]?.key.value;
+    const fqbn = doc.getIn(['profiles', name, 'fqbn']);
+    return typeof fqbn === 'string' ? fqbn.trim() : '';
+  } catch { return ''; }
 }
 
 /**
@@ -11170,327 +11017,95 @@ async function commandOpenCommandCenter() {
 }
 
 async function commandOpenSketchYamlHelper(ctx) {
-  const panel = vscode.window.createWebviewPanel(
-    'sketchYamlHelper',
-    'sketch.yaml Helper',
-    vscode.ViewColumn.Active,
-    { enableScripts: true, retainContextWhenHidden: true }
-  );
-  let helperSketchDir = (ctx && ctx.sketchDir) ? String(ctx.sketchDir) : '';
-
-  const guessSketchDirFromActiveEditor = () => {
-    const uri = vscode.window.activeTextEditor?.document?.uri;
-    if (!uri) return '';
-    const fsPath = uri.fsPath || '';
-    if (!fsPath) return '';
-    const lower = fsPath.toLowerCase();
-    if (lower.endsWith('.ino')) return path.dirname(fsPath);
-    if (path.basename(fsPath).toLowerCase() === 'sketch.yaml') return path.dirname(fsPath);
-    return '';
-  };
-
-  try {
-    const htmlUri = vscode.Uri.joinPath(extContext.extensionUri, 'html', 'sketch.yaml.html');
-    let html = await readTextFile(htmlUri);
-    panel.webview.html = html;
-  } catch (e) {
-    showError(e);
+  let sketchDir = ctx?.sketchDir || '';
+  if (!sketchDir) {
+    const file = vscode.window.activeTextEditor?.document?.uri?.fsPath || '';
+    if (file.endsWith('.ino') || path.basename(file) === 'sketch.yaml') sketchDir = path.dirname(file);
   }
-
-  // Try to initialize with selected profile's FQBN and libraries (if provided)
-  (async () => {
-    try {
-      let sketchDir = helperSketchDir;
-      if (!sketchDir) {
-        sketchDir = guessSketchDirFromActiveEditor();
-      }
-      if (!sketchDir) {
-        const ino = await pickInoFromWorkspace();
-        if (!ino) return;
-        sketchDir = path.dirname(ino);
-      }
-      helperSketchDir = sketchDir;
-      const yamlInfo = await readSketchYamlInfo(sketchDir);
-      if (!yamlInfo || !yamlInfo.profiles || yamlInfo.profiles.length === 0) return;
-      let prof = (ctx && ctx.profile && yamlInfo.profiles.includes(ctx.profile)) ? ctx.profile : '';
-      if (!prof) prof = yamlInfo.defaultProfile || yamlInfo.profiles[0];
-      const extFqbn = await getFqbnFromSketchYaml(sketchDir, prof);
-      const libs = await getLibrariesFromSketchYaml(sketchDir, prof);
-      // Extract raw profile block text to preserve user-defined parameters
-      const profileBlock = await getProfileBlockFromSketchYaml(sketchDir, prof);
-      // Parse platform id/version from sketch.yaml text
-      let platformId = '';
-      let platformVersion = '';
-      let platformIndexUrl = '';
-      try {
-        const text = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
-        const parsed = parsePlatformFromProfileYaml(text, prof);
-        if (parsed) {
-          platformId = parsed.vendorArch || '';
-          platformVersion = parsed.version || '';
-          platformIndexUrl = parsed.indexUrl || '';
-        }
-      } catch { }
-      if (extFqbn) {
-        panel.webview.postMessage({
-          type: 'init',
-          extFqbn,
-          libraries: libs,
-          platformId,
-          platformVersion,
-          platformIndexUrl,
-          profileBlock,
-          profileName: prof
-        });
-      }
-    } catch (_) { /* ignore init errors */ }
-  })();
-
-  panel.webview.onDidReceiveMessage(async (msg) => {
-    if (!msg || msg.type !== 'applyYaml') return;
-    try {
-      let sketchDir = helperSketchDir;
-      if (!sketchDir) {
-        sketchDir = guessSketchDirFromActiveEditor();
-      }
-      if (!sketchDir) {
-        sketchDir = await detectSketchDirForStatus();
-      }
-      if (!sketchDir) {
-        // Try to pick a sketch by .ino
+  if (!sketchDir) {
+    const ino = await pickInoFromWorkspace();
+    if (!ino) return;
+    sketchDir = path.dirname(ino);
+  }
+  const uri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+  try {
+    const original = await sketchDocuments.read(uri, true);
+    const tool = await sketchTool.getTool();
+    const parsed = original.trim() ? tool.listSketchProfiles(original) : { profiles: [], defaultProfile: '' };
+    const profile = parsed.profiles.find(p => p.name === ctx?.profile) || parsed.profiles.find(p => p.name === parsed.defaultProfile) || parsed.profiles[0];
+    const platform = profile?.platforms.find(p => p.name === profile.fqbn.split(':').slice(0, 2).join(':'));
+    const template = profile ? sketchTool.profileTemplate(original, profile.name) : '';
+    const panel = vscode.window.createWebviewPanel('sketchYamlHelper', 'sketch.yaml Helper', vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
+    let metadataPromise;
+    const metadata = () => metadataPromise || (metadataPromise = fetchVersionCheckMetadata(getOutput()));
+    let applying = false;
+    panel.webview.onDidReceiveMessage(async msg => {
+      if (msg?.type === 'sketchToolRequest') {
         try {
-          const ino = await pickInoFromWorkspace();
-          if (ino) {
-            sketchDir = path.dirname(ino);
-          }
-        } catch (_) { }
-      }
-      if (!sketchDir) {
-        // As a last resort, let user choose a folder
-        const picked = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: _isJa ? 'スケッチフォルダを選択' : 'Select Sketch Folder' });
-        if (!picked || picked.length === 0) {
-          vscode.window.showWarningMessage(t('yamlNoSketchDir'));
-          return;
+          let result;
+          const options = msg.payload || {};
+          if (msg.action === 'initialize') result = { type: 'init', extFqbn: profile?.fqbn || '',
+            libraries: profile?.libraries.filter(l => l.kind === 'library').map(l => ({ name: l.name, version: l.version })) || [],
+            platformId: platform?.name || '', platformVersion: platform?.version || '', platformIndexUrl: platform?.indexUrl || '',
+            profileName: profile?.name || '', profileBlock: template ? template.slice('profiles:\n'.length, template.lastIndexOf('default_profile:')) : '',
+            locale: _isJa ? 'ja' : 'en', metadataWarning: t('sketchBoardMetadataWarning'), localCoreLabel: t('sketchLocalCoreLabel') };
+          else if (msg.action === 'catalogs') {
+            const meta = await metadata();
+            const boards = Object.fromEntries(tool.searchBoards(meta.catalog, { details: true }).results.map(board => [board.fqbn, {
+              name: board.name, version: board.version, boardVersion: board.boardVersion, package_url: board.indexUrl,
+              config_options: board.configOptions.map(option => ({ ...option, values: (option.values || []).map(value => ({ ...value, is_default: !!(value.selected || value.is_default) })) }))
+            }]));
+            result = { boards, libraries: tool.searchLibraries(meta.catalog, { details: true }).results.map(library => ({ ...meta.catalog.libraryDetails?.get(library.name.toLowerCase()), ...library })), warnings: meta.warnings };
+          } else if (msg.action === 'platformVersions') {
+            const meta = await metadata();
+            const indexUrl = platform?.name === options.platformId && platform.indexUrl ? platform.indexUrl : options.indexUrl;
+            result = await tool.loadPlatformVersions(options.platformId, { indexUrl: indexUrl || undefined, catalog: meta.catalog });
+          } else if (msg.action === 'checkPreview') {
+            const meta = await metadata();
+            result = await sketchTool.report(String(options.text || ''), meta.catalog);
+          } else if (msg.action === 'updatePreview') {
+            const meta = await metadata();
+            const text = String(options.text || '');
+            const checked = await sketchTool.report(text, meta.catalog);
+            const platforms = await sketchTool.updateSelected(text, checked.entries.filter(e => e.kind === 'platform'), 'platform', meta.catalog);
+            const libraries = await sketchTool.updateSelected(platforms.content, checked.entries.filter(e => e.kind === 'library'), 'library', meta.catalog);
+            const selected = tool.listSketchProfiles(libraries.content).profiles[0];
+            result = { content: libraries.content, platformVersion: selected.platforms.find(p => p.name === selected.fqbn.split(':').slice(0, 2).join(':'))?.version || '', libraries: selected.libraries.filter(l => l.kind === 'library') };
+          } else if (msg.action === 'preview') {
+            const meta = await metadata();
+            result = await sketchTool.preview(String(options.text || ''), options, meta.catalog);
+          } else throw new Error('Unknown helper request');
+          await panel.webview.postMessage({ type: 'sketchToolResponse', id: msg.id, result });
+        } catch (error) {
+          await panel.webview.postMessage({ type: 'sketchToolResponse', id: msg.id, error: sketchErrorMessage(error) });
         }
-        sketchDir = picked[0].fsPath;
+        return;
       }
-      helperSketchDir = sketchDir;
-      const { profileName, blockText } = extractProfileFromTemplateYaml(String(msg.yaml || ''));
-      if (!profileName || !blockText) throw new Error('invalid YAML payload');
-      const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
-      let existing = '';
-      try { existing = await readTextFile(yamlUri); } catch { existing = ''; }
-      let merged = mergeProfileIntoSketchYaml(existing, profileName, blockText);
-      merged = formatSketchYamlLayout(merged);
-      await writeTextFile(yamlUri, merged);
-      await rememberSelectedProfile(sketchDir, profileName);
-      vscode.window.setStatusBarMessage(t('yamlApplied', { name: profileName }), 2000);
-      // Optionally reveal the file
-      try { await vscode.window.showTextDocument(yamlUri); } catch { }
-      try { await vscode.commands.executeCommand('arduino-cli.refreshView'); } catch { }
-      panel.dispose();
-    } catch (e) {
-      vscode.window.showErrorMessage(t('yamlApplyError', { msg: e.message }));
-    }
-  });
+      if (msg?.type !== 'applyYaml' || applying) return;
+      applying = true;
+      try {
+        const current = await sketchDocuments.read(uri, true);
+        if (current !== original) throw Object.assign(new Error(), { code: 'CONFLICT' });
+        const merged = await sketchTool.merge(current, String(msg.yaml || ''), msg.pinUnversioned === true);
+        await sketchDocuments.write(uri, current, merged.content);
+        await rememberSelectedProfile(sketchDir, merged.name);
+        vscode.window.setStatusBarMessage(t('yamlApplied', { name: merged.name }), 2000);
+        await vscode.window.showTextDocument(uri);
+        await vscode.commands.executeCommand('arduino-cli.refreshView');
+        panel.dispose();
+      } catch (error) { vscode.window.showErrorMessage(t('yamlApplyError', { msg: sketchErrorMessage(error) })); }
+      finally { applying = false; }
+    });
+    const html = await readTextFile(vscode.Uri.joinPath(extContext.extensionUri, 'html', 'sketch.yaml.html'));
+    panel.webview.html = html.replace('<html lang="en">', `<html lang="${_isJa ? 'ja' : 'en'}" data-vscode-language="${_locale}">`);
+  } catch (error) { vscode.window.showErrorMessage(t('yamlApplyError', { msg: sketchErrorMessage(error) })); }
 }
 
-/**
- * From a generated template YAML, extract the first profile name and its block text.
- */
-function extractProfileFromTemplateYaml(text) {
-  const lines = String(text || '').split(/\r?\n/);
-  let inProfiles = false;
-  let start = -1;
-  let name = '';
-  // First, try to find under an explicit `profiles:` section
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!inProfiles) { if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true; continue; }
-    const m = line.match(/^\s{2,}([^\s:#][^:]*)\s*:\s*$/);
-    if (m) { name = m[1].trim(); start = i; break; }
-  }
-  // Fallback: accept a raw profile block starting at an indented key
-  if (start < 0) {
-    for (let i = 0; i < lines.length; i++) {
-      const m = lines[i].match(/^\s{2,}([^\s:#][^:]*)\s*:\s*$/);
-      if (m) { name = m[1].trim(); start = i; break; }
-    }
-  }
-  if (start < 0 || !name) return { profileName: '', blockText: '' };
-  // Determine the indentation of the profile key to detect the end reliably
-  const indentMatch = lines[start].match(/^(\s+)/);
-  const baseIndent = indentMatch ? indentMatch[1] : '  ';
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    const s = lines[i];
-    if (/^\s*default_profile\s*:\s*/.test(s)) { end = i; break; }
-    if (/^\S/.test(s)) { end = i; break; }
-    const m = s.match(/^\s{2,}([^\s:#][^:]*)\s*:\s*$/);
-    if (m) {
-      const ind = (s.match(/^(\s+)/) || [, ''])[1];
-      if (ind && ind.length === baseIndent.length) { end = i; break; }
-    }
-  }
-  const block = lines.slice(start, end).join('\n');
-  return { profileName: name, blockText: block.replace(/\s+$/, '') + '\n' };
-}
-
-/**
- * Normalize spacing inside sketch.yaml profiles to keep helper output consistent.
- */
-function formatSketchYamlLayout(text) {
-  try {
-    const ensureFinalNewline = (str) => str.endsWith('\n') ? str : `${str}\n`;
-    const normalized = String(text || '').replace(/\r\n/g, '\n');
-    const lines = normalized.split('\n');
-    const profIdx = lines.findIndex(line => /^\s*profiles\s*:\s*$/.test(line));
-    if (profIdx < 0) {
-      const collapsed = normalized.replace(/\n{3,}/g, '\n\n');
-      const collapsedLines = collapsed.split('\n');
-      while (collapsedLines.length > 0 && collapsedLines[collapsedLines.length - 1].trim() === '') {
-        collapsedLines.pop();
-      }
-      return ensureFinalNewline(collapsedLines.join('\n'));
-    }
-    let profEnd = lines.length;
-    for (let i = profIdx + 1; i < lines.length; i++) {
-      if (/^\S/.test(lines[i])) { profEnd = i; break; }
-    }
-    const before = lines.slice(0, profIdx + 1);
-    const section = lines.slice(profIdx + 1, profEnd);
-    const after = lines.slice(profEnd);
-
-    const blocks = [];
-    let idx = 0;
-    while (idx < section.length) {
-      while (idx < section.length && section[idx].trim() === '') idx++;
-      if (idx >= section.length) break;
-      const start = idx;
-      idx++;
-      while (idx < section.length) {
-        const line = section[idx];
-        if (/^\s{2}[^ \t:#][^:]*\s*:\s*$/.test(line)) break;
-        if (/^\S/.test(line)) break;
-        idx++;
-      }
-      const block = section.slice(start, idx);
-      const cleaned = block.filter((line, lineIdx) => lineIdx === 0 || line.trim().length > 0);
-      blocks.push(cleaned);
-    }
-
-    const formattedSection = [];
-    for (let b = 0; b < blocks.length; b++) {
-      const block = blocks[b];
-      for (const line of block) formattedSection.push(line);
-      if (b < blocks.length - 1) formattedSection.push('');
-    }
-    while (formattedSection.length > 0 && formattedSection[formattedSection.length - 1].trim() === '') {
-      formattedSection.pop();
-    }
-
-    const afterTrimmed = after.slice();
-    while (afterTrimmed.length > 0 && afterTrimmed[0].trim() === '') {
-      afterTrimmed.shift();
-    }
-
-    const resultLines = before.concat(formattedSection);
-    if (afterTrimmed.length > 0) {
-      if (resultLines.length === 0 || resultLines[resultLines.length - 1].trim() !== '') {
-        resultLines.push('');
-      } else {
-        resultLines[resultLines.length - 1] = '';
-      }
-      resultLines.push(...afterTrimmed);
-    }
-
-    while (resultLines.length > 0 && resultLines[resultLines.length - 1].trim() === '') {
-      resultLines.pop();
-    }
-
-    const result = resultLines.join('\n').replace(/\n{3,}/g, '\n\n');
-    return ensureFinalNewline(result);
-  } catch (_) {
-    const fallback = String(text || '').replace(/\r\n/g, '\n');
-    return fallback.endsWith('\n') ? fallback : `${fallback}\n`;
-  }
-}
-/**
- * Merge a single profile block into existing sketch.yaml text.
- * - Overwrite when the profile exists; otherwise append under profiles.
- */
-function mergeProfileIntoSketchYaml(existingText, profileName, profileBlockText) {
-  const text = String(existingText || '');
-  const lines = text.split(/\r?\n/);
-  // Find profiles section
-  let profStart = -1; let profEnd = lines.length;
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*profiles\s*:\s*$/.test(lines[i])) { profStart = i; for (let j = i + 1; j < lines.length; j++) { if (/^\S/.test(lines[j])) { profEnd = j; break; } } break; }
-  }
-  const ensureEol = (s) => s.endsWith('\n') ? s : (s + '\n');
-  if (profStart < 0) {
-    // No profiles section: append one at the end
-    const base = ensureEol(text.trimEnd());
-    return base + 'profiles:\n' + profileBlockText + '\n';
-  }
-  // Section exists: check if profile exists
-  let curStart = -1; let curEnd = profEnd;
-  for (let i = profStart + 1; i < profEnd; i++) {
-    const m = lines[i].match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
-    if (m) {
-      if (curStart >= 0) { curEnd = i; break; }
-      if (m[1].trim() === profileName) { curStart = i; }
-    }
-  }
-  if (curStart >= 0) {
-    // Replace existing block
-    const before = lines.slice(0, curStart).join('\n');
-    const after = lines.slice(curEnd).join('\n');
-    return [before, profileBlockText.replace(/\s+$/, ''), after].join('\n').replace(/\n{3,}/g, '\n\n') + (text.endsWith('\n') ? '' : '\n');
-  }
-  // Append to end of profiles section
-  const before = lines.slice(0, profEnd).join('\n');
-  const after = lines.slice(profEnd).join('\n');
-  const glue = (before.endsWith('\n') ? '' : '\n');
-  return [before, glue + profileBlockText.replace(/\s+$/, ''), after].join('\n').replace(/\n{3,}/g, '\n\n') + (text.endsWith('\n') ? '' : '\n');
-}
-
-/**
- * Parse libraries entries from sketch.yaml under a specific profile.
- * Returns an array like [{ name, version }] (version may be '').
- */
 async function getLibrariesFromSketchYaml(sketchDir, profileName) {
   try {
-    const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
-    const text = await readTextFile(yamlUri);
-    const lines = text.split(/\r?\n/);
-    let inProfiles = false;
-    let inTarget = false;
-    let inLibs = false;
-    const result = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!inProfiles) { if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true; continue; }
-      const mKey = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
-      if (mKey) { inTarget = (mKey[1].trim() === profileName); inLibs = false; continue; }
-      if (!inTarget) { if (/^\S/.test(line)) break; else continue; }
-      const mLibs = line.match(/^\s{4}libraries\s*:\s*$/);
-      if (mLibs) { inLibs = true; continue; }
-      if (inLibs) {
-        const mItem = line.match(/^\s{6}-\s*(.+)\s*$/);
-        if (mItem) {
-          const raw = mItem[1].trim().replace(/^"|"$/g, '');
-          // Extract name and optional (version)
-          const mv = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-          if (mv) result.push({ name: mv[1].trim(), version: mv[2].trim() });
-          else if (raw) result.push({ name: raw, version: '' });
-          continue;
-        }
-        // End of list when indentation decreases or next top-level section starts
-        if (!/^\s{6}-/.test(line)) { inLibs = false; }
-      }
-    }
-    return result;
+    const tool = await sketchTool.getTool();
+    const text = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
+    return tool.listSketchProfiles(sketchTool.profileTemplate(text, profileName)).profiles.find(p => p.name === profileName)?.libraries.filter(l => l.kind === 'library').map(l => ({ name: l.name, version: l.version })) || [];
   } catch { return []; }
 }
 
@@ -12051,7 +11666,7 @@ async function openVersionCheckReport({ initialReport, initialMetadata, initialS
             vscode.window.setStatusBarMessage(t('versionCheckUpdateNoChanges'), 2000);
             return;
           }
-          const result = await applyPlatformVersionUpdates(entries);
+          const result = await applyPlatformVersionUpdates(entries, currentMetadata);
           if (result.errors && result.errors.length) {
             for (const errText of result.errors) {
               channel.appendLine(`[warn] ${errText}`);
@@ -12075,7 +11690,7 @@ async function openVersionCheckReport({ initialReport, initialMetadata, initialS
             vscode.window.setStatusBarMessage(t('versionCheckUpdateNoChanges'), 2000);
             return;
           }
-          const result = await applyLibraryVersionUpdates(entries);
+          const result = await applyLibraryVersionUpdates(entries, currentMetadata);
           if (result.errors && result.errors.length) {
             for (const errText of result.errors) {
               channel.appendLine(`[warn] ${errText}`);
@@ -12104,58 +11719,107 @@ async function openVersionCheckReport({ initialReport, initialMetadata, initialS
   }
 }
 
+function fetchJsonWithRedirect(url, timeoutMs = 10000) {
+  const visited = new Set();
+  const headers = { 'User-Agent': 'vscode-arduino-cli-wrapper' };
+  const attempt = (target) => new Promise((resolve, reject) => {
+    if (visited.size > 5) {
+      reject(new Error('too many redirects'));
+      return;
+    }
+    visited.add(target);
+    const req = https.get(target, { headers }, (res) => {
+      const status = res.statusCode || 0;
+      if (status >= 300 && status < 400 && res.headers.location) {
+        const next = (() => {
+          try { return new URL(res.headers.location, target).toString(); }
+          catch (_) { return res.headers.location; }
+        })();
+        res.resume();
+        resolve(attempt(next));
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        res.resume();
+        reject(new Error(`HTTP ${status} for ${target}`));
+        return;
+      }
+      const chunks = [];
+      res.on('data', (c) => { chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)); });
+      res.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        try {
+          resolve(JSON.parse(body || 'null'));
+        } catch (err) {
+          reject(err);
+        }
+      });
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => {
+      try { req.destroy(new Error('timeout')); } catch (_) { }
+    });
+  });
+  return attempt(url);
+}
+
+async function loadSketchLibraryCatalog(tool, options = {}) {
+  let localError;
+  try {
+    const dirs = await getCliConfigDirs();
+    if (!dirs.dataDir) throw new Error(t('sketchLibraryDataDirMissing'));
+    let dataDir = dirs.dataDir;
+    if (_isWslEnv && /^[A-Za-z]:[\\/]/.test(dataDir)) {
+      dataDir = await new Promise((resolve, reject) => {
+        cp.execFile('wslpath', ['-u', dataDir], { timeout: 10000 }, (error, stdout) => error ? reject(error) : resolve(stdout.trim()));
+      });
+    }
+    const uri = vscode.Uri.file(path.join(dataDir, 'library_index.json'));
+    const stat = await vscode.workspace.fs.stat(uri);
+    const stamp = `${uri.toString()}|${stat.mtime}|${stat.size}`;
+    if (!options.forceRefresh && cachedLibraryDetailsJson?.localIndexStamp === stamp) return cachedLibraryDetailsJson;
+    const catalog = await sketchTool.libraryCatalogFromFile(uri.fsPath);
+    catalog.localIndexStamp = stamp;
+    return catalog;
+  } catch (error) { localError = error?.message || String(error); }
+  const fallback = !options.forceRefresh && cachedLibraryDetailsJson?.librarySource === sketchTool.DEFAULT_LIBRARIES_SOURCE && Date.now() - cachedLibraryDetailsFetchedAt < THREE_HOURS_MS
+    ? cachedLibraryDetailsJson : await sketchTool.libraryCatalogFromSource(sketchTool.DEFAULT_LIBRARIES_SOURCE);
+  // Keep the local-source failure visible even when a cached fallback can be used.
+  return { ...fallback, localIndexWarning: t('sketchLibraryIndexFallback', { msg: localError }) };
+}
+
 async function fetchVersionCheckMetadata(channel, options = {}) {
-  const boardsUrl = 'https://tanakamasayuki.github.io/arduino-cli-helper/board_details.json';
-  const librariesUrl = 'https://tanakamasayuki.github.io/arduino-cli-helper/libraries.json';
-  const metadata = {
-    boardsUrl,
-    librariesUrl,
-    platforms: new Map(),
-    libraries: new Map(),
-    warnings: []
-  };
+  const tool = await sketchTool.getTool();
   const now = Date.now();
-  const forceRefresh = !!(options && options.forceRefresh);
-
-  const useCachedBoards = !forceRefresh && cachedBoardDetailsJson && (now - cachedBoardDetailsFetchedAt) < THREE_HOURS_MS;
-  if (useCachedBoards) {
-    metadata.platforms = buildPlatformLatestMap(cachedBoardDetailsJson);
+  const warnings = [];
+  const results = await Promise.allSettled([
+    !options.forceRefresh && cachedBoardDetailsJson && now - cachedBoardDetailsFetchedAt < THREE_HOURS_MS
+      ? cachedBoardDetailsJson : tool.loadVersionCatalog({ librariesSource: false }),
+    loadSketchLibraryCatalog(tool, options),
+  ]);
+  if (results[0].status === 'fulfilled') {
+    if (cachedBoardDetailsJson !== results[0].value) cachedBoardDetailsFetchedAt = now;
+    cachedBoardDetailsJson = results[0].value;
   } else {
-    try {
-      const boardJson = await fetchJsonWithRedirect(boardsUrl);
-      cachedBoardDetailsJson = boardJson;
-      cachedBoardDetailsFetchedAt = Date.now();
-      metadata.platforms = buildPlatformLatestMap(boardJson);
-    } catch (err) {
-      const msg = err && err.message ? err.message : String(err);
-      metadata.warnings.push(`boards: ${msg}`);
-      channel.appendLine(t('versionCheckFetchBoardsFail', { msg }));
-      if (cachedBoardDetailsJson) {
-        metadata.platforms = buildPlatformLatestMap(cachedBoardDetailsJson);
-      }
-    }
+    const msg = results[0].reason.message;
+    warnings.push(`boards: ${msg}`); channel.appendLine(t('versionCheckFetchBoardsFail', { msg }));
   }
-
-  const useCachedLibraries = !forceRefresh && cachedLibraryDetailsJson && (now - cachedLibraryDetailsFetchedAt) < THREE_HOURS_MS;
-  if (useCachedLibraries) {
-    metadata.libraries = buildLibraryLatestMap(cachedLibraryDetailsJson);
+  if (results[1].status === 'fulfilled') {
+    if (cachedLibraryDetailsJson !== results[1].value) cachedLibraryDetailsFetchedAt = results[1].value.retrievedAt || now;
+    cachedLibraryDetailsJson = results[1].value;
+    if (cachedLibraryDetailsJson.localIndexWarning) warnings.push(cachedLibraryDetailsJson.localIndexWarning);
   } else {
-    try {
-      const libraryJson = await fetchJsonWithRedirect(librariesUrl);
-      cachedLibraryDetailsJson = libraryJson;
-      cachedLibraryDetailsFetchedAt = Date.now();
-      metadata.libraries = buildLibraryLatestMap(libraryJson);
-    } catch (err) {
-      const msg = err && err.message ? err.message : String(err);
-      metadata.warnings.push(`libraries: ${msg}`);
-      channel.appendLine(t('versionCheckFetchLibrariesFail', { msg }));
-      if (cachedLibraryDetailsJson) {
-        metadata.libraries = buildLibraryLatestMap(cachedLibraryDetailsJson);
-      }
-    }
+    const msg = results[1].reason.message;
+    warnings.push(`libraries: ${msg}`); channel.appendLine(t('versionCheckFetchLibrariesFail', { msg }));
   }
-
-  return metadata;
+  const catalog = { platforms: cachedBoardDetailsJson?.platforms || new Map(),
+    boards: cachedBoardDetailsJson?.boards || new Map(), libraries: cachedLibraryDetailsJson?.libraries || new Map(),
+    libraryDetails: cachedLibraryDetailsJson?.libraryDetails || new Map(),
+    warnings: [...(cachedBoardDetailsJson?.warnings || []), ...(cachedLibraryDetailsJson?.warnings || [])] };
+  warnings.push(...catalog.warnings.map(w => `${w.code}: ${w.name || ''}`));
+  return { catalog, platforms: catalog.platforms, libraries: catalog.libraries, warnings,
+    boardsUrl: tool.DEFAULT_BOARDS_SOURCE, librariesUrl: cachedLibraryDetailsJson?.librarySource || sketchTool.DEFAULT_LIBRARIES_SOURCE };
 }
 
 async function buildVersionCheckReport(sketches, metadata) {
@@ -12187,7 +11851,7 @@ async function buildVersionCheckReport(sketches, metadata) {
 
     let yamlText = '';
     try {
-      yamlText = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
+      yamlText = await sketchDocuments.read(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
       warnings.push(`${sketchLabel}: ${msg}`);
@@ -12196,77 +11860,18 @@ async function buildVersionCheckReport(sketches, metadata) {
 
     sketchCount += 1;
 
-    let yamlInfo = null;
     try {
-      yamlInfo = await readSketchYamlInfo(sketchDir);
-    } catch (_) { yamlInfo = null; }
-
-    let profileNames = yamlInfo && Array.isArray(yamlInfo.profiles)
-      ? Array.from(new Set(yamlInfo.profiles.filter(p => typeof p === 'string' && p.trim().length > 0)))
-      : [];
-
-    if (yamlInfo && yamlInfo.defaultProfile && profileNames.includes(yamlInfo.defaultProfile)) {
-      profileNames = profileNames.filter(p => p !== yamlInfo.defaultProfile);
-      profileNames.push(yamlInfo.defaultProfile);
-    }
-
-    if (!profileNames.length) {
-      warnings.push(t('buildCheckSkipNoProfiles', { sketch: sketchLabel }));
-      continue;
-    }
-
-    profileCount += profileNames.length;
-
-    for (const profile of profileNames) {
-      const fqbn = extractProfileFqbnFromYaml(yamlText, profile);
-      const platformEntries = extractProfilePlatformsFromYaml(yamlText, profile);
-      if (!platformEntries.length) {
-        warnings.push(`${sketchLabel} (${profile}): no platform entry found`);
+      const checked = await sketchTool.report(yamlText, metadata.catalog || { platforms: platformMap, libraries: libraryMap });
+      profileCount += checked.parsed.profiles.length;
+      for (const row of checked.entries) {
+        (row.kind === 'platform' ? platformRows : libraryRows).push({ ...row, sketchDir, sketchLabel });
+        if (row.kind === 'platform' && !row.currentVersion) warnings.push(`${sketchLabel} (${row.profile}/${row.platformId}): ${t('sketchLocalCoreProtected')}`);
       }
-      for (const plat of platformEntries) {
-        const currentRaw = typeof plat.version === 'string' ? plat.version.trim() : '';
-        const currentIndexUrl = typeof plat.indexUrl === 'string' ? plat.indexUrl.trim() : '';
-        const latestEntry = platformMap.get(plat.id) || null;
-        const latestRaw = latestEntry && typeof latestEntry.version === 'string' ? latestEntry.version : '';
-        const latestIndexUrl = latestEntry && typeof latestEntry.packageUrl === 'string' ? latestEntry.packageUrl.trim() : '';
-        const status = evaluateVersionStatus(currentRaw, latestRaw);
-        const indexUrlStatus = evaluateIndexUrlStatus(currentIndexUrl, latestIndexUrl);
-        platformRows.push({
-          sketchDir,
-          sketchLabel,
-          profile,
-          fqbn,
-          platformId: plat.id,
-          currentVersion: currentRaw,
-          latestVersion: latestRaw,
-          currentIndexUrl,
-          latestIndexUrl,
-          indexUrlStatus,
-          status,
-          packageUrl: latestIndexUrl,
-          platformName: latestEntry && typeof latestEntry.name === 'string' ? latestEntry.name : ''
-        });
+      for (const profile of checked.parsed.profiles) {
+        if (!profile.platforms.length) warnings.push(`${sketchLabel} (${profile.name}): ${t('sketchNoPlatform')}`);
       }
-
-      const libs = extractProfileLibrariesFromYaml(yamlText, profile);
-      for (const lib of libs) {
-        const name = lib && typeof lib.name === 'string' ? lib.name : '';
-        if (!name) continue;
-        const currentRaw = lib && typeof lib.version === 'string' ? lib.version : '';
-        const lookup = libraryMap.get(name.toLowerCase()) || null;
-        const latestRaw = lookup && typeof lookup.version === 'string' ? lookup.version : '';
-        const status = evaluateVersionStatus(currentRaw, latestRaw);
-        libraryRows.push({
-          sketchDir,
-          sketchLabel,
-          profile,
-          fqbn,
-          libraryName: name,
-          currentVersion: currentRaw,
-          latestVersion: latestRaw,
-          status
-        });
-      }
+    } catch (error) {
+      warnings.push(`${sketchLabel}: ${sketchErrorMessage(error)}`);
     }
   }
 
@@ -12327,549 +11932,39 @@ async function buildVersionCheckReport(sketches, metadata) {
   };
 }
 
-function evaluateVersionStatus(currentRaw, latestRaw) {
-  const current = normalizeVersion(currentRaw || '');
-  const latest = normalizeVersion(latestRaw || '');
-  if (!current && !latest) return 'unknown';
-  if (!current) return latest ? 'missing' : 'unknown';
-  if (!latest) return 'unknown';
-  const cmp = compareVersions(current, latest);
-  if (cmp < 0) return 'outdated';
-  if (cmp > 0) return 'ahead';
-  return 'ok';
+function sketchErrorMessage(error) {
+  if (error?.code === 'CONFLICT') return t('sketchEditConflict');
+  if (error?.code === 'PROTECTED_CORE') return t('sketchLocalCoreProtected');
+  return error?.message || String(error);
 }
 
-function evaluateIndexUrlStatus(currentRaw, latestRaw) {
-  const current = String(currentRaw || '').trim();
-  const latest = String(latestRaw || '').trim();
-  if (!current && !latest) return 'unknown';
-  if (!latest) return 'unknown';
-  if (!current) return 'missing';
-  return normalizeIndexUrl(current) === normalizeIndexUrl(latest) ? 'ok' : 'outdated';
-}
-
-function normalizeIndexUrl(url) {
-  return String(url || '').trim().replace(/\/+$/, '');
-}
-
-async function applyPlatformVersionUpdates(entries) {
+async function applySelectedVersionUpdates(entries, kind, metadata) {
   const result = { applied: 0, errors: [] };
-  if (!Array.isArray(entries) || entries.length === 0) return result;
-
-  const dedup = new Map();
-  for (const entry of entries) {
-    if (!entry) continue;
-    const sketchDir = typeof entry.sketchDir === 'string' ? entry.sketchDir : '';
-    const profile = typeof entry.profile === 'string' ? entry.profile : '';
-    const platformId = typeof entry.platformId === 'string' ? entry.platformId : '';
-    const newVersion = typeof entry.latestVersion === 'string' ? entry.latestVersion : '';
-    const newIndexUrl = typeof entry.latestIndexUrl === 'string' ? entry.latestIndexUrl : '';
-    if (!sketchDir || !profile || !platformId || (!newVersion && !newIndexUrl)) continue;
-    const key = `${path.normalize(sketchDir)}|${profile}|${platformId}`;
-    dedup.set(key, { sketchDir, profile, platformId, newVersion, newIndexUrl });
-  }
-
   const grouped = new Map();
-  for (const entry of dedup.values()) {
-    const bucketKey = path.normalize(entry.sketchDir);
-    if (!grouped.has(bucketKey)) {
-      grouped.set(bucketKey, { sketchDir: entry.sketchDir, updates: [] });
-    }
-    grouped.get(bucketKey).updates.push(entry);
+  for (const row of Array.isArray(entries) ? entries : []) {
+    if (!row?.sketchDir || !row.profile || !(row.platformId || row.libraryName)) continue;
+    const key = path.normalize(row.sketchDir);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(row);
   }
-
-  for (const info of grouped.values()) {
-    const yamlUri = vscode.Uri.file(path.join(info.sketchDir, 'sketch.yaml'));
-    let text;
+  for (const [sketchDir, rows] of grouped) {
     try {
-      text = await readTextFile(yamlUri);
-    } catch (err) {
-      result.errors.push(`${info.sketchDir}: ${err && err.message ? err.message : String(err)}`);
-      continue;
-    }
-    let mutated = text;
-    let changed = 0;
-    for (const upd of info.updates) {
-      let next = patchPlatformVersionInYamlText(mutated, upd.profile, upd.platformId, upd.newVersion);
-      next = patchPlatformIndexUrlInYamlText(next, upd.profile, upd.platformId, upd.newIndexUrl);
-      if (next !== mutated) {
-        mutated = next;
-        changed += 1;
-      }
-    }
-    if (changed > 0) {
-      try {
-        mutated = formatSketchYamlLayout(mutated);
-        await writeTextFile(yamlUri, mutated);
-        result.applied += changed;
-      } catch (err) {
-        result.errors.push(`${info.sketchDir}: ${err && err.message ? err.message : String(err)}`);
-      }
-    }
+      const uri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
+      const text = await sketchDocuments.read(uri);
+      const updated = await sketchTool.updateSelected(text, rows, kind, metadata.catalog);
+      await sketchDocuments.write(uri, text, updated.content);
+      result.applied += updated.applied;
+    } catch (error) { result.errors.push(`${sketchDir}: ${sketchErrorMessage(error)}`); }
   }
-
   return result;
 }
 
-async function applyLibraryVersionUpdates(entries) {
-  const result = { applied: 0, errors: [] };
-  if (!Array.isArray(entries) || entries.length === 0) return result;
-
-  const dedup = new Map();
-  for (const entry of entries) {
-    if (!entry) continue;
-    const sketchDir = typeof entry.sketchDir === 'string' ? entry.sketchDir : '';
-    const profile = typeof entry.profile === 'string' ? entry.profile : '';
-    const libraryName = typeof entry.libraryName === 'string' ? entry.libraryName : '';
-    const newVersion = typeof entry.latestVersion === 'string' ? entry.latestVersion : '';
-    if (!sketchDir || !profile || !libraryName || !newVersion) continue;
-    const key = `${path.normalize(sketchDir)}|${profile}|${libraryName}`;
-    dedup.set(key, { sketchDir, profile, libraryName, newVersion });
-  }
-
-  const grouped = new Map();
-  for (const entry of dedup.values()) {
-    const bucketKey = path.normalize(entry.sketchDir);
-    if (!grouped.has(bucketKey)) {
-      grouped.set(bucketKey, { sketchDir: entry.sketchDir, updates: [] });
-    }
-    grouped.get(bucketKey).updates.push(entry);
-  }
-
-  for (const info of grouped.values()) {
-    const yamlUri = vscode.Uri.file(path.join(info.sketchDir, 'sketch.yaml'));
-    let text;
-    try {
-      text = await readTextFile(yamlUri);
-    } catch (err) {
-      result.errors.push(`${info.sketchDir}: ${err && err.message ? err.message : String(err)}`);
-      continue;
-    }
-    let mutated = text;
-    let changed = 0;
-    for (const upd of info.updates) {
-      const libs = extractProfileLibrariesFromYaml(mutated, upd.profile);
-      const idx = libs.findIndex(l => l.name === upd.libraryName);
-      if (idx === -1) continue;
-      if (libs[idx].version === upd.newVersion) continue;
-      libs[idx] = { name: libs[idx].name, version: upd.newVersion };
-      const next = patchLibrariesInYamlText(mutated, upd.profile, libs);
-      if (next !== mutated) {
-        mutated = next;
-        changed += 1;
-      }
-    }
-    if (changed > 0) {
-      try {
-        mutated = formatSketchYamlLayout(mutated);
-        await writeTextFile(yamlUri, mutated);
-        result.applied += changed;
-      } catch (err) {
-        result.errors.push(`${info.sketchDir}: ${err && err.message ? err.message : String(err)}`);
-      }
-    }
-  }
-
-  return result;
+async function applyPlatformVersionUpdates(entries, metadata) {
+  return applySelectedVersionUpdates(entries, 'platform', metadata);
 }
 
-function patchPlatformVersionInYamlText(yamlText, profileName, platformId, newVersion) {
-  try {
-    const id = String(platformId || '').trim();
-    const ver = String(newVersion || '').trim();
-    if (!id) return yamlText;
-    const lines = String(yamlText || '').split(/\r?\n/);
-    const bounds = findProfileBounds(lines, profileName);
-    if (!bounds) return yamlText;
-    const { targetStart, targetEnd } = bounds;
-    const desired = `      - platform: ${id}${ver ? ` (${ver})` : ''}`;
-    let platformsHeader = -1;
-    for (let i = targetStart + 1; i < targetEnd; i++) {
-      if (/^\s{4}platforms\s*:\s*$/.test(lines[i])) {
-        platformsHeader = i;
-        break;
-      }
-    }
-    if (platformsHeader >= 0) {
-      for (let i = platformsHeader + 1; i < targetEnd; i++) {
-        const line = lines[i];
-        if (/^\s{6}-\s*platform\s*:\s*/.test(line)) {
-          const m = line.match(/^\s{6}-\s*platform\s*:\s*([^\s]+)\s*(?:\([^)]*\))?\s*$/);
-          if (m && m[1] === id) {
-            lines[i] = desired;
-            return lines.join('\n');
-          }
-          continue;
-        }
-        if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) {
-          break;
-        }
-      }
-      const before = lines.slice(0, platformsHeader + 1).join('\n');
-      const after = lines.slice(platformsHeader + 1).join('\n');
-      return before + '\n' + desired + (after.startsWith('\n') ? '' : '\n') + after;
-    }
-    const before = lines.slice(0, targetStart + 1).join('\n');
-    const after = lines.slice(targetStart + 1).join('\n');
-    const block = ['    platforms:', desired].join('\n');
-    return [before, block, after].join('\n');
-  } catch (_) {
-    return yamlText;
-  }
-}
-
-function patchPlatformIndexUrlInYamlText(yamlText, profileName, platformId, newIndexUrl) {
-  try {
-    const id = String(platformId || '').trim();
-    const url = String(newIndexUrl || '').trim();
-    if (!id || !url) return yamlText;
-    const lines = String(yamlText || '').split(/\r?\n/);
-    const bounds = findProfileBounds(lines, profileName);
-    if (!bounds) return yamlText;
-    const { targetStart, targetEnd } = bounds;
-    for (let i = targetStart + 1; i < targetEnd; i++) {
-      const line = lines[i];
-      const m = line.match(/^(\s*)(?:-\s*)?platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\([^)]*\))?\s*$/);
-      if (!m || m[2] !== id) continue;
-      const childIndent = `${m[1]}  `;
-      const desired = `${childIndent}platform_index_url: ${url}`;
-      for (let j = i + 1; j < targetEnd; j++) {
-        const next = lines[j];
-        if (/^\s{6}-\s*platform\s*:/.test(next) || /^\s{4}platform\s*:/.test(next)) break;
-        if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(next) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(next) || /^\S/.test(next) || /^\s*default_profile\s*:\s*/.test(next)) break;
-        if (next.trim().startsWith('platform_index_url')) {
-          if (next === desired) return yamlText;
-          lines[j] = desired;
-          return lines.join('\n');
-        }
-      }
-      lines.splice(i + 1, 0, desired);
-      return lines.join('\n');
-    }
-    return yamlText;
-  } catch (_) {
-    return yamlText;
-  }
-}
-
-function patchLibrariesInYamlText(yamlText, profileName, libs) {
-  try {
-    const lines = String(yamlText || '').split(/\r?\n/);
-    const bounds = findProfileBounds(lines, profileName);
-    if (!bounds) return yamlText;
-    const { targetStart, targetEnd } = bounds;
-    let header = -1;
-    let headerEnd = -1;
-    for (let i = targetStart + 1; i < targetEnd; i++) {
-      if (/^\s{4}libraries\s*:\s*$/.test(lines[i])) {
-        header = i;
-        headerEnd = i + 1;
-        for (let j = i + 1; j < targetEnd; j++) {
-          if (/^\s{6}-\s*/.test(lines[j])) {
-            headerEnd = j + 1;
-            continue;
-          }
-          if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(lines[j]) || /^\S/.test(lines[j]) || /^\s*default_profile\s*:\s*/.test(lines[j])) {
-            break;
-          }
-        }
-        break;
-      }
-    }
-    const formatted = [];
-    if (Array.isArray(libs)) {
-      for (const entry of libs) {
-        const name = entry && typeof entry.name === 'string' ? entry.name.trim() : '';
-        if (!name) continue;
-        const ver = entry && typeof entry.version === 'string' ? entry.version.trim() : '';
-        formatted.push(`      - ${ver ? `${name} (${ver})` : name}`);
-      }
-    }
-    const hasLibs = formatted.length > 0;
-    if (header >= 0) {
-      const before = lines.slice(0, header);
-      const after = lines.slice(headerEnd >= 0 ? headerEnd : header + 1);
-      if (!hasLibs) {
-        return before.concat(after).join('\n').replace(/\n{3,}/g, '\n\n');
-      }
-      return before.concat(['    libraries:', ...formatted], after).join('\n');
-    }
-    if (!hasLibs) return yamlText;
-    const before = lines.slice(0, targetEnd);
-    const after = lines.slice(targetEnd);
-    const block = ['    libraries:', ...formatted];
-    return before.concat(block, after).join('\n').replace(/\n{3,}/g, '\n\n');
-  } catch (_) {
-    return yamlText;
-  }
-}
-
-function findProfileBounds(lines, profileName) {
-  if (!Array.isArray(lines)) return null;
-  let profilesStart = -1;
-  let profilesEnd = lines.length;
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*profiles\s*:\s*$/.test(lines[i])) {
-      profilesStart = i;
-      for (let j = i + 1; j < lines.length; j++) {
-        if (/^\S/.test(lines[j])) {
-          profilesEnd = j;
-          break;
-        }
-      }
-      break;
-    }
-  }
-  if (profilesStart < 0) return null;
-  let targetStart = -1;
-  let targetEnd = profilesEnd;
-  const wanted = typeof profileName === 'string' ? profileName.trim() : '';
-  for (let i = profilesStart + 1; i < profilesEnd; i++) {
-    const m = lines[i].match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
-    if (m) {
-      const name = m[1].trim();
-      if (!wanted || name === wanted) {
-        if (targetStart < 0) {
-          targetStart = i;
-          continue;
-        }
-      }
-      if (targetStart >= 0) {
-        targetEnd = i;
-        break;
-      }
-    }
-  }
-  if (targetStart < 0) return null;
-  if (targetEnd <= targetStart) targetEnd = profilesEnd;
-  return { profilesStart, profilesEnd, targetStart, targetEnd };
-}
-
-function extractProfileFqbnFromYaml(yamlText, profileName) {
-  try {
-    const lines = String(yamlText || '').split(/\r?\n/);
-    const bounds = findProfileBounds(lines, profileName);
-    if (!bounds) return '';
-    const { targetStart, targetEnd } = bounds;
-    for (let i = targetStart + 1; i < targetEnd; i++) {
-      const line = lines[i];
-      const m = line.match(/^\s{4}fqbn\s*:\s*(.+)\s*$/);
-      if (m) {
-        return m[1].trim().replace(/^"|"$/g, '');
-      }
-      if (/^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line)) break;
-    }
-    return '';
-  } catch (_) {
-    return '';
-  }
-}
-
-function extractProfilePlatformsFromYaml(yamlText, profileName) {
-  const result = [];
-  try {
-    const lines = String(yamlText || '').split(/\r?\n/);
-    const bounds = findProfileBounds(lines, profileName);
-    if (!bounds) return result;
-    const { targetStart, targetEnd } = bounds;
-    for (let i = targetStart + 1; i < targetEnd; i++) {
-      if (/^\s{4}platforms\s*:\s*$/.test(lines[i])) {
-        for (let j = i + 1; j < targetEnd; j++) {
-          const line = lines[j];
-          const m = line.match(/^\s{6}-\s*platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
-          if (m) {
-            result.push({
-              id: m[1],
-              version: m[2] ? m[2].trim() : '',
-              indexUrl: extractPlatformIndexUrlAfterLine(lines, j + 1, targetEnd)
-            });
-            continue;
-          }
-          if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) {
-            break;
-          }
-        }
-        if (result.length > 0) return result;
-      }
-    }
-    for (let i = targetStart + 1; i < targetEnd; i++) {
-      const m = lines[i].match(/^\s{4}platform\s*:\s*([A-Za-z0-9_.:-]+)(?:\s*\(([^)]+)\)\s*)?$/);
-      if (m) {
-        result.push({
-          id: m[1],
-          version: m[2] ? m[2].trim() : '',
-          indexUrl: extractPlatformIndexUrlAfterLine(lines, i + 1, targetEnd)
-        });
-      }
-    }
-    return result;
-  } catch (_) {
-    return result;
-  }
-}
-
-function extractPlatformIndexUrlAfterLine(lines, start, end) {
-  for (let i = start; i < end; i++) {
-    const line = lines[i] || '';
-    if (/^\s{6}-\s*platform\s*:/.test(line) || /^\s{4}platform\s*:/.test(line)) break;
-    if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) break;
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('platform_index_url')) continue;
-    const idx = trimmed.indexOf(':');
-    if (idx < 0) continue;
-    let value = trimmed.slice(idx + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    return value;
-  }
-  return '';
-}
-
-function extractProfileLibrariesFromYaml(yamlText, profileName) {
-  const result = [];
-  try {
-    const lines = String(yamlText || '').split(/\r?\n/);
-    const bounds = findProfileBounds(lines, profileName);
-    if (!bounds) return result;
-    const { targetStart, targetEnd } = bounds;
-    let header = -1;
-    for (let i = targetStart + 1; i < targetEnd; i++) {
-      if (/^\s{4}libraries\s*:\s*$/.test(lines[i])) {
-        header = i;
-        for (let j = i + 1; j < targetEnd; j++) {
-          const line = lines[j];
-          const m = line.match(/^\s{6}-\s*(.+?)\s*$/);
-          if (m) {
-            const raw = m[1].trim().replace(/^"|"$/g, '');
-            const mv = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-            if (mv) result.push({ name: mv[1].trim(), version: mv[2].trim() });
-            else if (raw) result.push({ name: raw, version: '' });
-            continue;
-          }
-          if (/^\s{4}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\s{2}[^\s:#][^:]*\s*:\s*$/.test(line) || /^\S/.test(line) || /^\s*default_profile\s*:\s*/.test(line)) {
-            break;
-          }
-        }
-        break;
-      }
-    }
-    return result;
-  } catch (_) {
-    return result;
-  }
-}
-
-function buildPlatformLatestMap(boardDetails) {
-  const map = new Map();
-  if (!boardDetails || typeof boardDetails !== 'object' || Array.isArray(boardDetails)) return map;
-  for (const [fqbn, detail] of Object.entries(boardDetails)) {
-    if (!detail || typeof detail !== 'object') continue;
-    const parts = String(fqbn).split(':');
-    if (parts.length < 2) continue;
-    const id = `${parts[0]}:${parts[1]}`;
-    const versionRaw = detail.version || detail.Version || '';
-    const version = normalizeVersion(versionRaw);
-    const existing = map.get(id);
-    if (!existing || compareVersions(version, existing.version) > 0) {
-      map.set(id, {
-        version,
-        packageUrl: typeof detail.package_url === 'string' ? detail.package_url : '',
-        name: typeof detail.name === 'string' ? detail.name : ''
-      });
-    }
-  }
-  return map;
-}
-
-function buildLibraryLatestMap(libraryEntries) {
-  const map = new Map();
-  if (!Array.isArray(libraryEntries)) return map;
-  for (const entry of libraryEntries) {
-    if (!entry || typeof entry !== 'object') continue;
-    const name = typeof entry.name === 'string' ? entry.name.trim() : '';
-    if (!name) continue;
-    const key = name.toLowerCase();
-    const version = normalizeVersion(entry.version || '');
-    const existing = map.get(key);
-    if (!existing || compareVersions(version, existing.version) > 0) {
-      map.set(key, { name, version });
-    }
-  }
-  return map;
-}
-
-function fetchJsonWithRedirect(url, timeoutMs = 10000) {
-  const visited = new Set();
-  const headers = { 'User-Agent': 'vscode-arduino-cli-wrapper' };
-  const attempt = (target) => new Promise((resolve, reject) => {
-    if (visited.size > 5) {
-      reject(new Error('too many redirects'));
-      return;
-    }
-    visited.add(target);
-    const req = https.get(target, { headers }, (res) => {
-      const status = res.statusCode || 0;
-      if (status >= 300 && status < 400 && res.headers.location) {
-        const next = (() => {
-          try { return new URL(res.headers.location, target).toString(); }
-          catch (_) { return res.headers.location; }
-        })();
-        res.resume();
-        resolve(attempt(next));
-        return;
-      }
-      if (status < 200 || status >= 300) {
-        res.resume();
-        reject(new Error(`HTTP ${status} for ${target}`));
-        return;
-      }
-      const chunks = [];
-      res.on('data', (c) => { chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)); });
-      res.on('end', () => {
-        const body = Buffer.concat(chunks).toString('utf8');
-        try {
-          resolve(JSON.parse(body || 'null'));
-        } catch (err) {
-          reject(err);
-        }
-      });
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    req.setTimeout(timeoutMs, () => {
-      try { req.destroy(new Error('timeout')); } catch (_) { }
-    });
-  });
-  return attempt(url);
-}
-
-function compareVersions(a, b) {
-  const va = normalizeVersion(a || '');
-  const vb = normalizeVersion(b || '');
-  if (!va && !vb) return 0;
-  if (!va) return -1;
-  if (!vb) return 1;
-  const [mainA, preA = ''] = va.split('-', 2);
-  const [mainB, preB = ''] = vb.split('-', 2);
-  const partsA = mainA.split('.');
-  const partsB = mainB.split('.');
-  const len = Math.max(partsA.length, partsB.length);
-  for (let i = 0; i < len; i++) {
-    const na = parseInt(partsA[i] || '0', 10);
-    const nb = parseInt(partsB[i] || '0', 10);
-    if (Number.isNaN(na) && Number.isNaN(nb)) continue;
-    if (Number.isNaN(na)) return -1;
-    if (Number.isNaN(nb)) return 1;
-    if (na !== nb) return na < nb ? -1 : 1;
-  }
-  if (preA && !preB) return -1;
-  if (!preA && preB) return 1;
-  if (preA && preB) {
-    if (preA === preB) return 0;
-    return preA < preB ? -1 : 1;
-  }
-  return 0;
+async function applyLibraryVersionUpdates(entries, metadata) {
+  return applySelectedVersionUpdates(entries, 'library', metadata);
 }
 
 function formatBuildReportPlatform(builder) {
@@ -14546,40 +13641,6 @@ function formatProfilePortDisplay(rawPort) {
  * Extract the raw YAML block for the given profile from sketch.yaml.
  * Returns an empty string when not found.
  */
-async function getProfileBlockFromSketchYaml(sketchDir, profileName) {
-  try {
-    const yamlUri = vscode.Uri.file(path.join(sketchDir, 'sketch.yaml'));
-    const text = await readTextFile(yamlUri);
-    const lines = text.split(/\r?\n/);
-    let inProfiles = false;
-    let start = -1;
-    let end = -1;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!inProfiles) {
-        if (/^\s*profiles\s*:\s*$/.test(line)) inProfiles = true;
-        continue;
-      }
-      const m = line.match(/^\s{2}([^\s:#][^:]*)\s*:\s*$/);
-      if (m) {
-        const name = m[1].trim();
-        if (start >= 0) { end = i; break; }
-        if (!profileName || name === profileName) { start = i; }
-        continue;
-      }
-      // Stop at top-level or default_profile
-      if (start >= 0 && (/^\s*default_profile\s*:\s*/.test(line) || /^\S/.test(line))) {
-        end = i; break;
-      }
-    }
-    if (start >= 0 && end < 0) end = lines.length;
-    if (start >= 0 && end > start) {
-      return lines.slice(start, end).join('\n') + (text.endsWith('\n') ? '' : '\n');
-    }
-  } catch { }
-  return '';
-}
-
 /** Parse `port` from provided sketch.yaml text under a specific profile. */
 function getPortFromSketchYamlText(text, profileName) {
   try {

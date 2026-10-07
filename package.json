@@ -340,6 +340,15 @@
     }
   },
   "dependencies": {
-    "embed-asset-tool": "1.0.0"
+    "arduino-sketch-tool": "1.1.0",
+    "embed-asset-tool": "1.0.0",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "jsdom": "24.1.3"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check extension.js && node --check sketch-tool-adapter.js && node --check sketch-document.js && npm test"
   }
 }

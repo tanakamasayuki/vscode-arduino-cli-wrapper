@@ -1,6 +1,11 @@
 node_modules/**
 !node_modules/embed-asset-tool/
 !node_modules/embed-asset-tool/**
+!node_modules/arduino-sketch-tool/
+!node_modules/arduino-sketch-tool/**
+!node_modules/yaml/
+!node_modules/yaml/**
+test/**
 .vscode
 .git
 **/*.map
