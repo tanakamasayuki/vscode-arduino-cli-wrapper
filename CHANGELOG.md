@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Documented local VSIX packaging and manual Marketplace upload steps.
+- (JA) ローカルでの VSIX 作成と Marketplace への手動アップロード手順を追記しました。
 
 ## 1.10.0
 - (EN) Shared sketch.yaml creation/editing, version checks/updates, board catalogs and core version listings with published `arduino-sketch-tool` 1.1.0. Bulk updates protect unversioned cores and preserve local libraries, custom fields and unsaved edits. Library metadata prefers CLI-downloaded indexes, with direct official downloads as fallback.

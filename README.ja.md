@@ -494,6 +494,29 @@ clangd などの設定で `<ワークスペース>/.vscode/compile_commands.json
 - ボードが検出されない: ケーブル/ドライバー/ポートを確認し、「Arduino CLI: List Connected Boards」で確認してください。
 - Upload Data: `data/` が存在するか、スケッチに `SPIFFS.h` または `LittleFS.h` を含めているか確認してください。
 
+## リリース手順
+
+VSIX をローカルで作成し、Visual Studio Marketplace の管理画面から手動でアップロードします。以下はリポジトリのルートで実行します。
+
+1. `package.json` と `package-lock.json` のバージョンを公開する版にそろえ、`CHANGELOG.md` の `Unreleased` の変更をその版の節へ移します。変更履歴は英語、日本語の順で記載します。依存を導入し、チェックを実行します。
+
+   ```sh
+   npm ci
+   npm run check
+   ```
+
+2. vsce のバージョンとパッケージ対象ファイルを確認し、VSIX を作成します。
+
+   ```sh
+   npx @vscode/vsce --version
+   npx @vscode/vsce ls
+   npx @vscode/vsce package
+   ```
+
+   `ls` で実行時に必要なモジュールや HTML が含まれ、不要なファイルが除外されていることを確認します。対象ファイルは `.vscodeignore` で調整します。`package` は `vscode-arduino-cli-wrapper-<version>.vsix` を生成します。
+
+3. [Publisher 管理画面（tanakamasayuki）](https://marketplace.visualstudio.com/manage/publishers/tanakamasayuki) にサインインし、対象拡張の更新操作から生成した VSIX をアップロードします。公開後に Marketplace に表示されるバージョンを確認します。
+
 ## ライセンス
 
 CC0 1.0 Universal (Public Domain Dedication)。詳細は `LICENSE` を参照してください。

@@ -488,6 +488,29 @@ Point clangd or other tools to `<workspace>/.vscode/compile_commands.json` and t
 
 - Highlight.js (core, cpp grammar, VS2015 theme) (c) 2006-2023 the highlight.js authors, BSD-3-Clause. [License](https://github.com/highlightjs/highlight.js/blob/main/LICENSE)
 
+## Release procedure
+
+Build a VSIX locally, then upload it manually through the Visual Studio Marketplace management page. Run the commands below from the repository root.
+
+1. Set the release version in `package.json` and `package-lock.json`, and move the `Unreleased` changes in `CHANGELOG.md` into that version's section. Write English entries before their Japanese counterparts. Install dependencies and run the checks.
+
+   ```sh
+   npm ci
+   npm run check
+   ```
+
+2. Check the vsce version and packaged file list, then build the VSIX.
+
+   ```sh
+   npx @vscode/vsce --version
+   npx @vscode/vsce ls
+   npx @vscode/vsce package
+   ```
+
+   Use `ls` to confirm that required runtime modules and HTML files are included and unnecessary files are excluded. Adjust `.vscodeignore` as needed. `package` produces `vscode-arduino-cli-wrapper-<version>.vsix`.
+
+3. Sign in to the [publisher management page (tanakamasayuki)](https://marketplace.visualstudio.com/manage/publishers/tanakamasayuki) and upload the generated VSIX through the existing extension's update action. After publication, confirm the version shown in Marketplace.
+
 ## License
 
 CC0 1.0 Universal (Public Domain Dedication). See `LICENSE`.
