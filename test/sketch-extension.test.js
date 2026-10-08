@@ -11,14 +11,16 @@ const text = 'profiles:\n  dev:\n    fqbn: esp32:esp32:esp32\n    platforms:\n  
 async function extension(locale = 'ja', diskText = text) {
   let current = text, saves = 0, handler;
   const errors = [], posted = [];
-  const uri = file => ({ fsPath: file, toString: () => `file://${file}` });
+  // Compare by forward-slash paths so path.join results match on Windows hosts as well.
+  const slash = file => file.replace(/\\/g, '/');
+  const uri = file => ({ fsPath: file, toString: () => `file://${slash(file)}` });
   const document = { uri: uri('/sketch/sketch.yaml'), isDirty: true, getText: () => current, positionAt: n => n, save: async () => { saves++; return true; } };
   class Edit { replace(uri, range, value) { this.content = value; } }
   const panel = { disposed: false, dispose() { this.disposed = true; }, onDidDispose() {}, webview: { postMessage: async msg => { posted.push(msg); return true; }, onDidReceiveMessage(callback) { handler = callback; } } };
   const vscode = { env: { language: locale }, EventEmitter: class { fire() {} dispose() {} }, TreeItem: class {}, ViewColumn: { Active: 1 }, WorkspaceEdit: Edit, Position: class {}, Range: class {},
     Uri: { file: uri, joinPath: (base, ...parts) => uri(path.join(base.fsPath, ...parts)) },
     window: { createTreeView: () => ({}), createWebviewPanel: () => panel, showErrorMessage: m => errors.push(m), showTextDocument: async () => {}, setStatusBarMessage() {}, createOutputChannel: () => ({ appendLine() {} }) },
-    commands: { executeCommand: async () => {} }, workspace: { workspaceFolders: [{ name: 'workspace', uri: uri('/sketch') }], textDocuments: [document], fs: { readFile: async file => file.fsPath === '/sketch/sketch.yaml' ? Buffer.from(diskText) : fs.promises.readFile(file.fsPath) }, applyEdit: async edit => { current = edit.content; return true; } } };
+    commands: { executeCommand: async () => {} }, workspace: { workspaceFolders: [{ name: 'workspace', uri: uri('/sketch') }], textDocuments: [document], fs: { readFile: async file => slash(file.fsPath) === '/sketch/sketch.yaml' ? Buffer.from(diskText) : fs.promises.readFile(file.fsPath) }, applyEdit: async edit => { current = edit.content; return true; } } };
   const requireLocal = createRequire(path.resolve('extension.js'));
   const context = vm.createContext({ require: name => name === 'vscode' ? vscode : requireLocal(name), module: { exports: {} }, exports: {}, process, Buffer, TextDecoder, TextEncoder, console, setTimeout, clearTimeout, setInterval, clearInterval });
   new vm.Script(fs.readFileSync('extension.js', 'utf8'), { filename: 'extension.js' }).runInContext(context);
