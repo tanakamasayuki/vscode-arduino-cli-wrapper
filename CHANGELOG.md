@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.11.0
 - (EN) Documented local VSIX packaging and manual Marketplace upload steps.
 - (JA) ローカルでの VSIX 作成と Marketplace への手動アップロード手順を追記しました。
 - (EN) Added a monitor settings status bar item and the `Arduino CLI: Monitor Settings` command. Settings such as data bits, parity, stop bits, DTR and RTS are read from `arduino-cli monitor --describe` (with the board FQBN so board-specific defaults apply), and only values that differ from the board default are passed to `--config`. Profiles' `port_config` entries other than `baudrate` are applied too, and the baudrate picker now lists the rates reported by the port monitor.
