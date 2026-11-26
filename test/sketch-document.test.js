@@ -11,8 +11,12 @@ function fixture({ text = 'original', dirty = false, disk = 'disk', missing = fa
     createFile() { this.create = true; }
     insert(uri, position, value) { this.text = value; }
   }
-  const workspace = { textDocuments: missing ? [] : [document], fs: { readFile: async () => Buffer.from(disk) }, openTextDocument: async () => {
-    if (!workspace.textDocuments.length) throw Object.assign(new Error('missing'), { code: 'FileNotFound' });
+  const workspace = { textDocuments: missing ? [] : [document], fs: {
+    readFile: async () => Buffer.from(disk),
+    stat: async () => { if (!workspace.textDocuments.length) throw Object.assign(new Error('missing'), { code: 'FileNotFound' }); return {}; }
+  }, openTextDocument: async () => {
+    // Real VS Code rejects a missing file with a plain Error without `code`.
+    if (!workspace.textDocuments.length) throw new Error('cannot open vscode-remote://wsl%2Bubuntu/sketch.yaml');
     return document;
   }, applyEdit: async edit => { if (fail) return false; text = edit.text; workspace.textDocuments = [document]; return true; } };
   return { uri, workspace, document, saves: () => saves, access: createAccess({ workspace, WorkspaceEdit: Edit, Position: class {}, Range: class {} }) };
@@ -30,4 +34,16 @@ test('only missing-file errors can become an empty new document', async () => {
   await assert.rejects(f.access.read(f.uri, true), { code: 'EACCES' });
   f.workspace.fs.readFile = async () => { throw Object.assign(new Error('missing'), { code: 'FileNotFound' }); };
   assert.equal(await f.access.read(f.uri, true), '');
+});
+test('existing files that are not open are loaded instead of recreated', async () => {
+  const f = fixture({ missing: true });
+  f.workspace.fs.stat = async () => ({});
+  f.workspace.openTextDocument = async () => f.document;
+  await f.access.write(f.uri, 'original', 'updated');
+  assert.equal(f.document.getText(), 'updated');
+});
+test('stat errors other than missing files are not treated as a new file', async () => {
+  const f = fixture({ missing: true });
+  f.workspace.fs.stat = async () => { throw Object.assign(new Error('denied'), { code: 'NoPermissions' }); };
+  await assert.rejects(f.access.write(f.uri, '', 'new'), { code: 'NoPermissions' });
 });

@@ -32,6 +32,7 @@
   "cmd.setFqbn": "Arduino CLI: Set FQBN",
   "cmd.setPort": "Arduino CLI: Set Serial Port",
   "cmd.setBaud": "Arduino CLI: Set Baudrate",
+  "cmd.setMonitorConfig": "Arduino CLI: Monitor Settings",
   "cmd.localPortHelper": "Arduino CLI: Edit Local Port Rules",
   "cmd.openSketchFromTree": "Arduino CLI: Open Sketch from Tree",
   "cmd.uploadData": "Arduino CLI: Upload Data (FS)",

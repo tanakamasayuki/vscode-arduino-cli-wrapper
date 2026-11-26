@@ -3,6 +3,12 @@
 ## Unreleased
 - (EN) Documented local VSIX packaging and manual Marketplace upload steps.
 - (JA) ローカルでの VSIX 作成と Marketplace への手動アップロード手順を追記しました。
+- (EN) Added a monitor settings status bar item and the `Arduino CLI: Monitor Settings` command. Settings such as data bits, parity, stop bits, DTR and RTS are read from `arduino-cli monitor --describe` (with the board FQBN so board-specific defaults apply), and only values that differ from the board default are passed to `--config`. Profiles' `port_config` entries other than `baudrate` are applied too, and the baudrate picker now lists the rates reported by the port monitor.
+- (JA) ステータスバーにモニター設定項目と `Arduino CLI: モニター設定` コマンドを追加しました。データビット・パリティ・ストップビット・DTR・RTS などを `arduino-cli monitor --describe`（ボード固有の既定値を反映するため FQBN 付き）から取得し、ボードの既定値と異なる値だけを `--config` に渡します。プロファイルの `port_config` の `baudrate` 以外の項目も反映し、ボーレート選択にもポートモニターが報告する値を表示するようにしました。
+- (EN) Fixed Windows host ports selected from WSL losing their protocol prefix (e.g. `wchlink://<serial>` was passed as `//<serial>`).
+- (JA) WSL から選択した Windows ホストのポートで、プロトコル部分が欠落する不具合を修正しました（例: `wchlink://<serial>` が `//<serial>` として渡されていました）。
+- (EN) Fixed "Failed to apply to sketch.yaml: cannot open …" when applying the sketch.yaml helper to a sketch that has no sketch.yaml yet (VS Code reports a missing file without an error code, so the file was never created).
+- (JA) sketch.yaml がまだ無いスケッチで sketch.yaml ヘルパーを適用すると「sketch.yaml への反映に失敗しました: cannot open …」となる不具合を修正しました（VS Code は存在しないファイルをエラーコードなしで報告するため、新規作成に進めていませんでした）。
 
 ## 1.10.0
 - (EN) Shared sketch.yaml creation/editing, version checks/updates, board catalogs and core version listings with published `arduino-sketch-tool` 1.1.0. Bulk updates protect unversioned cores and preserve local libraries, custom fields and unsaved edits. Library metadata prefers CLI-downloaded indexes, with direct official downloads as fallback.

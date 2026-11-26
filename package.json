@@ -182,6 +182,10 @@
         "title": "%cmd.setBaud%"
       },
       {
+        "command": "arduino-cli.setMonitorConfig",
+        "title": "%cmd.setMonitorConfig%"
+      },
+      {
         "command": "arduino-cli.localPortHelper",
         "title": "%cmd.localPortHelper%"
       },

@@ -2,6 +2,13 @@
 // Keep editor buffers authoritative and avoid saving unrelated unsaved edits.
 module.exports = function createSketchDocumentAccess(vscode) {
   const open = uri => vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString());
+  const missing = async uri => {
+    try { await vscode.workspace.fs.stat(uri); return false; }
+    catch (error) {
+      if (['FileNotFound', 'ENOENT', 'EntryNotFound'].includes(error && error.code)) return true;
+      throw error;
+    }
+  };
   const conflict = () => Object.assign(new Error('sketch.yaml changed; reload the helper or version report'), { code: 'CONFLICT' });
   return {
     async read(uri, allowMissing = false) {
@@ -14,10 +21,10 @@ module.exports = function createSketchDocumentAccess(vscode) {
       }
     },
     async write(uri, original, content) {
-      let document;
-      try { document = open(uri) || await vscode.workspace.openTextDocument(uri); }
-      catch (error) {
-        if (original !== '' || !['FileNotFound', 'ENOENT'].includes(error.code)) throw error;
+      let document = open(uri);
+      // openTextDocument rejects a missing file with a plain Error (no code),
+      // so check existence on the file system before deciding to create it.
+      if (!document && original === '' && await missing(uri)) {
         const edit = new vscode.WorkspaceEdit();
         edit.createFile(uri, { overwrite: false });
         edit.insert(uri, new vscode.Position(0, 0), content);
@@ -26,6 +33,7 @@ module.exports = function createSketchDocumentAccess(vscode) {
         if (!await document.save()) throw new Error('Unable to save sketch.yaml');
         return;
       }
+      if (!document) document = await vscode.workspace.openTextDocument(uri);
       if (document.getText() !== original) throw conflict();
       if (content === original) return;
       const wasDirty = document.isDirty;

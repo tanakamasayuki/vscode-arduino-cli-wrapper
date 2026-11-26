@@ -32,6 +32,7 @@
   "cmd.setFqbn": "Arduino CLI: FQBN を設定",
   "cmd.setPort": "Arduino CLI: シリアルポートを設定",
   "cmd.setBaud": "Arduino CLI: ボーレートを設定",
+  "cmd.setMonitorConfig": "Arduino CLI: モニター設定",
   "cmd.localPortHelper": "Arduino CLI: ローカルポート設定を編集",
   "cmd.openSketchFromTree": "Arduino CLI: ツリーからスケッチを開く",
   "cmd.uploadData": "Arduino CLI: data フォルダをアップロード",

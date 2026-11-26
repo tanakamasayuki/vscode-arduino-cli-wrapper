@@ -181,6 +181,7 @@ const OUTPUT_NAME = 'Arduino CLI';
 const STATE_FQBN = 'arduino-cli.selectedFqbn';
 const STATE_PORT = 'arduino-cli.selectedPort';
 const STATE_BAUD = 'arduino-cli.selectedBaud';
+const STATE_MONITOR_CONFIG = 'arduino-cli.monitorConfig';
 const STATE_LAST_PROFILE = 'arduino-cli.lastProfileApplied';
 const STATE_LAST_AUTO_UPDATE = 'arduino-cli.lastAutoUpdateAt';
 const STATE_SELECTED_SKETCH = 'arduino-cli.selectedSketchDir';
@@ -191,7 +192,7 @@ const VALID_WARNING_LEVELS = new Set(['workspace', 'none', 'default', 'more', 'a
 const BUILD_DIR_NAME = '.build';
 let output;
 let extContext;
-let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings;
+let statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusMonitorConfig, statusWarnings;
 let compileDiagnostics;
 const PROGRESS_BUSY = Symbol('progressBusyNotification');
 const PROGRESS_CANCELLED = Symbol('progressCancelledNotification');
@@ -338,6 +339,21 @@ const MSG = {
     setBaudCustom: 'Custom…',
     setBaudPrompt: 'Enter baudrate (e.g., 115200)',
     statusSetBaud: 'Baudrate set: {baud}',
+    monitorConfigLoading: 'Reading monitor settings from the port…',
+    monitorConfigDescribeFail: '[monitor] Failed to read monitor settings: {msg}',
+    monitorConfigDescribeUnavailable: 'Could not read monitor settings for {port}. You can still enter settings manually.',
+    monitorConfigPickSetting: 'Select a monitor setting to change (current: {summary}) — Esc to finish',
+    monitorConfigPickValue: '{label} (current: {current})',
+    monitorConfigDefault: 'default',
+    monitorConfigCurrent: 'current',
+    monitorConfigUnknownSetting: 'Not reported by the current port monitor (select to remove)',
+    monitorConfigManual: 'Enter manually (id=value)…',
+    monitorConfigManualPrompt: 'Enter a monitor setting as id=value (empty value removes it)',
+    monitorConfigManualInvalid: 'Use the form id=value without spaces or commas',
+    monitorConfigResetAll: 'Reset all to board defaults',
+    monitorConfigApplied: 'Monitor settings: {summary}',
+    monitorConfigTooltipDefault: 'Monitor settings: board defaults (click to change)',
+    monitorConfigTooltipCustom: 'Monitor settings: {config} (click to change)',
     warningsStatusTooltip: 'Warnings: {level} / Verbose: {verbose}',
     warningsLevelWorkspace: 'workspace-only',
     warningsLevelNone: 'none',
@@ -644,6 +660,9 @@ const MSG = {
     commandCenterSetPortDesc: 'Select or enter the serial port used for upload and monitor commands.',
     commandCenterSetBaudTitle: 'Set Baudrate',
     commandCenterSetBaudDesc: 'Choose the serial monitor baudrate.',
+    commandCenterSetMonitorConfigTitle: 'Monitor Settings',
+    commandCenterSetMonitorConfigDesc: 'Choose data bits, parity, stop bits, DTR/RTS and other monitor settings reported by the port.',
+    commandCenterSetMonitorConfigCli: 'arduino-cli monitor -p <port> --describe',
     commandCenterCompileTitle: 'Compile Sketch',
     commandCenterCompileDesc: 'Build the active sketch using the selected profile or FQBN.',
     commandCenterExportAllTitle: 'Export Binaries (All Profiles)',
@@ -700,7 +719,7 @@ const MSG = {
     commandCenterCleanCompileCli: 'arduino-cli compile --clean [--profile <profile> | --fqbn <fqbn>] <sketch>',
     commandCenterUploadCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] <sketch>\narduino-cli upload [--profile <profile> | --fqbn <fqbn>] [-p <port>] <sketch>',
     commandCenterUploadDataCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] --show-properties <sketch>\nmkspiffs/mklittlefs -s <size> -c data <image>\nesptool write-flash <offset> <image>',
-    commandCenterMonitorCli: 'arduino-cli monitor -p <port> --config baudrate=<baud>',
+    commandCenterMonitorCli: 'arduino-cli monitor -p <port> --config baudrate=<baud>[,<id>=<value>...]',
     commandCenterDebugCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] --build-property compiler.*=-Og -g3 --show-properties <sketch>',
     commandCenterInspectorCli: 'arduino-cli compile [--profile <profile> | --fqbn <fqbn>] --warnings=all [--clean] --json <sketch>',
     commandCenterRunArbitraryCli: 'arduino-cli <arguments entered at runtime>',
@@ -883,6 +902,9 @@ const MSG = {
     commandCenterSetPortDesc: 'アップロードやシリアルモニターで使うシリアルポートを選択または入力します。',
     commandCenterSetBaudTitle: 'ボーレートを設定',
     commandCenterSetBaudDesc: 'シリアルモニター用のボーレートを選択します。',
+    commandCenterSetMonitorConfigTitle: 'モニター設定',
+    commandCenterSetMonitorConfigDesc: 'ポートが提供するデータビット・パリティ・ストップビット・DTR/RTS などのモニター設定を選択します。',
+    commandCenterSetMonitorConfigCli: 'arduino-cli monitor -p <ポート> --describe',
     commandCenterCompileTitle: 'スケッチをコンパイル',
     commandCenterCompileDesc: '選択したプロファイルまたは FQBN を使ってスケッチをビルドします。',
     commandCenterExportAllTitle: 'バイナリを一括出力',
@@ -939,7 +961,7 @@ const MSG = {
     commandCenterCleanCompileCli: 'arduino-cli compile --clean [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>',
     commandCenterUploadCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] <スケッチ>\narduino-cli upload [--profile <プロファイル> | --fqbn <FQBN>] [-p <ポート>] <スケッチ>',
     commandCenterUploadDataCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] --show-properties <スケッチ>\nmkspiffs/mklittlefs -s <サイズ> -c data <イメージ>\nesptool write-flash <オフセット> <イメージ>',
-    commandCenterMonitorCli: 'arduino-cli monitor -p <ポート> --config baudrate=<ボーレート>',
+    commandCenterMonitorCli: 'arduino-cli monitor -p <ポート> --config baudrate=<ボーレート>[,<ID>=<値>...]',
     commandCenterDebugCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] --build-property compiler.*=-Og -g3 --show-properties <スケッチ>',
     commandCenterInspectorCli: 'arduino-cli compile [--profile <プロファイル> | --fqbn <FQBN>] --warnings=all [--clean] --json <スケッチ>',
     commandCenterRunArbitraryCli: 'arduino-cli <入力した引数>',
@@ -1054,6 +1076,21 @@ const MSG = {
     setBaudCustom: 'カスタム入力…',
     setBaudPrompt: 'ボーレートを入力（例: 115200）',
     statusSetBaud: 'ボーレートを設定: {baud}',
+    monitorConfigLoading: 'ポートからモニター設定を取得しています…',
+    monitorConfigDescribeFail: '[monitor] モニター設定の取得に失敗しました: {msg}',
+    monitorConfigDescribeUnavailable: '{port} のモニター設定を取得できませんでした。手動入力は利用できます。',
+    monitorConfigPickSetting: '変更するモニター設定を選択（現在: {summary}）— Esc で終了',
+    monitorConfigPickValue: '{label}（現在: {current}）',
+    monitorConfigDefault: '既定値',
+    monitorConfigCurrent: '現在',
+    monitorConfigUnknownSetting: '現在のポートモニターにない設定です（選択すると削除）',
+    monitorConfigManual: '手動入力 (ID=値)…',
+    monitorConfigManualPrompt: 'モニター設定を ID=値 の形式で入力（値を空にすると削除）',
+    monitorConfigManualInvalid: 'スペースやカンマを含まない ID=値 の形式で入力してください',
+    monitorConfigResetAll: 'すべてボードの既定値に戻す',
+    monitorConfigApplied: 'モニター設定: {summary}',
+    monitorConfigTooltipDefault: 'モニター設定: ボードの既定値（クリックで変更）',
+    monitorConfigTooltipCustom: 'モニター設定: {config}（クリックで変更）',
     warningsStatusTooltip: '警告: {level} / 詳細ログ: {verbose}',
     warningsLevelWorkspace: 'ワークスペースのみ(workspace)',
     warningsLevelNone: 'なし(none)',
@@ -1282,6 +1319,7 @@ const COMMAND_CENTER_ITEMS = Object.freeze([
   { command: 'arduino-cli.setFqbn', titleKey: 'commandCenterSetFqbnTitle', descKey: 'commandCenterSetFqbnDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.setPort', titleKey: 'commandCenterSetPortTitle', descKey: 'commandCenterSetPortDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.setBaud', titleKey: 'commandCenterSetBaudTitle', descKey: 'commandCenterSetBaudDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
+  { command: 'arduino-cli.setMonitorConfig', titleKey: 'commandCenterSetMonitorConfigTitle', descKey: 'commandCenterSetMonitorConfigDesc', requiresProfile: false, cliKey: 'commandCenterSetMonitorConfigCli' },
   { command: 'arduino-cli.localPortHelper', titleKey: 'commandCenterLocalPortHelperTitle', descKey: 'commandCenterLocalPortHelperDesc', requiresProfile: false, cliKey: 'commandCenterCliNone' },
   { command: 'arduino-cli.compile', titleKey: 'commandCenterCompileTitle', descKey: 'commandCenterCompileDesc', requiresProfile: true, cliKey: 'commandCenterCompileCli' },
   { command: 'arduino-cli.exportAllBinaries', titleKey: 'commandCenterExportAllTitle', descKey: 'commandCenterExportAllDesc', requiresProfile: true, cliKey: 'commandCenterExportAllCli' },
@@ -1358,7 +1396,9 @@ function parseStoredPortValue(value) {
   if (!raw) return { raw: '', display: '', host: '', cliPort: '' };
   const lower = raw.toLowerCase();
   if (lower.includes('windows')) {
-    const idx = raw.lastIndexOf(':');
+    // Split at the first colon after the "Windows host" label; the address
+    // itself may contain colons (e.g. "wchlink://<serial>").
+    const idx = raw.indexOf(':', lower.indexOf('windows'));
     const cliPort = idx >= 0 ? raw.slice(idx + 1).trim() : raw;
     return { raw, display: raw, host: 'windows', cliPort };
   }
@@ -6727,6 +6767,7 @@ function activate(context) {
     vscode.commands.registerCommand('arduino-cli.setFqbn', () => commandSetFqbn(false)),
     vscode.commands.registerCommand('arduino-cli.setPort', () => commandSetPort(false)),
     vscode.commands.registerCommand('arduino-cli.setBaud', () => commandSetBaud(false)),
+    vscode.commands.registerCommand('arduino-cli.setMonitorConfig', () => commandSetMonitorConfig()),
     vscode.commands.registerCommand('arduino-cli.localPortHelper', commandLocalPortHelper),
     vscode.commands.registerCommand('arduino-cli.openSketchFromTree', (item) => commandOpenSketchFromTree(item)),
     vscode.commands.registerCommand('arduino-cli.uploadData', commandUploadData),
@@ -6758,10 +6799,13 @@ function activate(context) {
   statusBaud = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 95);
   statusBaud.command = 'arduino-cli.setBaud';
 
+  statusMonitorConfig = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 94.5);
+  statusMonitorConfig.command = 'arduino-cli.setMonitorConfig';
+
   statusWarnings = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 94);
   statusWarnings.command = 'arduino-cli.configureWarnings';
 
-  context.subscriptions.push(statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusWarnings);
+  context.subscriptions.push(statusBuild, statusUpload, statusMonitor, statusFqbn, statusPort, statusBaud, statusMonitorConfig, statusWarnings);
   updateStatusBar();
 
   vscode.window.onDidChangeActiveTextEditor(updateStatusBar, null, context.subscriptions);
@@ -9280,6 +9324,12 @@ async function applyProfileSerialSettings(sketchDir, profile) {
     if (baudRaw) {
       await extContext.workspaceState.update(STATE_BAUD, String(baudRaw));
     }
+    // Apply the remaining port_config entries (dtr, parity, ...) when the profile defines them.
+    try {
+      const yamlText = await readTextFile(vscode.Uri.file(path.join(sketchDir, 'sketch.yaml')));
+      const portConfig = getPortConfigFromSketchYamlText(yamlText, profile);
+      if (portConfig) await setStoredMonitorConfig(portConfig);
+    } catch { /* sketch.yaml missing or unreadable */ }
   } catch { }
 }
 
@@ -9318,6 +9368,7 @@ async function updateStatusBar() {
     statusFqbn.hide();
     statusPort.hide();
     statusBaud.hide();
+    statusMonitorConfig.hide();
     statusWarnings.hide();
     return;
   }
@@ -9329,6 +9380,7 @@ async function updateStatusBar() {
     statusFqbn.hide();
     statusPort.hide();
     statusBaud.hide();
+    statusMonitorConfig.hide();
     statusWarnings.hide();
     return;
   }
@@ -9389,6 +9441,12 @@ async function updateStatusBar() {
     : (_isJa ? '現在のポート（クリックで変更）' : 'Current serial port (click to change)');
   statusBaud.text = `$(watch) ${baud}`;
   statusBaud.tooltip = _isJa ? '現在のボーレート（クリックで変更）' : 'Current baudrate (click to change)';
+  const monitorOverrides = getStoredMonitorConfig();
+  const monitorSummary = formatMonitorConfigSummary(monitorOverrides);
+  statusMonitorConfig.text = monitorSummary ? `$(settings-gear) ${monitorSummary}` : '$(settings-gear)';
+  statusMonitorConfig.tooltip = monitorSummary
+    ? t('monitorConfigTooltipCustom', { config: Object.keys(monitorOverrides).map(id => `${id}=${monitorOverrides[id]}`).join(', ') })
+    : t('monitorConfigTooltipDefault');
   statusWarnings.text = `$(megaphone) ${formatWarningsBadge(warningsLevel, verboseEnabled)}`;
   statusWarnings.tooltip = t('warningsStatusTooltip', { level: getWarningsLevelLabel(warningsLevel), verbose: getVerboseLabel(verboseEnabled) });
   statusWarnings.command = 'arduino-cli.configureWarnings';
@@ -9398,6 +9456,7 @@ async function updateStatusBar() {
   statusFqbn.show();
   statusPort.show();
   statusBaud.show();
+  statusMonitorConfig.show();
   statusWarnings.show();
 }
 
@@ -9471,12 +9530,45 @@ async function commandSetFqbn(required) {
  */
 async function pickBaudrate() {
   const current = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
-  const options = [
-    '300', '1200', '2400', '4800', '9600', '14400', '19200', '28800', '38400', '57600', '74880', '115200', '230400', '460800', '921600'
-  ];
-  const items = options.map(v => ({ label: v, description: v === current ? 'current' : undefined }));
-  items.push({ label: t('setBaudCustom'), value: '__manual__' });
-  const pick = await vscode.window.showQuickPick(items, { placeHolder: t('setBaudTitle', { current }) });
+  const buildItems = (options) => {
+    const items = options.map(v => ({ label: v, description: v === current ? t('monitorConfigCurrent') : undefined }));
+    items.push({ label: t('setBaudCustom'), value: '__manual__' });
+    return items;
+  };
+  // Show the fallback list immediately and swap in the values reported by
+  // `arduino-cli monitor --describe` once they are available.
+  const cached = peekMonitorDescribeCache();
+  const cachedBaud = cached ? cached.find(s => s.id === 'baudrate') : undefined;
+  const initialOptions = cachedBaud && cachedBaud.values.length ? cachedBaud.values : BAUD_FALLBACK_OPTIONS;
+  const pick = await new Promise((resolve) => {
+    const qp = vscode.window.createQuickPick();
+    qp.placeholder = t('setBaudTitle', { current });
+    qp.items = buildItems(initialOptions);
+    const initialActive = qp.items.find(item => item.label === current);
+    if (initialActive) qp.activeItems = [initialActive];
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      resolve(value);
+      qp.dispose();
+    };
+    qp.onDidAccept(() => finish(qp.selectedItems[0] || qp.activeItems[0]));
+    qp.onDidHide(() => finish(undefined));
+    if (!cachedBaud) {
+      qp.busy = true;
+      describeMonitorSettings().then((settings) => {
+        if (done) return;
+        const baudSetting = Array.isArray(settings) ? settings.find(s => s.id === 'baudrate') : undefined;
+        if (baudSetting && baudSetting.values.length) {
+          qp.items = buildItems(baudSetting.values);
+          const active = qp.items.find(item => item.label === current);
+          if (active) qp.activeItems = [active];
+        }
+      }).catch(() => { /* keep fallback list */ }).finally(() => { if (!done) qp.busy = false; });
+    }
+    qp.show();
+  });
   if (!pick) return undefined;
   let baud = pick.value || pick.label;
   if (baud === '__manual__') {
@@ -9501,6 +9593,326 @@ async function commandSetBaud(required) {
   updateStatusBar();
   vscode.window.setStatusBarMessage(t('statusSetBaud', { baud }), 2000);
   return true;
+}
+
+/** Baudrate candidates used when `monitor --describe` is unavailable. */
+const BAUD_FALLBACK_OPTIONS = Object.freeze([
+  '300', '1200', '2400', '4800', '9600', '19200', '38400', '57600', '74880', '115200', '230400', '460800', '921600'
+]);
+
+/** Cache of `monitor --describe` results keyed by exe/port/fqbn. */
+const monitorDescribeCache = new Map();
+let monitorDescribeLastKey = '';
+
+/**
+ * Parse the JSON printed by `arduino-cli monitor --describe --json`.
+ * @param {string} text
+ * @returns {{id: string, label: string, type: string, values: string[], defaultValue: string}[]}
+ */
+function parseMonitorDescribeJson(text) {
+  let parsed;
+  try { parsed = JSON.parse(String(text || '')); } catch { return []; }
+  const list = parsed && Array.isArray(parsed.settings) ? parsed.settings : [];
+  const result = [];
+  for (const raw of list) {
+    if (!raw || typeof raw !== 'object') continue;
+    const id = typeof raw.setting_id === 'string' ? raw.setting_id.trim() : '';
+    if (!id) continue;
+    const values = Array.isArray(raw.enum_values) ? raw.enum_values.map(v => String(v)) : [];
+    result.push({
+      id,
+      label: typeof raw.label === 'string' && raw.label.trim() ? raw.label.trim() : id,
+      type: typeof raw.type === 'string' ? raw.type : '',
+      values,
+      defaultValue: raw.value != null ? String(raw.value) : ''
+    });
+  }
+  return result;
+}
+
+/** True when a monitor setting id/value can be passed safely via `--config`. */
+function isValidMonitorConfigToken(token) {
+  return typeof token === 'string' && /^[^\s,=]+$/.test(token);
+}
+
+/**
+ * Normalize stored monitor settings (excluding baudrate) into a plain
+ * string-to-string map with ids sorted for stable output.
+ * @param {any} raw
+ * @returns {Record<string, string>}
+ */
+function normalizeMonitorConfig(raw) {
+  const result = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
+  for (const key of Object.keys(raw).sort()) {
+    const id = String(key).trim();
+    if (!id || id === 'baudrate') continue;
+    const value = raw[key] == null ? '' : String(raw[key]).trim();
+    if (!isValidMonitorConfigToken(id) || !isValidMonitorConfigToken(value)) continue;
+    result[id] = value;
+  }
+  return result;
+}
+
+/**
+ * Build the value passed to `arduino-cli monitor --config`.
+ * @param {string} baud
+ * @param {Record<string, string>} overrides
+ */
+function buildMonitorConfigArg(baud, overrides) {
+  const parts = [`baudrate=${baud}`];
+  const normalized = normalizeMonitorConfig(overrides);
+  for (const id of Object.keys(normalized)) parts.push(`${id}=${normalized[id]}`);
+  return parts.join(',');
+}
+
+/**
+ * Compact status bar summary for non-default monitor settings, e.g. "7E2 DTR:off".
+ * Returns an empty string when nothing is overridden.
+ * @param {Record<string, string>} overrides
+ */
+function formatMonitorConfigSummary(overrides) {
+  const cfg = normalizeMonitorConfig(overrides);
+  const parts = [];
+  if (cfg.bits || cfg.parity || cfg.stop_bits) {
+    const parityMap = { none: 'N', even: 'E', odd: 'O', mark: 'M', space: 'S' };
+    const parity = cfg.parity ? (parityMap[cfg.parity.toLowerCase()] || cfg.parity) : 'N';
+    parts.push(`${cfg.bits || '8'}${parity}${cfg.stop_bits || '1'}`);
+  }
+  for (const id of Object.keys(cfg)) {
+    if (id === 'bits' || id === 'parity' || id === 'stop_bits') continue;
+    if (id === 'dtr' || id === 'rts') parts.push(`${id.toUpperCase()}:${cfg[id]}`);
+    else parts.push(`${id}=${cfg[id]}`);
+  }
+  return parts.join(' ');
+}
+
+/**
+ * Read `profiles.<name>.port_config` from sketch.yaml text.
+ * @returns {Record<string, string>|null} null when the profile has no port_config.
+ */
+function getPortConfigFromSketchYamlText(text, profileName) {
+  try {
+    const doc = YAML.parse(String(text || ''));
+    const portConfig = doc && doc.profiles && doc.profiles[profileName] ? doc.profiles[profileName].port_config : undefined;
+    if (!portConfig || typeof portConfig !== 'object' || Array.isArray(portConfig)) return null;
+    const result = {};
+    for (const key of Object.keys(portConfig)) {
+      if (portConfig[key] == null) continue;
+      result[String(key)] = String(portConfig[key]);
+    }
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function getStoredMonitorConfig() {
+  return normalizeMonitorConfig(extContext?.workspaceState.get(STATE_MONITOR_CONFIG, {}));
+}
+
+async function setStoredMonitorConfig(config) {
+  if (!extContext) return;
+  await extContext.workspaceState.update(STATE_MONITOR_CONFIG, normalizeMonitorConfig(config));
+}
+
+/** Resolve the FQBN used to query board-specific monitor defaults. */
+async function resolveMonitorFqbn() {
+  const { sketchDir, profile } = getSelectedProfileState();
+  if (sketchDir && profile) {
+    const fqbn = await getFqbnFromSketchYaml(sketchDir, profile);
+    if (fqbn) return fqbn;
+  }
+  return extContext?.workspaceState.get(STATE_FQBN, '') || '';
+}
+
+/** Return cached describe results for the last queried port, if any. */
+function peekMonitorDescribeCache() {
+  const portInfo = getStoredPortInfo();
+  if (!portInfo.cliPort || !monitorDescribeLastKey) return undefined;
+  if (!monitorDescribeLastKey.includes(`|${portInfo.cliPort}|`)) return undefined;
+  const entry = monitorDescribeCache.get(monitorDescribeLastKey);
+  return entry && Array.isArray(entry.value) ? entry.value : undefined;
+}
+
+/**
+ * Query the pluggable monitor for its settings via
+ * `arduino-cli monitor -p <port> [-l serial] [-b <fqbn>] --describe --json`.
+ * Results are cached per exe/port/fqbn. Returns undefined when unavailable.
+ * @param {{force?: boolean}} [options]
+ */
+async function describeMonitorSettings(options = {}) {
+  const portInfo = getStoredPortInfo();
+  const port = portInfo.cliPort;
+  if (!port || isNoPortSelected(portInfo)) return undefined;
+  const fqbn = await resolveMonitorFqbn();
+  const cfg = getConfig();
+  const useWindowsCli = shouldUseWindowsSerial(portInfo);
+  const exe = useWindowsCli ? await resolveWindowsCliExecutable(getOutput()) : (cfg.exe || 'arduino-cli');
+  const key = `${exe}|${port}|${fqbn}`;
+  monitorDescribeLastKey = key;
+  const cachedEntry = monitorDescribeCache.get(key);
+  if (cachedEntry && !options.force) {
+    return cachedEntry.value !== undefined ? cachedEntry.value : cachedEntry.promise;
+  }
+  const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
+  let args = [...baseArgs, 'monitor', '-p', port];
+  // Network ports and protocol-prefixed addresses (e.g. "wchlink://...") are left
+  // to discovery; plain serial ports skip it so the query works offline.
+  if (!portContainsIpAddress(port) && !port.includes('://')) args.push('-l', 'serial');
+  if (fqbn) args.push('-b', fqbn);
+  args.push('--describe', '--json');
+  if (useWindowsCli) args = await convertArgsForWindowsCli(args);
+  const entry = {};
+  entry.promise = (async () => {
+    try {
+      const out = await runCliForJson(exe, args, getOutput());
+      const settings = parseMonitorDescribeJson(out);
+      if (settings.length) {
+        entry.value = settings;
+        return settings;
+      }
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err || 'unknown');
+      getOutput().appendLine(t('monitorConfigDescribeFail', { msg }));
+    }
+    monitorDescribeCache.delete(key);
+    return undefined;
+  })();
+  monitorDescribeCache.set(key, entry);
+  return entry.promise;
+}
+
+/**
+ * Let the user change any monitor setting reported by `monitor --describe`
+ * (data bits, parity, stop bits, DTR, RTS, ...). Loops until dismissed.
+ */
+async function commandSetMonitorConfig() {
+  if (!(await ensureCliReady())) return false;
+  let portInfo = getStoredPortInfo();
+  if (!portInfo.cliPort) {
+    if (isNoPortSelected(portInfo)) {
+      vscode.window.showWarningMessage(t('portNoSerialMonitorWarn'));
+      return false;
+    }
+    const set = await commandSetPort(true);
+    if (!set) return false;
+    portInfo = getStoredPortInfo();
+  }
+  const settings = await runWithNotificationProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: t('monitorConfigLoading')
+  }, async () => describeMonitorSettings());
+  if (settings === PROGRESS_BUSY) return false;
+  const available = Array.isArray(settings) ? settings : [];
+  if (!available.length) {
+    vscode.window.showWarningMessage(t('monitorConfigDescribeUnavailable', { port: portInfo.display || portInfo.cliPort }));
+  }
+  let changed = false;
+  for (;;) {
+    const overrides = getStoredMonitorConfig();
+    const baud = extContext?.workspaceState.get(STATE_BAUD, '115200') || '115200';
+    const items = available.map((s) => {
+      const isBaud = s.id === 'baudrate';
+      const current = isBaud ? baud : (overrides[s.id] != null ? overrides[s.id] : s.defaultValue);
+      const isDefault = isBaud ? false : overrides[s.id] == null;
+      return {
+        label: s.label,
+        description: isDefault ? `${current}  (${t('monitorConfigDefault')})` : `$(edit) ${current}`,
+        detail: s.id,
+        setting: s
+      };
+    });
+    // Keep stored overrides that the current monitor does not describe visible so they can be removed.
+    for (const id of Object.keys(overrides)) {
+      if (available.some(s => s.id === id)) continue;
+      items.push({ label: id, description: `$(warning) ${overrides[id]}`, detail: t('monitorConfigUnknownSetting'), unknownId: id });
+    }
+    items.push({ label: '', kind: vscode.QuickPickItemKind ? vscode.QuickPickItemKind.Separator : undefined });
+    items.push({ label: `$(edit) ${t('monitorConfigManual')}`, action: 'manual' });
+    if (Object.keys(overrides).length) items.push({ label: `$(discard) ${t('monitorConfigResetAll')}`, action: 'reset' });
+    const summary = formatMonitorConfigSummary(overrides);
+    const pick = await vscode.window.showQuickPick(items.filter(item => item.kind !== undefined || item.label), {
+      placeHolder: t('monitorConfigPickSetting', { summary: summary || t('monitorConfigDefault') }),
+      matchOnDetail: true
+    });
+    if (!pick) break;
+    if (pick.action === 'reset') {
+      await setStoredMonitorConfig({});
+      changed = true;
+      continue;
+    }
+    if (pick.action === 'manual') {
+      const input = await vscode.window.showInputBox({
+        prompt: t('monitorConfigManualPrompt'),
+        placeHolder: 'dtr=off',
+        validateInput: (v) => {
+          const m = String(v || '').trim().match(/^([^\s,=]+)=([^\s,=]*)$/);
+          return m ? undefined : t('monitorConfigManualInvalid');
+        }
+      });
+      if (!input) continue;
+      const [, id, value] = input.trim().match(/^([^\s,=]+)=([^\s,=]*)$/);
+      if (id === 'baudrate') {
+        if (value) await extContext.workspaceState.update(STATE_BAUD, value);
+      } else {
+        const next = { ...overrides };
+        if (value) next[id] = value; else delete next[id];
+        await setStoredMonitorConfig(next);
+      }
+      changed = true;
+      continue;
+    }
+    if (pick.unknownId) {
+      const next = { ...overrides };
+      delete next[pick.unknownId];
+      await setStoredMonitorConfig(next);
+      changed = true;
+      continue;
+    }
+    const setting = pick.setting;
+    if (!setting) continue;
+    if (setting.id === 'baudrate') {
+      if (await pickBaudrate()) changed = true;
+      continue;
+    }
+    const current = overrides[setting.id] != null ? overrides[setting.id] : setting.defaultValue;
+    let value;
+    if (setting.values.length) {
+      const valueItems = setting.values.map((v) => {
+        const tags = [];
+        if (v === current) tags.push(t('monitorConfigCurrent'));
+        if (v === setting.defaultValue) tags.push(t('monitorConfigDefault'));
+        return { label: v, description: tags.join(' / ') || undefined };
+      });
+      const valuePick = await vscode.window.showQuickPick(valueItems, {
+        placeHolder: t('monitorConfigPickValue', { label: setting.label, current })
+      });
+      if (!valuePick) continue;
+      value = valuePick.label;
+    } else {
+      const input = await vscode.window.showInputBox({
+        prompt: t('monitorConfigPickValue', { label: setting.label, current }),
+        value: current,
+        validateInput: (v) => isValidMonitorConfigToken(String(v || '').trim()) ? undefined : t('monitorConfigManualInvalid')
+      });
+      if (input === undefined) continue;
+      value = input.trim();
+    }
+    const next = { ...overrides };
+    // Only keep values that differ from the board default so that board-specific
+    // defaults (e.g. DTR/RTS off on ESP32) are not overridden accidentally.
+    if (value === setting.defaultValue) delete next[setting.id];
+    else next[setting.id] = value;
+    await setStoredMonitorConfig(next);
+    changed = true;
+  }
+  if (changed) {
+    updateStatusBar();
+    const summary = formatMonitorConfigSummary(getStoredMonitorConfig());
+    vscode.window.setStatusBarMessage(t('monitorConfigApplied', { summary: summary || t('monitorConfigDefault') }), 2000);
+  }
+  return changed;
 }
 
 async function commandConfigureWarnings() {
@@ -9603,7 +10015,8 @@ async function commandMonitor(options = {}) {
 
   const cfg = getConfig();
   const baseArgs = Array.isArray(cfg.extra) ? cfg.extra : [];
-  let args = [...baseArgs, 'monitor', '-p', port, '--config', `baudrate=${baud}`];
+  const configArg = buildMonitorConfigArg(baud, getStoredMonitorConfig());
+  let args = [...baseArgs, 'monitor', '-p', port, '--config', configArg];
 
   const useWindowsCli = shouldUseWindowsSerial(portInfo);
   let exe = cfg.exe || 'arduino-cli';
