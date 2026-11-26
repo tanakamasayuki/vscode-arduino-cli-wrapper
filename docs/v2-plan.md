@@ -150,32 +150,47 @@ html/                   // Webview(必要に応じて分割)
 
 ## 4. 機能の整理案
 
-判断の基準: 標準の Arduino CLI / IDE の範囲にあるか、この拡張だけの独自仕様か、gRPC 化で作り直しが必要になるか。
+### 4.1 判断材料(2026-11-26 調査)
 
-| 機能 | 案 | 理由 |
-| --- | --- | --- |
-| Compile / Upload / Monitor / Profile / ポート・ボーレート・モニター設定 | 残す | 中核の機能 |
-| sketch.yaml Helper / Version Check / New Sketch | 残す | プロファイル運用が拡張のコンセプト |
-| IntelliSense / compile_commands | 残す | `create_compilation_database_only` で軽くできる |
-| 警告 `workspace` モード | 残す | 価値の高い独自機能 |
-| Debug | 残す | `GetDebugConfig` に置き換える |
-| Build Check / Inspector / Examples | 残す | 利用価値が高い。Inspector は構造化された結果で簡単になる |
-| Export Binaries(2 コマンド)/ Clean Compile | 統合 | オプションにまとめる |
-| Version / Update / Upgrade / Cache Clean / List Boards / List All / Board Details | 統合 | Command Center に集約し、コマンドパレットからは外す |
-| Run Command(任意の引数) | 削除候補 | gRPC では成り立たない。必要ならターミナルで CLI を直接使えば足りる |
-| `.arduino-cli-flags` | 削除候補 | README でも「拡張専用の非常口」と明記されている独自仕様 |
-| タイムゾーンマクロ注入 | 削除候補 | 既定は OFF の独自仕様で、`--show-properties` に依存している |
-| Include Order Lint(M5GFX・FS) | 削除候補 | 特定ライブラリ向けで、設定項目が 2 つ増えている |
-| Local Port Rules | 削除候補 | sketch.yaml の `port` / `port_config` と重なる。ワークスペースごとの固定は state で足りる |
-| autoCopySketchYaml | 削除候補 | 暗黙のコピーは標準の挙動ではない |
-| Source Backup | 別ツール化を検討 | 独自仕様。`embed-asset-tool` と同様に外部パッケージや別拡張へ |
-| Embed Assets | 要判断 | 外部パッケージ化済みなので、残してもコストは小さい |
-| Upload Data(ESP32 LittleFS/SPIFFS) | 要判断 | 標準外だが、ESP32 利用者には需要がある。mklittlefs / esptool を直接扱うため保守コストが高い |
-| Wokwi 連携 | 要判断 | 標準外。参照が約 130 か所あり、規模が大きい |
-| `arduino_secrets.h` | 残す | Arduino 標準の慣習 |
-| localBuildPath | 要判断 | `build_path` で簡単に実装できるので、残すなら軽い |
+- **手元での利用の痕跡:** `/home/mt/dev`(.ino 1,610 個、sketch.yaml 1,553 個)と Arduino の既定フォルダーで、各機能の設定ファイルや生成物を探しました。Marketplace の利用者の状況は分かりません。
+- **既定で動くか:** 既定で動く機能は、使っていない人にも影響します(勝手にファイルを作る、警告を出すなど)。
+- **規模:** 関連する関数の行数の目安です。テンプレートなどの定数は含みません。
 
----
+### 4.2 削除候補の評価
+
+| 機能 | 入口 | 既定で動くか | 手元での利用 | 規模 | 追加時期 | 消した場合の影響と代わり | 提案 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `.arduino-cli-flags` | ファイルを置くとビルド時に注入 | ファイルがあるときだけ | **なし**(0 件) | 約 80 行 | 2025-10 | 秘密情報は `arduino_secrets.h`(手元で利用多数)で代わりになる | 削除 |
+| タイムゾーンマクロ | 設定 `injectTimezoneMacros` | 既定 OFF | **なし**(`CLI_BUILD_TZ` の参照 0 件) | 約 140 行 + 設定 1 つ | 2025-10 | 上と合わせて消すと、`--show-properties` で注入先を判定する処理ごと不要になり、ビルド処理が単純になる | 削除 |
+| Local Port Rules | コマンド + 編集用 Webview | `.vscode/arduino-cli-wrapper.json` があるときだけ | **なし**(0 件) | 約 350 行 + Webview | 2025-12 | 「sketch.yaml は git 管理なので、マシンごとのポートは別に持ちたい」という用途。選んだポートはワークスペースごとに記憶されるので、通常はそれで足りる | 削除 |
+| Wokwi 連携 | `wokwi: true` のプロファイル | 指定したときだけ | **なし**(`wokwi: true` も `wokwi.toml` も 0 件) | 約 340 行(テンプレート込み) | 2025-09 | Wokwi 拡張を手動で使う | 削除(要確認) |
+| Source Backup | `.sourcebackupconfig` | ファイルがあるときだけ | **なし**(0 件) | 約 600 行 | 2026-03(最新、5 コミット) | 最近作った機能なので、需要があるなら `embed-asset-tool` と同じく別パッケージに出す | 要相談 |
+| Run Command | コマンド | 手動 | 判定できない | 約 20 行 | 2025-09 | ターミナルで CLI を直接使う。gRPC 化後は成り立たない | v2(gRPC 化)のときに削除 |
+| autoCopySketchYaml | Refresh View 時 | **既定 ON** | 判定できない(手元の sketch.yaml はすべて git 管理済み) | 約 20 行 + 設定 1 つ | 2025-11 | 何も知らない利用者のフォルダーに sketch.yaml を作る、既定 ON の暗黙動作 | 削除、または既定 OFF |
+| Include Order Lint | `.ino` を開いたとき | **既定 ON** | 判定できない(M5 系のリポジトリは多い) | 約 90 行 + 設定 2 つ | 2025-09 | M5GFX と FS 系ヘッダーの順序による実行時の不具合を事前に防げる。M5 を使う人には有用 | 要相談 |
+
+### 4.3 残すもの(根拠つき)
+
+| 機能 | 根拠 |
+| --- | --- |
+| Embed Assets | 利用あり(`*_embed.h` 6 件、assets/ を持つスケッチ複数)。本体は外部パッケージで、拡張側は約 130 行 |
+| Upload Data(ESP32) | `data/` + `LittleFS.h` のスケッチあり(EspHttpServer の StaticFS など)。ESP32 系のリポジトリが多い |
+| `arduino_secrets.h` | 利用多数。Arduino 標準の慣習 |
+| localBuildPath | 約 10 行。gRPC でも `build_path` で簡単に残せる |
+| Compile / Upload / Monitor / Profile / sketch.yaml Helper / Version Check / IntelliSense / Debug / Build Check / Inspector / Examples / 警告 `workspace` モード | 中核の機能 |
+
+### 4.4 統合
+
+| 対象 | 案 |
+| --- | --- |
+| Version / Update Index / Upgrade / Cache Clean / List Boards / List All Boards / Board Details | コマンドパレットからは外し、Command Center に集約する(機能自体は残す) |
+| Export Binaries(2 コマンド)/ Clean Compile | オプションとしてまとめる |
+
+### 4.5 進め方
+
+- 1 機能 1 コミットで削除し、各コミットで `npm run check` を通す。
+- 削除した機能と代わりの方法は、README と CHANGELOG に日英で書く。
+- 削除する設定項目(`injectTimezoneMacros` など)が残っていても、エラーにはしない。
 
 ## 5. フェーズ計画
 
@@ -263,7 +278,9 @@ html/                   // Webview(必要に応じて分割)
   - Debug points objdump at a non-existent `<prefix>-objdump`; it should fall back to `llvm-objdump`.
   - Both fixes are independent of gRPC and can ship in v1.
 - **Plan:** P0 decisions → P1 CLI installer (can ship as v1.11) → P2 daemon foundation → P3 split into `src/` with an `ArduinoBackend` abstraction → P4 read-only ops → P5 build/upload → P6 monitor/debug → P7 pruning and v2.0.0.
-- **Pruning candidates:**
-  - Remove: Run Command, `.arduino-cli-flags`, timezone macros, include-order lint, local port rules, `autoCopySketchYaml`.
+- **Pruning (based on a local usage survey of ~1,600 sketches):**
+  - Unused locally, proposed for removal: `.arduino-cli-flags`, timezone macros, local port rules, Wokwi.
+  - Source Backup is also unused but recent; discuss spin-off. Run Command goes with the gRPC switch.
+  - Default-on implicit behaviors: `autoCopySketchYaml` (remove or default off); include-order lint (discuss).
+  - Keep: Embed Assets, Upload Data, `arduino_secrets.h`, localBuildPath.
   - Consolidate the CLI passthrough commands into the Command Center.
-  - Undecided: Upload Data, Wokwi, Embed Assets, Source Backup (spin-off).
