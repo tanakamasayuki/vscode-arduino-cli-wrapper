@@ -1,0 +1,282 @@
+     VMA      LMA     Size Align Out     In      Symbol
+       0        0       dc     4 .vector
+       0        0       dc     4         /sketch/build/core/core.a(crt0_ch32.S.o):(.vector)
+       0        0        0     1                 .L0 
+       0        0        0     1                 .L0 
+       0        0        0     1                 $xrv32i2p1_m2p0_a2p1_zicsr2p0_zmmul1p0_zaamo1p0_zalrsc1p0
+       0        0        0     1                 .L0 
+       0        0        0     1                 _start
+       0        0        0     1                 _vector_base
+       4        4        0     1                 $d
+      dc       dc        0     1                 .L0 
+      dc       dc        0     1         . = ALIGN(4)
+      dc       dc        0     1 .init
+      dc       dc        0     1         . = ALIGN(4)
+      dc       dc        0     1         . = ALIGN(4)
+      dc       dc      1f8     2 .text
+      dc       dc        0     1         . = ALIGN(4)
+      dc       dc        6     1         /sketch/build/core/core.a(crt0_ch32.S.o):(.text.vector_handler)
+      dc       dc        0     1                 .L0 
+      dc       dc        0     1                 $xrv32i2p1_m2p0_a2p1_c2p0_zicsr2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0
+      dc       dc        0     1                 .L0 
+      dc       dc        0     1                 NMI_Handler
+      dc       dc        0     1                 HardFault_Handler
+      dc       dc        0     1                 Ecall_M_Mode_Handler
+      dc       dc        0     1                 Ecall_U_Mode_Handler
+      dc       dc        0     1                 Break_Point_Handler
+      dc       dc        0     1                 SW_Handler
+      dc       dc        0     1                 WWDG_IRQHandler
+      dc       dc        0     1                 PVD_IRQHandler
+      dc       dc        0     1                 FLASH_IRQHandler
+      dc       dc        0     1                 EXTI7_0_IRQHandler
+      dc       dc        0     1                 AWU_IRQHandler
+      dc       dc        0     1                 DMA1_Channel1_IRQHandler
+      dc       dc        0     1                 DMA1_Channel2_IRQHandler
+      dc       dc        0     1                 DMA1_Channel3_IRQHandler
+      dc       dc        0     1                 DMA1_Channel4_IRQHandler
+      dc       dc        0     1                 DMA1_Channel5_IRQHandler
+      dc       dc        0     1                 DMA1_Channel6_IRQHandler
+      dc       dc        0     1                 DMA1_Channel7_IRQHandler
+      dc       dc        0     1                 ADC1_IRQHandler
+      dc       dc        0     1                 I2C1_EV_IRQHandler
+      dc       dc        0     1                 I2C1_ER_IRQHandler
+      dc       dc        0     1                 USART1_IRQHandler
+      dc       dc        0     1                 SPI1_IRQHandler
+      dc       dc        0     1                 TIM1_BRK_IRQHandler
+      dc       dc        0     1                 TIM1_UP_IRQHandler
+      dc       dc        0     1                 TIM1_TRG_COM_IRQHandler
+      dc       dc        0     1                 TIM1_CC_IRQHandler
+      dc       dc        0     1                 TIM2_UP_IRQHandler
+      dc       dc        0     1                 USART2_IRQHandler
+      dc       dc        0     1                 EXTI15_8_IRQHandler
+      dc       dc        0     1                 EXTI25_16_IRQHandler
+      dc       dc        0     1                 USART3_IRQHandler
+      dc       dc        0     1                 USART4_IRQHandler
+      dc       dc        0     1                 DMA1_Channel8_IRQHandler
+      dc       dc        0     1                 USBFS_IRQHandler
+      dc       dc        0     1                 USBFSWakeUp_IRQHandler
+      dc       dc        0     1                 PIOC_IRQHandler
+      dc       dc        0     1                 OPA_IRQHandler
+      dc       dc        0     1                 USBPD_IRQHandler
+      dc       dc        0     1                 USBPDWakeUp_IRQHandler
+      dc       dc        0     1                 TIM2_CC_IRQHandler
+      dc       dc        0     1                 TIM2_TRG_COM_IRQHandler
+      dc       dc        0     1                 TIM2_BRK_IRQHandler
+      dc       dc        0     1                 TIM3_IRQHandler
+      dc       dc        0     1                 Default_Handler
+      e0       e0        0     1                 .L0 
+      e0       e0        0     1                 .L0 
+      e0       e0        0     1                 ch32rv_irq_unhandled
+      e2       e2        0     1                 .L0 
+      e2       e2       b0     2         /sketch/build/core/core.a(crt0_ch32.S.o):(.text.handle_reset)
+      e2       e2        0     1                 .L0 
+      e2       e2        0     1                 .Lpcrel_hi0
+      e2       e2        0     1                 $xrv32i2p1_m2p0_a2p1_c2p0_zicsr2p0_zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0
+      e2       e2        0     1                 .L0 
+      e2       e2        0     1                 handle_reset
+      ea       ea        0     1                 .Lpcrel_hi1
+      ea       ea        0     1                 .L0 
+      f2       f2        0     1                 .Lpcrel_hi2
+      f2       f2        0     1                 .L0 
+      fa       fa        0     1                 .Lpcrel_hi3
+      fa       fa        0     1                 .L0 
+     102      102        0     1                 .Lpcrel_hi4
+     102      102        0     1                 .L0 
+     10a      10a        0     1                 .L0 
+     10e      10e        0     1                 .L0 
+     11a      11a        0     1                 .L0 
+     11e      11e        0     1                 .Ltmp1
+     11e      11e        0     1                 .Lpcrel_hi5
+     11e      11e        0     1                 .L0 
+     126      126        0     1                 .Lpcrel_hi6
+     126      126        0     1                 .L0 
+     12e      12e        0     1                 .L0 
+     132      132        0     1                 .L0 
+     138      138        0     1                 .L0 
+     13c      13c        0     1                 .Ltmp3
+     13c      13c        0     1                 .L0 
+     148      148        0     1                 .Lpcrel_hi7
+     148      148        0     1                 .L0 
+     150      150        0     1                 .L0 
+     160      160        0     1                 .L0 
+     164      164        0     1                 .Lpcrel_hi8
+     164      164        0     1                 .L0 
+     16c      16c        0     1                 .Lpcrel_hi9
+     16c      16c        0     1                 .L0 
+     174      174        0     1                 .Ltmp5
+     174      174        0     1                 .L0 
+     178      178        0     1                 .L0 
+     180      180        0     1                 .L0 
+     182      182        0     1                 .Ltmp6
+     182      182        0     1                 .Lpcrel_hi10
+     182      182        0     1                 .L0 
+     18a      18a        0     1                 .L0 
+     192      192        0     1                 .L0 
+     192      192       a8     2         /sketch/build/testV003.ino.elf.lto.o:(.text.SystemInit)
+     192      192        0     1                 .L0 
+     192      192        0     1                 .L0 
+     192      192        0     1                 $xrv32i2p1
+     192      192        0     1                 .L0 
+     192      192       a8     1                 SystemInit
+     1a2      1a2        0     1                 .L0 
+     1a4      1a4        0     1                 .L0 
+     1b2      1b2        0     1                 .L0 
+     1b4      1b4        0     1                 .L0 
+     1da      1da        0     1                 .L0 
+     1dc      1dc        0     1                 .L0 
+     1dc      1dc        0     1                 .L0 
+     1e4      1e4        0     1                 .L0 
+     1e6      1e6        0     1                 .L0 
+     1ee      1ee        0     1                 .L0 
+     1fc      1fc        0     1                 .L0 
+     1fe      1fe        0     1                 .L0 
+     20a      20a        0     1                 .L0 
+     20c      20c        0     1                 .L0 
+     210      210        0     1                 .L0 
+     214      214        0     1                 .L0 
+     214      214        0     1                 .L0 
+     218      218        0     1                 .L0 
+     222      222        0     1                 .L0 
+     226      226        0     1                 .L0 
+     22a      22a        0     1                 .L0 
+     230      230        0     1                 .L0 
+     232      232        0     1                 .L0 
+     236      236        0     1                 .L0 
+     23a      23a        0     1                 .L0 
+     23a      23a        0     1                 .L0 
+     23a      23a       72     2         /sketch/build/testV003.ino.elf.lto.o:(.text.SysTick_Handler)
+     23a      23a        0     1                 .L0 
+     23a      23a        0     1                 .L0 
+     23a      23a        0     1                 $xrv32i2p1
+     23a      23a        0     1                 .L0 
+     23a      23a       72     1                 SysTick_Handler
+     240      240        0     1                 .L0 
+     240      240        0     1                 .L0 
+     24c      24c        0     1                 .L0 
+     250      250        0     1                 .L0 
+     250      250        0     1                 .L0 
+     252      252        0     1                 .L0 
+     252      252        0     1                 .L0 
+     254      254        0     1                 .L0 
+     254      254        0     1                 .L0 
+     258      258        0     1                 .L0 
+     25a      25a        0     1                 .L0 
+     25a      25a        0     1                 .L0 
+     264      264        0     1                 .L0 
+     266      266        0     1                 .L0 
+     268      268        0     1                 .L0 
+     274      274        0     1                 .L0 
+     27e      27e        0     1                 .L0 
+     282      282        0     1                 .L0 
+     286      286        0     1                 .L0 
+     286      286        0     1                 .L0 
+     28e      28e        0     1                 .L0 
+     294      294        0     1                 .L0 
+     294      294        0     1                 .L0 
+     294      294        0     1                 .L0 
+     298      298        0     1                 .L0 
+     29a      29a        0     1                 .L0 
+     29a      29a        0     1                 .L0 
+     29c      29c        0     1                 .L0 
+     29c      29c        0     1                 .L0 
+     29c      29c        0     1                 .L0 
+     2a0      2a0        0     1                 .L0 
+     2a0      2a0        0     1                 .L0 
+     2a6      2a6        0     1                 .L0 
+     2ac      2ac        0     1                 .L0 
+     2ac      2ac        0     1                 .L0 
+     2ac      2ac       26     2         /sketch/build/testV003.ino.elf.lto.o:(.text.main)
+     2ac      2ac        0     1                 .L0 
+     2ac      2ac        0     1                 .L0 
+     2ac      2ac        0     1                 $xrv32i2p1
+     2ac      2ac        0     1                 .L0 
+     2ac      2ac       26     1                 main
+     2c2      2c2        0     1                 .L0 
+     2c2      2c2        0     1                 .L0 
+     2c6      2c6        0     1                 .L0 
+     2c8      2c8        0     1                 .L0 
+     2c8      2c8        0     1                 .L0 
+     2c8      2c8        0     1                 .L0 
+     2ca      2ca        0     1                 .L0 
+     2cc      2cc        0     1                 .L0 
+     2cc      2cc        0     1                 .L0 
+     2cc      2cc        0     1                 .L0 
+     2ce      2ce        0     1                 .L0 
+     2d0      2d0        0     1                 .L0 
+     2d0      2d0        0     1                 .L0 
+     2d2      2d2        0     1                 .L0 
+     2d2      2d2        0     1                 .L0 
+     2d2      2d2        2     1         . = ALIGN(4)
+     2d4      2d4        0     1 .init_array
+     2d4      2d4        0     1         PROVIDE_HIDDEN(__init_array_start = .)
+     2d4      2d4        0     1         PROVIDE_HIDDEN(__init_array_end = .)
+20000000 20000000        0     8 .highcode
+20000000 20000000        0     1         PROVIDE(_highcode_vma_start = .)
+20000000 20000000        0     1         . = ALIGN(8)
+20000000 20000000        0     1 PROVIDE(_highcode_lma = LOADADDR(.highcode))
+20000000 20000000        0     8 .data
+20000000 20000000        0     1         . = ALIGN(8)
+20000000 20000000        0     1         PROVIDE( __global_pointer$ = . + 0x800 )
+20000000 20000000        0     1         . = ALIGN(4)
+20000000 20000000        0     1         PROVIDE( _edata = . )
+20000000 20000000        0     1 PROVIDE(_data_vma = ADDR(.data))
+20000000 20000000        0     1 PROVIDE(_data_lma = LOADADDR(.data))
+20000000 20000000        0     1 .noinit
+20000000 20000000        0     1         . = ALIGN(4)
+20000000 20000000        0     1         . = ALIGN(4)
+20000000 20000000        c     4 .bss
+20000000 20000000        0     1         . = ALIGN(4)
+20000000 20000000        0     1         PROVIDE( _sbss = . )
+20000000 20000000        c     4         /sketch/build/testV003.ino.elf.lto.o:(.bss..L_MergedGlobals)
+20000000 20000000        c     1                 .L_MergedGlobals
+20000000 20000000        0     1                 $d
+20000000 20000000        4     1                 ch32rv_systick_base
+20000004 20000004        4     1                 ch32rv_systick_base_hi
+20000008 20000008        4     1                 ch32rv_millis_counter
+2000000c 2000000c        0     1         . = ALIGN(4)
+2000000c 2000000c        0     1         PROVIDE( _ebss = . )
+20004c00 20004c00      400     1 .stack
+20004c00 20004c00        0     1         . = ALIGN(4)
+20004c00 20004c00      400     1         . = . + __stack_size
+20005000 20005000        0     1         PROVIDE( _eusrstack = . )
+20005000 20005000        0     1 
+20005000 20005000        0     1 
+20005000 20005000        0     1 
+       0        0       60     1 .riscv.attributes
+       0        0       60     1         <internal>:(.riscv.attributes)
+       0        0     1254     1 .debug_info
+       0        0      1d8     1         /sketch/build/core/core.a(crt0_ch32.S.o):(.debug_info)
+       0        0        0     1                 .L0 
+       0        0        0     1                 $d
+     1d8      1d8     107c     1         /sketch/build/testV003.ino.elf.lto.o:(.debug_info)
+     1d8      1d8        0     1                 $d
+       0        0      488     1 .debug_abbrev
+       0        0       1f     1         /sketch/build/core/core.a(crt0_ch32.S.o):(.debug_abbrev)
+       0        0        0     1                 .L0 
+       0        0        0     1                 $d
+      1f       1f      469     1         /sketch/build/testV003.ino.elf.lto.o:(.debug_abbrev)
+      1f       1f        0     1                 $d
+       0        0       30     1 .debug_aranges
+       0        0       30     1         /sketch/build/core/core.a(crt0_ch32.S.o):(.debug_aranges)
+       0        0        0     1                 $d
+       0        0       a0     1 .debug_rnglists
+       0        0       21     1         /sketch/build/core/core.a(crt0_ch32.S.o):(.debug_rnglists)
+       0        0        0     1                 $d
+       c        c        0     1                 .L0 
+      21       21       7f     1         /sketch/build/testV003.ino.elf.lto.o:(.debug_rnglists)
+      21       21        0     1                 $d
+      2d       2d        0     1                 .L0 
+       0        0      ab3     1 .debug_line
+       0        0       ee     1         /sketch/build/core/core.a(crt0_ch32.S.o):(.debug_line)
+       0        0        0     1                 .Lline_table_start0
+       0        0        0     1                 $d
+      ee       ee      9c5     1         /sketch/build/testV003.ino.elf.lto.o:(.debug_line)
+      ee       ee        0     1                 .Lline_table_start0
+      ee       ee        0     1                 $d
+     19d      19d        0     1                 .Lline_table_start1
+     3e5      3e5        0     1                 .Lline_table_start2
+     4c4      4c4        0     1                 .Lline_table_start3
+     52e      52e        0     1                 .Lline_table_start4
+     762      762        0     1                 .Lline_table_start5
+     8f7      8f7        0     1                 .Lline_table_start6
+     9eb      9eb        0     1                 .Lline_table_start7

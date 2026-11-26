@@ -4184,9 +4184,7 @@ async function commandDebug(sketchDir, profileFromTree) {
     const toolchainPrefix = String(props['debug.toolchain.prefix'] || '').trim();
     const normalizedToolchainPath = toolchainPath ? path.normalize(toolchainPath) : '';
     const exeExt = process.platform === 'win32' ? '.exe' : '';
-    const derivedObjdumpPath = (normalizedToolchainPath && toolchainPrefix)
-      ? path.join(normalizedToolchainPath, `${toolchainPrefix}-objdump${exeExt}`)
-      : '';
+    const derivedObjdumpPath = await resolveDebugObjdumpPath(normalizedToolchainPath, toolchainPrefix, exeExt);
     const objdumpPathConfigured = toTrimmedString(cortexMerged.objdumpPath);
     delete cortexMerged.objdumpPath;
     delete cortexMerged.name;
@@ -12912,6 +12910,22 @@ function windowsDrivePathToWsl(p) {
   return `/mnt/${drive}/${rest}`;
 }
 
+/**
+ * Pick the objdump used by cortex-debug. GNU toolchains ship `<prefix>-objdump`;
+ * LLVM toolchains (clang + lld) only ship `llvm-objdump`, so fall back to it.
+ * Returns the GNU-style path when neither exists to keep the previous behavior.
+ */
+async function resolveDebugObjdumpPath(toolchainPath, toolchainPrefix, exeExt = '') {
+  if (!toolchainPath) return '';
+  const candidates = [];
+  if (toolchainPrefix) candidates.push(path.join(toolchainPath, `${toolchainPrefix}-objdump${exeExt}`));
+  candidates.push(path.join(toolchainPath, `llvm-objdump${exeExt}`));
+  for (const candidate of candidates) {
+    if (await pathExistsSafe(candidate)) return candidate;
+  }
+  return toolchainPrefix ? candidates[0] : '';
+}
+
 async function pathExistsSafe(fsPath) {
   if (!fsPath) return false;
   try {
@@ -13229,7 +13243,85 @@ async function analyzeInspectorMap(buildPath, sketchDir) {
   };
 }
 
+/** True when the map text was produced by LLVM lld (`VMA LMA Size Align Out In Symbol` table). */
+function isLldMapText(text) {
+  const firstLine = String(text || '').split(/\r?\n/).find((line) => line.trim()) || '';
+  return /^\s*VMA\s+LMA\s+Size\s+Align\s+Out\s+In\s+Symbol\s*$/.test(firstLine);
+}
+
+/**
+ * Parse an LLVM lld map file into the same entry shape as `buildMapEntry`.
+ * Column layout: VMA, LMA, Size, Align, then the Out/In/Symbol column whose
+ * indentation tells the row kind (0 = output section, 8 = input section,
+ * 16 = symbol). Input sections become entries; when an input section carries
+ * several sized symbols (e.g. LTO's `.L_MergedGlobals`), each symbol becomes
+ * its own entry so that variables stay visible.
+ */
+function parseLldMapEntries(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const rowPattern = /^\s*([0-9a-fA-F]+)\s+[0-9a-fA-F]+\s+([0-9a-fA-F]+)\s+\d+ (.*)$/;
+  const linkerOnlySections = new Set(['.symtab', '.strtab', '.shstrtab']);
+  const entries = [];
+  let current = null;
+  const makeEntry = (sectionName, address, size, objectFile, symbolName) => {
+    const raw = sectionName.startsWith('.') ? sectionName.slice(1) : sectionName;
+    const dotIdx = raw.indexOf('.');
+    const root = dotIdx >= 0 ? raw.slice(0, dotIdx) : raw;
+    const suffix = dotIdx >= 0 ? raw.slice(dotIdx + 1) : raw;
+    return { root, section: sectionName, symbol: symbolName || suffix, address, size, objectFile };
+  };
+  const flush = () => {
+    if (!current || current.size <= 0) { current = null; return; }
+    const sized = current.symbols.filter((sym) => sym.size > 0);
+    if (sized.length >= 2) {
+      let covered = 0;
+      for (const sym of sized) {
+        entries.push(makeEntry(current.section, sym.address, sym.size, current.objectFile, sym.name));
+        covered += sym.size;
+      }
+      if (current.size > covered) {
+        entries.push(makeEntry(current.section, current.address, current.size - covered, current.objectFile, ''));
+      }
+    } else {
+      const named = sized[0] || current.symbols[0];
+      entries.push(makeEntry(current.section, current.address, current.size, current.objectFile, named ? named.name : ''));
+    }
+    current = null;
+  };
+  for (const line of lines) {
+    const row = rowPattern.exec(line || '');
+    if (!row) continue;
+    const address = parseInt(row[1], 16);
+    const size = parseInt(row[2], 16);
+    const column = row[3];
+    const body = column.trim();
+    const indent = column.length - column.trimStart().length;
+    if (indent < 8) {
+      // Output section or top-level linker assignment.
+      flush();
+      continue;
+    }
+    if (indent < 16) {
+      flush();
+      const input = body.match(/^(.*):\((\S+)\)$/);
+      if (!input) continue; // linker script assignment such as ". = ALIGN(4)"
+      const objectFile = input[1].trim();
+      const sectionName = input[2];
+      if (objectFile === '<internal>' && linkerOnlySections.has(sectionName)) continue;
+      current = { section: sectionName, address, size, objectFile, symbols: [] };
+      continue;
+    }
+    // Symbol row; skip assembler-local labels and mapping symbols.
+    if (current && body && !body.startsWith('.L') && !body.startsWith('$')) {
+      current.symbols.push({ name: body, address, size: Number.isFinite(size) ? size : 0 });
+    }
+  }
+  flush();
+  return entries;
+}
+
 function parseMapEntries(text) {
+  if (isLldMapText(text)) return parseLldMapEntries(text);
   const lines = String(text || '').split(/\r?\n/);
   const entries = [];
   let pendingSection = '';

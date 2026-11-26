@@ -1,6 +1,10 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Inspector now reads map files produced by LLVM lld, so clang-based cores such as `ch32-riscv-ug:ch32rv` 0.14+ show sections, symbols and objects (LTO merged globals are listed per variable). GNU ld maps are parsed as before.
+- (JA) Inspector が LLVM lld の map ファイルを読めるようにし、`ch32-riscv-ug:ch32rv` 0.14 以降など clang ベースのコアでもセクション・シンボル・オブジェクトを表示できるようにしました（LTO でまとめられたグローバル変数も変数ごとに表示します）。GNU ld の map はこれまでどおり解析します。
+- (EN) Debug now falls back to `llvm-objdump` when the toolchain has no `<prefix>-objdump` (clang + lld toolchains).
+- (JA) ツールチェーンに `<prefix>-objdump` が無い場合（clang + lld のツールチェーン）、Debug が `llvm-objdump` を使うようにしました。
 
 ## 1.11.0
 - (EN) Documented local VSIX packaging and manual Marketplace upload steps.
