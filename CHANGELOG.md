@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Removed the Wokwi integration (`wokwi: true` profiles, `.wokwi/<profile>/` generation and the "Run in Wokwi" command). Existing `.wokwi/` folders are left untouched; use the Wokwi extension directly if needed.
+- (JA) Wokwi 連携（`wokwi: true` のプロファイル、`.wokwi/<profile>/` の自動生成、「wokwi で実行」コマンド）を削除しました。既存の `.wokwi/` フォルダーはそのまま残ります。必要な場合は Wokwi 拡張機能を直接利用してください。
 - (EN) Inspector now reads map files produced by LLVM lld, so clang-based cores such as `ch32-riscv-ug:ch32rv` 0.14+ show sections, symbols and objects (LTO merged globals are listed per variable). GNU ld maps are parsed as before.
 - (JA) Inspector が LLVM lld の map ファイルを読めるようにし、`ch32-riscv-ug:ch32rv` 0.14 以降など clang ベースのコアでもセクション・シンボル・オブジェクトを表示できるようにしました（LTO でまとめられたグローバル変数も変数ごとに表示します）。GNU ld の map はこれまでどおり解析します。
 - (EN) Debug now falls back to `llvm-objdump` when the toolchain has no `<prefix>-objdump` (clang + lld toolchains).

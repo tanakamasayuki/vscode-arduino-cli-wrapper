@@ -165,7 +165,6 @@ Status bar items are hidden when the workspace has no `.ino` files. FQBN/Port/Ba
 - **Upload Sketch** – Compiles and uploads in one go. You will be prompted for a serial port if one is not already selected, and the monitor is closed/reopened as needed so the port stays free.
 - **OTA uploads (network ports)** – If the selected port looks like an IP address, the extension assumes an OTA transfer and injects `--upload-field password=$ARDUINO_CLI_OTA_PASSWORD`. The actual CLI call expands the environment variable (leave it empty when no password is required) while the Arduino Logs channel keeps the literal `$ARDUINO_CLI_OTA_PASSWORD` string so credentials never appear in clear text.
 - **Build Check** – Compiles every profile defined in `sketch.yaml` with full warnings (`--warnings all`), then shows a summary of warnings and errors so you can spot regressions quickly.
-- **Run in Wokwi** – When a `sketch.yaml` profile sets `wokwi: true`, compiling that profile exports `.wokwi/<profile>/wokwi.elf`, scaffolds board-aware defaults for `diagram.json` / `wokwi.toml`, and adds a "Run in Wokwi" action that opens the diagram in the official simulator extension.
 
 ## Sketch management and utilities
 
@@ -412,7 +411,6 @@ emit_raw = true
   - To bootstrap a `sketch.yaml`, select your board and libraries in the Helper, then use "Apply to sketch.yaml" to create the file in your sketch folder.
 - The status bar FQBN indicator switches to a profile name if profiles exist. Use "Arduino CLI: Set Profile" to change it.
 - "Sketch.yaml Helper" shows a helper UI to inspect/apply FQBN, libraries, and platform info for a selected profile.
-- Profiles with `wokwi: true` automatically maintain `.wokwi/<profile>/wokwi.elf`, `diagram.json`, and `wokwi.toml` after each compile so the Wokwi extension can simulate the latest firmware. The generated `diagram.json` seeds board-specific layouts (UNO, MEGA, Nano, ESP32 S3 Box, M5Stack CoreS3, Seeed XIAO ESP32 families, and generic ESP32).
 
 ## Debug your sketch (advanced)
 

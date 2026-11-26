@@ -198,10 +198,6 @@
         "title": "%cmd.uploadData%"
       },
       {
-        "command": "arduino-cli.runWokwi",
-        "title": "%cmd.runWokwi%"
-      },
-      {
         "command": "arduino-cli.openSecretsHeader",
         "title": "%cmd.openSecretsHeader%"
       },

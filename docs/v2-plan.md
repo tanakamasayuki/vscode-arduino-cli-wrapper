@@ -163,7 +163,7 @@ html/                   // Webview(必要に応じて分割)
 | `.arduino-cli-flags` | ファイルを置くとビルド時に注入 | ファイルがあるときだけ | **なし**(0 件) | 約 80 行 | 2025-10 | 秘密情報は `arduino_secrets.h`(手元で利用多数)で代わりになる | 削除 |
 | タイムゾーンマクロ | 設定 `injectTimezoneMacros` | 既定 OFF | **なし**(`CLI_BUILD_TZ` の参照 0 件) | 約 140 行 + 設定 1 つ | 2025-10 | 上と合わせて消すと、`--show-properties` で注入先を判定する処理ごと不要になり、ビルド処理が単純になる | 削除 |
 | Local Port Rules | コマンド + 編集用 Webview | `.vscode/arduino-cli-wrapper.json` があるときだけ | **なし**(0 件) | 約 350 行 + Webview | 2025-12 | 「sketch.yaml は git 管理なので、マシンごとのポートは別に持ちたい」という用途。選んだポートはワークスペースごとに記憶されるので、通常はそれで足りる | 削除 |
-| Wokwi 連携 | `wokwi: true` のプロファイル | 指定したときだけ | **なし**(`wokwi: true` も `wokwi.toml` も 0 件) | 約 340 行(テンプレート込み) | 2025-09 | Wokwi 拡張を手動で使う | 削除(要確認) |
+| Wokwi 連携 | `wokwi: true` のプロファイル | 指定したときだけ | **なし**(`wokwi: true` も `wokwi.toml` も 0 件) | 約 340 行(テンプレート込み) | 2025-09 | Wokwi 拡張を手動で使う | **削除済み(v1、2026-11-26)** |
 | Source Backup | `.sourcebackupconfig` | ファイルがあるときだけ | **なし**(0 件) | 約 600 行 | 2026-03(最新、5 コミット) | 最近作った機能なので、需要があるなら `embed-asset-tool` と同じく別パッケージに出す | 要相談 |
 | Run Command | コマンド | 手動 | 判定できない | 約 20 行 | 2025-09 | ターミナルで CLI を直接使う。gRPC 化後は成り立たない | v2(gRPC 化)のときに削除 |
 | autoCopySketchYaml | Refresh View 時 | **既定 ON** | 判定できない(手元の sketch.yaml はすべて git 管理済み) | 約 20 行 + 設定 1 つ | 2025-11 | 何も知らない利用者のフォルダーに sketch.yaml を作る、既定 ON の暗黙動作 | 削除、または既定 OFF |

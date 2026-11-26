@@ -36,7 +36,6 @@
   "cmd.localPortHelper": "Arduino CLI: Edit Local Port Rules",
   "cmd.openSketchFromTree": "Arduino CLI: Open Sketch from Tree",
   "cmd.uploadData": "Arduino CLI: Upload Data (FS)",
-  "cmd.runWokwi": "Arduino CLI: Run in Wokwi",
   "treeEmbedAssets": "Embed Assets",
   "treeSourceBackup": "Source Backup",
   "treeLocalPortRules": "Local Port Rules",

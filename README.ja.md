@@ -166,7 +166,6 @@ Windows 上で Arduino CLI のコンパイルが遅いときは、WSL (Windows S
 - **Upload Sketch** – コンパイルしてそのまま書き込みます。ポートが未設定ならその場で選択でき、必要に応じてシリアルモニタを自動で閉じたり再オープンしたりします。
 - **OTA 書き込み（ネットワーク経由）** – 選択したポートに IP アドレスが含まれる場合は OTA 転送とみなし、`--upload-field password=$ARDUINO_CLI_OTA_PASSWORD` を自動付与します。CLI 実行時に環境変数を展開します（パスワード不要なら未設定のままで問題ありません）。Arduino Logs には展開前の `$ARDUINO_CLI_OTA_PASSWORD` をそのまま表示し、平文のパスワードは残りません。
 - **Build Check** – `sketch.yaml` に定義したすべてのプロファイルを `--warnings all` でビルドし、警告とエラーの集計結果を表示します。リグレッションチェックに最適です。
-- **wokwi で実行** – プロファイルに `wokwi: true` を設定すると、ビルド時に `.wokwi/<profile>/wokwi.elf` を出力し、ボードに合わせた初期値で `diagram.json` / `wokwi.toml` を補完したうえで、エクスプローラーに「wokwiで実行」アクションが現れ、公式 Wokwi 拡張機能で図面を開けます。
 
 ## スケッチ管理とユーティリティ
 
@@ -416,7 +415,6 @@ emit_raw = true
   - ひな形を作るには「Sketch.yaml Helper」でボードやライブラリを選択し、「sketch.yaml に反映」でスケッチフォルダーに作成してください。
 - ステータスバーの FQBN 表示は、プロファイルがあればプロファイル名に切り替わります。「Arduino CLI: Set Profile」で変更できます。
 - 「Sketch.yaml Helper」では、選択したプロファイルの FQBN やライブラリ、プラットフォーム情報の確認と反映ができます。
-- `wokwi: true` を付けたプロファイルは、コンパイルのたびに `.wokwi/<profile>/wokwi.elf` と `diagram.json` / `wokwi.toml` を自動整備し、Wokwi 拡張機能で最新ファームウェアを即座にシミュレートできます。生成される `diagram.json` は UNO / MEGA / Nano / ESP32 S3 Box / M5Stack CoreS3 / Seeed XIAO ESP32 各モデル / その他 ESP32 (DevKitC) 向けのレイアウトを初期配置します。
 
 ## デバッグを始める（上級者向け）
 
